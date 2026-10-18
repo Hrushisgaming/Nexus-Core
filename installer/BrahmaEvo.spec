@@ -22,7 +22,8 @@ a = Analysis(
         (os.path.join(cwd, 'workspace_store.py'), '.'),
         (os.path.join(cwd, 'README.md'), '.'),
         (os.path.join(cwd, 'requirements.txt'), '.'),
-        (os.path.join(cwd, 'version.txt'), '.')
+        (os.path.join(cwd, 'version.txt'), '.'),
+        (os.path.join(cwd, 'installer', 'uninstall.cmd'), '.')
     ],
     hiddenimports=[
         'mediapipe', 'cv2', 'instagrapi', 'google.genai', 'PyQt6', 'PyQt6.QtWebEngineCore',

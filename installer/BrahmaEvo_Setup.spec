@@ -2,9 +2,9 @@
 import os
 import sys
 
-cwd = os.path.abspath(os.path.join(os.getcwd(), '..'))
+cwd = os.path.abspath(os.getcwd())
 if not os.path.exists(os.path.join(cwd, 'installer')):
-    cwd = os.path.abspath(os.getcwd()) # fallback
+    cwd = os.path.abspath(os.path.join(os.getcwd(), '..'))
 
 source_dir = os.path.join(cwd, 'dist', 'BrahmaEvo')
 
