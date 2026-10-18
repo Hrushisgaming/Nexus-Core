@@ -44,5 +44,6 @@ def test_web_background_instant_boot_no_document_write():
     assert "Math.max" in content
 
 def test_opengl_context_sharing_flag():
+    import ui
     from PyQt6.QtCore import QCoreApplication, Qt
     assert QCoreApplication.testAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)

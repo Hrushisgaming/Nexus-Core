@@ -1088,11 +1088,21 @@
         // ==========================================
         // 4. ANIMATION LOOP & AUTO-TRANSITION
         // ==========================================
+        const GLOBE_TARGET_FPS = 60;
+        const GLOBE_FRAME_INTERVAL = 1000 / GLOBE_TARGET_FPS;
+        let lastGlobeRenderTime = 0;
+
         function animate(now = performance.now()) {
             if (isPaused) return;
             animFrameId = requestAnimationFrame(animate);
 
             if (currentMode !== "3D") return;
+
+            const elapsed = now - lastGlobeRenderTime;
+            if (elapsed < GLOBE_FRAME_INTERVAL) {
+                return;
+            }
+            lastGlobeRenderTime = now - (elapsed % GLOBE_FRAME_INTERVAL);
 
             const dt = Math.min(Math.max((now - lastFrameTime) / 1000, 0.0005), 0.05);
             lastFrameTime = now;
@@ -1193,7 +1203,8 @@
             if (!isPaused) return;
             isPaused = false;
             lastFrameTime = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-            fpsLastTime = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+            lastGlobeRenderTime = lastFrameTime;
+            fpsLastTime = lastFrameTime;
             fpsFrames = 0;
             if (!animFrameId) {
                 animFrameId = requestAnimationFrame(animate);

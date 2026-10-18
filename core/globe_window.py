@@ -9,11 +9,19 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-# Hardware acceleration & WebGL flags for smooth 180fps+ rendering in Chromium
-os.environ.setdefault(
-    "QTWEBENGINE_CHROMIUM_FLAGS",
-    "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-webgl --enable-webgl2-compute-context --disable-frame-rate-limit --disable-gpu-vsync --num-raster-threads=4 --use-angle=d3d11 --disable-gpu-driver-bug-workarounds"
+import sys
+
+# Hardware acceleration & WebGL flags for smooth 180fps+ rendering across Windows, macOS, and Linux
+_base_chromium_flags = (
+    "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist "
+    "--enable-accelerated-2d-canvas --enable-webgl --enable-webgl2-compute-context "
+    "--disable-frame-rate-limit --disable-gpu-vsync --num-raster-threads=4 --disable-gpu-driver-bug-workarounds"
 )
+if sys.platform == "win32":
+    _base_chromium_flags += " --use-angle=d3d11"
+elif sys.platform.startswith("linux"):
+    _base_chromium_flags += " --no-sandbox --disable-dev-shm-usage"
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _base_chromium_flags)
 
 from PyQt6.QtCore import Qt, QUrl, pyqtSlot, QObject, pyqtSignal, QTimer, QPoint, QCoreApplication
 from PyQt6.QtWidgets import (
@@ -402,11 +410,21 @@ class GlobeWindow(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        p = self.parent()
+        if p:
+            bg = getattr(p, "_bg_widget", None)
+            if bg and hasattr(bg, "pause_rendering"):
+                bg.pause_rendering()
         if self._web_view and getattr(self, "_is_page_loaded", False):
             self._web_view.page().runJavaScript("if (window.BrahmaGlobe && window.BrahmaGlobe.resume) window.BrahmaGlobe.resume();")
 
     def hideEvent(self, event):
         super().hideEvent(event)
+        p = self.parent()
+        if p:
+            bg = getattr(p, "_bg_widget", None)
+            if bg and hasattr(bg, "resume_rendering"):
+                bg.resume_rendering()
         if self._web_view and getattr(self, "_is_page_loaded", False):
             self._web_view.page().runJavaScript("if (window.BrahmaGlobe && window.BrahmaGlobe.pause) window.BrahmaGlobe.pause();")
 

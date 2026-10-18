@@ -62,9 +62,68 @@ class UnifiedAIClient:
             logger.error(f"[LLM Client] Local AI Request Failed: {e}")
             return None
 
+    def _get_gemini_client(self):
+        try:
+            from google import genai
+            api_keys_path = get_user_data_dir() / "config" / "api_keys.json"
+            if not api_keys_path.exists():
+                return None
+            with open(api_keys_path, "r", encoding="utf-8") as f:
+                key = json.load(f).get("gemini_api_key", "").strip()
+            if not key:
+                return None
+            return genai.Client(api_key=key, http_options={"api_version": "v1beta"})
+        except Exception as e:
+            logger.error(f"[LLM Client] Failed to init Gemini client: {e}")
+            return None
+
+    def _gemini_chat_completion(self, messages: list[dict], temperature: float = 0.7, json_mode: bool = False) -> Optional[str]:
+        client = self._get_gemini_client()
+        if not client:
+            return None
+        try:
+            from google.genai import types
+            sys_parts = [m["content"] for m in messages if m["role"] == "system"]
+            system_instruction = "\n".join(sys_parts) if sys_parts else None
+
+            contents = []
+            for m in messages:
+                if m["role"] == "system":
+                    continue
+                role = "user" if m["role"] == "user" else "model"
+                contents.append(types.Content(role=role, parts=[types.Part.from_text(text=str(m["content"]))]))
+
+            config = types.GenerateContentConfig(
+                temperature=temperature,
+                system_instruction=system_instruction,
+                response_mime_type="application/json" if json_mode else None
+            )
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+                config=config
+            )
+            return resp.text.strip() if resp and resp.text else None
+        except Exception as e:
+            logger.error(f"[LLM Client] Gemini request failed: {e}")
+            return None
+
     def chat(self, prompt: str, system: str = "You are a helpful assistant.", history: Optional[list[dict]] = None, model: Optional[str] = None, max_tokens: int = 4096, temperature: float = 0.7) -> str:
         self.reload_settings()
-        if self._provider == "Local":
+        if self._provider in ("Gemini", "Google Gemini"):
+            messages = [{"role": "system", "content": system}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": prompt})
+            result = self._gemini_chat_completion(messages, temperature)
+            if result:
+                return result
+            try:
+                return openrouter_client.chat(prompt, system, history, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or "I'm ready, sir."
+        elif self._provider == "Local":
             messages = [{"role": "system", "content": system}]
             if history:
                 messages.extend(history)
@@ -79,7 +138,33 @@ class UnifiedAIClient:
 
     def chat_json(self, prompt: str, system: str = "Return ONLY valid JSON.", model: Optional[str] = None, max_tokens: int = 4096) -> dict:
         self.reload_settings()
-        if self._provider == "Local":
+        if self._provider in ("Gemini", "Google Gemini"):
+            messages = [
+                {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
+                {"role": "user", "content": prompt}
+            ]
+            raw = self._gemini_chat_completion(messages, temperature=0.2, json_mode=True)
+            if not raw:
+                try:
+                    return openrouter_client.chat_json(prompt, system, model, max_tokens)
+                except Exception:
+                    pass
+                raw = self._local_chat_completion(messages, temperature=0.2, response_format={"type": "json_object"})
+            if not raw:
+                raise RuntimeError("AI request failed for JSON generation.")
+            
+            clean = raw.strip()
+            if clean.startswith("```"):
+                parts = clean.split("```")
+                clean = parts[1] if len(parts) > 1 else clean
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip().rstrip("`").strip()
+            try:
+                return json.loads(clean)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Gemini model returned unparseable JSON: {e}\nRaw output: {raw[:200]}")
+        elif self._provider == "Local":
             messages = [
                 {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
                 {"role": "user", "content": prompt}
@@ -105,7 +190,34 @@ class UnifiedAIClient:
 
     def vision(self, prompt: str, image_b64: str, mime: str = "image/png", system: str = "Analyze the image.", model: Optional[str] = None, max_tokens: int = 1024) -> str:
         self.reload_settings()
-        if self._provider == "Local":
+        if self._provider in ("Gemini", "Google Gemini"):
+            client = self._get_gemini_client()
+            if client:
+                try:
+                    import base64
+                    from google.genai import types
+                    image_bytes = base64.b64decode(image_b64)
+                    resp = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=[
+                            types.Part.from_bytes(data=image_bytes, mime_type=mime),
+                            prompt
+                        ],
+                        config=types.GenerateContentConfig(
+                            system_instruction=system,
+                            max_output_tokens=max_tokens
+                        )
+                    )
+                    if resp and resp.text:
+                        return resp.text.strip()
+                except Exception as e:
+                    logger.error(f"[LLM Client] Gemini vision request failed: {e}")
+            try:
+                return openrouter_client.vision(prompt, image_b64, mime, system, model, max_tokens)
+            except Exception:
+                pass
+            raise RuntimeError("Vision request failed with Gemini provider.")
+        elif self._provider == "Local":
             messages = [
                 {"role": "system", "content": system},
                 {
@@ -125,7 +237,7 @@ class UnifiedAIClient:
 
     def vision_from_file(self, prompt: str, image_path: str, system: str = "Analyze the image.", model: Optional[str] = None, max_tokens: int = 1024) -> str:
         self.reload_settings()
-        if self._provider == "Local":
+        if self._provider in ("Local", "Gemini", "Google Gemini"):
             import base64
             path = Path(image_path)
             mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif"}
@@ -138,7 +250,16 @@ class UnifiedAIClient:
 
     def multi_turn(self, messages: list[dict], model: Optional[str] = None, max_tokens: int = 4096, temperature: float = 0.7) -> str:
         self.reload_settings()
-        if self._provider == "Local":
+        if self._provider in ("Gemini", "Google Gemini"):
+            result = self._gemini_chat_completion(messages, temperature)
+            if result:
+                return result
+            try:
+                return openrouter_client.multi_turn(messages, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
+        elif self._provider == "Local":
             result = self._local_chat_completion(messages, temperature)
             if result:
                 return result

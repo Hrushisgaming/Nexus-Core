@@ -120,3 +120,52 @@ class LearnedRulesEngine:
         for i, rule in enumerate(active, 1):
             lines.append(f"{i}. {rule}")
         return "\n".join(lines) + "\n"
+
+    @classmethod
+    def detect_and_learn_conversational_rule(cls, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Detects conversational corrections or preference expressions from the user
+        and automatically converts them into an active behavioral rule.
+        e.g.:
+        - 'no, don't open edge, use chrome' -> 'Prefer chrome instead of open edge'
+        - 'from now on, keep volume at 50' -> 'Keep volume at 50'
+        - 'always save documents to desktop' -> 'Always save documents to desktop'
+        """
+        import re
+        raw = text.strip()
+        low = raw.lower()
+
+        rule_text = None
+
+        # Pattern A: "no, don't ... / don't ..., use/do ..."
+        m_neg_pos = re.search(r"(?:no,?\s+)?(?:don't|do not)\s+([^,;]+)[,;]\s*(?:use|do|prefer|always)?\s*(.+)", low)
+        if m_neg_pos and len(m_neg_pos.group(1)) > 2 and len(m_neg_pos.group(2)) > 2:
+            bad = m_neg_pos.group(1).strip()
+            good = m_neg_pos.group(2).strip()
+            rule_text = f"Prefer {good} instead of {bad}"
+
+        # Pattern B: "from now on, ..."
+        elif low.startswith("from now on, ") or low.startswith("from now on "):
+            rule_text = raw[12:].strip().lstrip(",").strip()
+
+        # Pattern C: "always / never" directives with substance
+        elif (low.startswith("always ") or low.startswith("never ")) and len(low.split()) >= 3:
+            if not any(low.startswith(p) for p in ("always open ", "always play ")):
+                rule_text = raw.strip()
+
+        # Pattern D: "remember that ...", "remember to ..."
+        elif low.startswith("remember that ") or low.startswith("remember to "):
+            prefix_len = 14 if low.startswith("remember that ") else 12
+            rule_text = raw[prefix_len:].strip()
+
+        # Pattern E: "i prefer X over Y" / "i prefer X instead of Y"
+        elif "i prefer " in low and (" over " in low or " instead of " in low):
+            rule_text = raw.strip()
+
+        if rule_text and len(rule_text) >= 5:
+            clean_rule = rule_text[0].upper() + rule_text[1:]
+            res = cls.add_rule(clean_rule, category="conversational_preference", origin="autonomous_dialogue")
+            return res.get("rule")
+
+        return None
+

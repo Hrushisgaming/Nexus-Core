@@ -1,4 +1,5 @@
 from core.user_paths import get_user_data_dir
+from typing import Any, Optional
 import os
 
 # Hardware acceleration & WebGL flags for smooth 180fps+ rendering in Chromium
@@ -127,6 +128,7 @@ SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
 LIVE_CONNECT_TIMEOUT = 12
+_SINGLE_INSTANCE_MUTEX = None
 
 
 def _get_api_key() -> str:
@@ -248,6 +250,15 @@ def _load_system_prompt() -> str:
         custom = identity.get_custom_instructions()
         if custom:
             identity_str += f"Custom Instructions: {custom}\n\n"
+
+        # Inject long-term memory cortex facts
+        try:
+            from core.memory_cortex import MemoryCortex
+            recalled_facts = MemoryCortex.get_instance().build_context_prompt("user preferences identity hardware")
+            if recalled_facts:
+                identity_str += f"{recalled_facts}\n\n"
+        except Exception as e_mem:
+            print(f"[MemoryCortex] Error injecting memory into prompt: {e_mem}")
 
         # Inject continuously learned rules and behavioral directives
         try:
@@ -386,17 +397,50 @@ def _clipboard_gemini_reply(text: str) -> str:
 
 
 def _looks_like_code_request(text: str) -> bool:
-    low = (text or "").lower()
-    code_words = (
-        "build", "create", "write", "implement", "code", "python", "app",
-        "module", "function", "class", "project", "script", "api",
-        "ui", "webpage", "bot", "server", "service"
+    low = (text or "").lower().strip()
+    if not low:
+        return False
+    # If explicitly targeting a mobile device, never treat as a local code creation request
+    if any(m in low for m in ("on phone", "on my phone", "on mobile", "on my mobile", "on android", "on tablet", "on iphone", "in phone", "in my phone")):
+        return False
+    # Action/execution commands targeting local apps or utilities are not code creation
+    if any(low.startswith(p) for p in ("open ", "launch ", "start ", "run ", "close ", "kill ", "quit ", "turn on ", "turn off ", "switch on ", "switch off ", "ring ", "find ")):
+        if not any(re.search(rf"\b{a}\b", low) for a in ("write", "create", "build", "code", "develop", "implement", "scaffold", "generate")):
+            return False
+
+    code_intent_verbs = (
+        "build", "create", "make", "code", "develop", "program",
+        "implement", "write", "scaffold", "generate", "refactor", "debug"
     )
-    return any(word in low for word in code_words)
+    code_target_nouns = (
+        "app", "application", "website", "web page", "webpage", "web app",
+        "webapp", "script", "program", "game", "calculator", "bot",
+        "api", "server", "service", "module", "component", "frontend",
+        "backend", "ui", "landing page", "portfolio"
+    )
+    tech_markers = (
+        "in python", "using python", "python script", "python code",
+        "html", "css", "javascript", "react", "typescript", "flask",
+        "fastapi", "django", "node.js", "nodejs", "express", "sql"
+    )
+
+    has_intent = any(re.search(rf"\b{re.escape(v)}\b", low) for v in code_intent_verbs)
+    has_target = any(re.search(rf"\b{re.escape(n)}\b", low) for n in code_target_nouns)
+    has_tech = any(re.search(rf"\b{re.escape(t)}\b", low) for t in tech_markers)
+
+    return (has_intent and (has_target or has_tech)) or (has_target and has_tech)
 
 
 def _looks_like_website_request(text: str) -> bool:
-    low = (text or "").lower()
+    low = (text or "").lower().strip()
+    if not low:
+        return False
+    if any(m in low for m in ("on phone", "on my phone", "on mobile", "on android", "on tablet")):
+        return False
+    if any(low.startswith(p) for p in ("open ", "go to ", "visit ", "browse ", "launch ")):
+        if not any(re.search(rf"\b{a}\b", low) for a in ("make", "create", "build", "design", "develop", "code", "generate")):
+            return False
+
     website_words = (
         "website",
         "web site",
@@ -419,7 +463,7 @@ def _looks_like_website_request(text: str) -> bool:
     action_words = ("make", "create", "build", "design", "develop", "generate", "code", "edit", "update", "fix")
     has_web = any(re.search(rf"\b{re.escape(w)}\b", low) for w in website_words)
     has_action = any(re.search(rf"\b{re.escape(a)}\b", low) for a in action_words)
-    return has_web and (has_action or any(w in low for w in ("landing page", "homepage", "portfolio", "website", "web app", "web page")))
+    return has_web and has_action
 
 
 def _looks_like_presentation_request(text: str) -> bool:
@@ -482,6 +526,17 @@ def _is_gemini_limit_error(exc: Exception) -> bool:
         "access denied",
         "permission denied",
     ))
+
+
+def _looks_like_camera_request(text: str) -> bool:
+    t = (text or "").lower()
+    if not t:
+        return False
+    cam_words = ("camera", "cam", "webcam", "see me", "look at me", "in front of the camera", "pc cam", "laptop cam", "through cam", "through camera", "through webcam")
+    has_cam = any(re.search(rf"\b{re.escape(w)}\b", t) for w in cam_words)
+    request_words = ("what", "check", "look", "analy", "analyse", "analyze", "read", "tell", "answer", "see", "explain", "inspect", "view", "watch", "can you see")
+    has_request = any(re.search(rf"\b{re.escape(w)}\b", t) for w in request_words)
+    return has_cam and has_request
 
 
 def _looks_like_screen_request(text: str) -> bool:
@@ -2027,6 +2082,67 @@ TOOL_DECLARATIONS = [
             "required": ["description"]
         }
     },
+    {
+        "name": "reverse_engineer",
+        "description": (
+            "Reverse engineer any website, desktop application, or native binary without source code. "
+            "Extracts API surfaces, network schemas, client bundles, or native pseudocode, "
+            "and can automatically remake/replicate a clean working version in your project. "
+            "Supports web URLs (https://...), desktop apps (.exe, Electron .asar), and .wasm."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "target": {
+                    "type": "STRING",
+                    "description": "Target website URL (e.g. 'https://example.com') or local file/folder path (e.g. 'C:/Apps/target.exe' or 'D:/electron-app')"
+                },
+                "action": {
+                    "type": "STRING",
+                    "description": "'analyze' (architectural breakdown), 'remake' (generate a working clone project), 'api_surface' (extract backend API schemas only), 'decompile' (pseudocode of native binary or JS bundle)"
+                },
+                "feature": {
+                    "type": "STRING",
+                    "description": "Specific feature, component, or behavior to investigate (e.g. 'search modal', 'auth flow', 'database query')"
+                },
+                "destination": {
+                    "type": "STRING",
+                    "description": "Optional local folder to write the remade code, assets, or extracted schemas into"
+                }
+            },
+            "required": ["target"]
+        }
+    },
+    {
+        "name": "generate_image",
+        "description": (
+            "Generates stunning AI images, concept art, photorealistic photos, and 3D renders from text prompts. "
+            "Saves the high-resolution image to Desktop, shows a preview on the HUD, and opens it automatically. "
+            "Use whenever the user asks to generate, create, draw, paint, or visualize an image or picture."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "prompt": {
+                    "type": "STRING",
+                    "description": "Detailed text description of the image to generate."
+                },
+                "style": {
+                    "type": "STRING",
+                    "description": "Style: 'photorealistic', 'cyberpunk', 'anime', 'cinematic_3d', 'digital_art', 'concept_art', 'fantasy', or 'minimalist' (default: photorealistic)."
+                },
+                "aspect_ratio": {
+                    "type": "STRING",
+                    "description": "Aspect ratio: '1:1' (square), '16:9' (landscape), '9:16' (portrait) (default: 1:1)."
+                },
+                "destination": {
+                    "type": "STRING",
+                    "description": "Optional custom folder path to save the generated image."
+                }
+            },
+            "required": ["prompt"]
+        }
+    },
 ]
 
 
@@ -2162,7 +2278,8 @@ class BrahmaLive:
                         import asyncio
                         async def _send():
                             try:
-                                await self.session.send(input=prompt, end_of_turn=True)
+                                content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+                                await self.session.send_client_content(turns=[content], turn_complete=True)
                             except Exception as e:
                                 print(f"[Proactive] Error: {e}")
                         asyncio.run_coroutine_threadsafe(_send(), self._loop)
@@ -2202,6 +2319,43 @@ class BrahmaLive:
             stop_native_speech()
         except Exception:
             pass
+
+        # Fast emergency stop check for active StudyGuard session
+        lower_fast = text.lower().strip()
+        study_stop_words = {
+            "stop", "stop it", "cancel", "halt", "end", "quit", "abort",
+            "stop study", "stop studying", "cancel study", "end study", "quit study",
+            "stop session", "end session", "cancel session", "stop study session", "end study session"
+        }
+        if lower_fast in study_stop_words or any(lower_fast.startswith(p + " ") for p in ("stop study", "end study", "cancel study", "stop session")):
+            try:
+                from core.study_guard import get_study_guard_manager
+                sg = get_study_guard_manager()
+                if sg.is_active:
+                    res = sg.stop_session()
+                    stats = res.get("stats", {})
+                    card_path = res.get("card_path")
+                    summary = res.get("summary", "")
+                    if hasattr(self.ui, "update_task_workspace"):
+                        self.ui.update_task_workspace(status="Session Stopped", output=summary, percent=100)
+                    if hasattr(self.ui, "show_hud_deliverable"):
+                        self.ui.show_hud_deliverable(
+                            title=f"Study: {stats.get('subject', 'Sprint')}",
+                            summary=f"Focus Efficiency: {stats.get('focus_score')}%\nTotal Time: {int(stats.get('total_seconds', 0) // 60)}m",
+                            bullets=[
+                                f"Focus Score: {stats.get('focus_score')}%",
+                                f"Focus Time: {int(stats.get('active_focus_seconds', 0) // 60)} minutes",
+                                f"Sleep Alerts: {stats.get('sleep_alerts', 0)}",
+                                f"Phone Distractions: {stats.get('phone_alerts', 0)}",
+                            ],
+                            file_path=card_path,
+                            kind="study_guard"
+                        )
+                    self.speak("Study session stopped, sir.")
+                    return
+            except Exception as e_sg_stop:
+                self.ui.write_log(f"ERR: StudyGuard stop failed: {e_sg_stop}")
+
         # allow plugins to handle the incoming text command first
         try:
             pm = getattr(self, "plugin_manager", None)
@@ -2268,43 +2422,6 @@ class BrahmaLive:
                 name="skill-forge",
             ).start()
             return
-
-        # Check for dynamic/evolved skill execution (e.g. "run the skill", "system status", "show cpu and ram")
-        try:
-            from core.dynamic_registry import DynamicToolRegistry
-            matched = DynamicToolRegistry.find_matching_skill(text)
-            if matched:
-                skill_name, skill_args = matched
-                self.speak(f"Running {skill_name.replace('_', ' ')}.")
-                def _run_dynamic_feature():
-                    try:
-                        res = DynamicToolRegistry.execute_sync(skill_name, skill_args or {})
-                        out_text = ""
-                        if isinstance(res, dict):
-                            out_text = str(res.get("summary") or res.get("output") or res.get("text") or res).strip()
-                        else:
-                            out_text = str(res).strip()
-                        self.ui.write_log(f"Brahma Evo [{skill_name}]:\n{out_text}")
-                        if hasattr(self.ui, "finish_task_workspace"):
-                            self.ui.finish_task_workspace(out_text, f"{skill_name} completed.", 100)
-                        if hasattr(self.ui, "show_hud_deliverable"):
-                            self.ui.show_hud_deliverable(
-                                title=f"{skill_name.upper()} DELIVERABLE",
-                                summary=out_text,
-                                kind=skill_name
-                            )
-                        # Speak first line as voice response
-                        first_line = out_text.strip().splitlines()[0] if out_text.strip() else "Task completed."
-                        if len(first_line) > 120:
-                            first_line = first_line[:115] + "..."
-                        self.speak(first_line)
-                    except Exception as err:
-                        self.ui.write_log(f"ERR: {skill_name} failed: {err}")
-                        self.speak(f"Error running {skill_name}: {err}")
-                threading.Thread(target=_run_dynamic_feature, daemon=True, name=f"skill-{skill_name}").start()
-                return
-        except Exception as e_dyn:
-            print(f"[Registry] Match error: {e_dyn}")
 
         if lower.startswith("email ") or lower.startswith("mail ") or "send email" in lower or "write email" in lower or "compose email" in lower:
             # Extract recipient
@@ -2405,6 +2522,901 @@ class BrahmaLive:
         except Exception as e:
             print(f"[BRAHMA EVO] Redirection error: {e}")
 
+        # =========================================================================
+        # 3-TIER INTELLIGENT INTENT DISPATCHER
+        # Tier 1: Instant Local Reflex (< 2ms)
+        # Tier 2: Learned Phrase Cache (< 1ms)
+        # Tier 3: Fast Semantic AI (~200ms)
+        # =========================================================================
+        try:
+            from core.intent_dispatcher import get_intent_dispatcher
+            dispatcher = get_intent_dispatcher()
+
+            connected_devices = []
+            try:
+                from actions.brahma_connect import connect_list_devices
+                dev_res = json.loads(connect_list_devices(parameters={}, player=self.ui))
+                connected_devices = dev_res.get("devices", [])
+            except Exception:
+                connected_devices = []
+
+            active_win = ""
+            try:
+                if hasattr(self.ui, "get_active_window_title"):
+                    active_win = self.ui.get_active_window_title()
+            except Exception:
+                pass
+
+            # If Gemini Live duplex session is active, bypass slow Tier 3 REST classification for 0ms local reflex
+            live_active = bool(self.session and self._loop and getattr(self, "_loop", None).is_running())
+            intent_res = dispatcher.resolve(
+                text,
+                connected_devices=connected_devices,
+                active_window=active_win,
+                enable_ai_tier=(source != "instagram" and not live_active)
+            )
+
+            if intent_res.intent == "media_control":
+                def _run_media_control():
+                    try:
+                        from actions.media_keys import volume_up, volume_down, volume_mute, volume_set, media_play_pause, media_next, media_previous
+                    except Exception:
+                        pass
+                    if intent_res.action == "volume_up":
+                        volume_up()
+                    elif intent_res.action == "volume_down":
+                        volume_down()
+                    elif intent_res.action == "volume_mute":
+                        volume_mute()
+                    elif intent_res.action == "volume_set":
+                        val = int(intent_res.parameters.get("value", 50))
+                        volume_set(val)
+                    elif intent_res.action in {"media_pause", "media_play"}:
+                        media_play_pause()
+                    elif intent_res.action == "media_next":
+                        media_next()
+                    elif intent_res.action == "media_previous":
+                        media_previous()
+                    if intent_res.voice_ack:
+                        self.speak(intent_res.voice_ack)
+                threading.Thread(target=_run_media_control, daemon=True).start()
+                return
+
+            if intent_res.intent == "meeting_mode":
+                if intent_res.action == "start":
+                    self._start_meeting_mode("Meeting mode activated.")
+                else:
+                    self._stop_meeting_mode("Meeting mode closed.")
+                return
+
+            if intent_res.intent == "open_app":
+                from actions.open_app import open_app
+                app_name = intent_res.parameters.get("app_name", "")
+                if app_name:
+                    def _run_open_local():
+                        open_app({"app_name": app_name}, player=self.ui)
+                        self.speak(intent_res.voice_ack or f"Opening {app_name}, sir.")
+                    threading.Thread(target=_run_open_local, daemon=True).start()
+                    return
+
+            if intent_res.intent == "mobile_connect" and source != "instagram":
+                if self._handle_brahma_connect_command(text, source=source or "local", parsed_intent=intent_res):
+                    return
+
+            if intent_res.intent == "vision":
+                vision_angle = intent_res.parameters.get("angle", "camera" if "cam" in intent_res.action else "screen")
+                workspace_title = "Webcam Inspection" if vision_angle == "camera" else "Screen Analysis"
+                status_text = "Checking camera..." if vision_angle == "camera" else "Scanning screen..."
+                output_text = "Brahma Evo is inspecting your camera..." if vision_angle == "camera" else "Brahma Evo is inspecting your screen..."
+                
+                try:
+                    self.ui.update_task_workspace(
+                        title=workspace_title,
+                        command=text,
+                        plan=["Capture visual frame", "Analyze with vision AI", "Report observations"],
+                        status=status_text,
+                        output=output_text,
+                        percent=40,
+                        source=source or "local",
+                    )
+                except Exception:
+                    pass
+
+                img_bytes = None
+                if vision_angle == "screen" and hasattr(self.ui, "capture_screen_bytes"):
+                    img_bytes = self.ui.capture_screen_bytes()
+
+                def _run_vision_process():
+                    success = screen_process(
+                        parameters={"angle": vision_angle, "text": text},
+                        response=None,
+                        player=self.ui,
+                        session_memory=None,
+                        image_bytes=img_bytes,
+                    )
+                    if not success:
+                        try:
+                            self.ui.update_task_workspace(
+                                status=f"{workspace_title} failed",
+                                output="Visual perception could not complete. Check your camera or screen permissions.",
+                                percent=0,
+                            )
+                        except Exception:
+                            pass
+            if intent_res.intent == "shopping" and intent_res.action in ("open_item", "open_link", "buy_now"):
+                from core.shopping_agent import get_shopping_agent
+                agent = get_shopping_agent()
+                target_plat = intent_res.parameters.get("platform")
+                target_mode = intent_res.parameters.get("mode", "pc")
+                res = agent.open_last_item(platform=target_plat, mode=target_mode)
+                if res.get("success"):
+                    prod_title = res.get("item", {}).get("title", "product")[:40]
+                    plat_name = str(res.get("platform") or "store").capitalize()
+                    dest = "on your phone" if target_mode == "phone" else "in your browser"
+                    self.speak(f"Opened the {plat_name} page for {prod_title} {dest}, sir.")
+                else:
+                    self.speak(res.get("error") or "No recent shopping item found to open, sir.")
+                return
+
+            if intent_res.intent == "shopping":
+                query_prod = str(intent_res.parameters.get("query") or text)
+                target_platform = str(intent_res.parameters.get("platform") or "both").lower()
+                self.speak(intent_res.voice_ack or f"Scanning e-commerce deals for {query_prod}, sir.")
+                if hasattr(self.ui, "begin_task_workspace"):
+                    self.ui.begin_task_workspace(
+                        f"Shopping Agent: {query_prod}",
+                        [
+                            "Search Amazon India & Flipkart",
+                            "Cross-compare prices & delivery speeds",
+                            "Extract customer reviews (Rufus-style)",
+                            "Launch top item link in browser",
+                            "Generate interactive HUD deliverable",
+                        ],
+                        source=source or "local"
+                    )
+
+                def _run_shopping():
+                    try:
+                        from core.shopping_agent import get_shopping_agent
+                        agent = get_shopping_agent()
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Scanning stores...", percent=35)
+
+                        if target_platform == "amazon":
+                            amz = agent.search_amazon_playwright(query_prod, limit=4)
+                            flp = []
+                        elif target_platform == "flipkart":
+                            amz = []
+                            flp = agent.search_flipkart_playwright(query_prod, limit=4)
+                        else:
+                            both = agent.search_both_parallel(query_prod, limit_per_store=3)
+                            amz = both.get("amazon", [])
+                            flp = both.get("flipkart", [])
+
+                        if not amz and not flp:
+                            msg = f"I couldn't find live listings for '{query_prod}' on Amazon or Flipkart right now, sir."
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(status="No Products Found", output=msg, percent=0)
+                            self.speak(msg)
+                            return
+
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Synthesizing deals...", percent=75)
+
+                        synthesis = agent.synthesize_rufus_recommendation(query_prod, amz, flp)
+                        card_html = agent.generate_hud_shopping_card(query_prod, synthesis, amz, flp)
+
+                        best = synthesis.get("best_overall")
+                        verdict = synthesis.get("verdict", "")
+                        voice_msg = synthesis.get("voice_summary", "")
+
+                        # Automatically launch top recommended product link in default browser!
+                        if best and best.url:
+                            agent.execute_cart_or_buy(best.url, platform=best.platform, mode="pc")
+
+                        if hasattr(self.ui, "update_task_workspace"):
+                            out_summary = f"Top Pick: {best.title if best else 'Recommended'}\nPrice: ₹{best.price:,.0f} ({best.platform.capitalize() if best else ''})\n\n{verdict}"
+                            self.ui.update_task_workspace(status="Comparison Complete & Opened in Browser", output=out_summary, percent=100)
+
+                        if hasattr(self.ui, "show_hud_deliverable"):
+                            self.ui.show_hud_deliverable(
+                                title=f"Shopping: {query_prod[:28]}",
+                                summary=verdict,
+                                bullets=[
+                                    f"Top Pick: {best.title[:45]} (₹{best.price:,.0f})" if best else "",
+                                    f"Platform: {best.platform.capitalize() if best else ''}",
+                                    f"Deal: {best.badge if best and best.badge else 'In Stock'}",
+                                    "Status: Opened in browser",
+                                ],
+                                file_path=card_html,
+                                kind="shopping"
+                            )
+
+                        if voice_msg:
+                            self.speak(voice_msg + f" I have opened the {best.platform.capitalize()} listing in your browser, sir.")
+                        elif best:
+                            self.speak(f"The best option is {best.title[:45]} on {best.platform.capitalize()} for ₹{best.price:,.0f}. I've opened the link in your browser and loaded the comparison card on your HUD, sir.")
+
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Shopping agent failed: {exc}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Search Failed", output=str(exc), percent=0)
+                        self.speak("I encountered an issue searching for that item, sir. Please check the network connection.")
+
+            if intent_res.intent == "flowstate":
+                fs_action = str(intent_res.action or "snapshot").lower()
+                ws_name = str(intent_res.parameters.get("name") or "Main Workspace")
+                self.speak(intent_res.voice_ack or f"Processing FlowState workspace '{ws_name}'...")
+
+                def _run_flowstate():
+                    try:
+                        from core.flowstate import get_flowstate_manager
+                        manager = get_flowstate_manager()
+
+                        if fs_action in ("snapshot", "save", "create"):
+                            if hasattr(self.ui, "begin_task_workspace"):
+                                self.ui.begin_task_workspace(
+                                    f"FlowState: Snapshot '{ws_name}'",
+                                    ["Enumerate running apps", "Extract Chrome & Edge tabs", "Record VS Code workspaces", "Save to persistent storage"],
+                                    source=source or "local"
+                                )
+                            res = manager.snapshot_workspace(ws_name)
+                            apps_count = res.get("apps_count", 0)
+                            tabs_count = res.get("chrome_tabs_count", 0) + res.get("edge_tabs_count", 0)
+                            workspaces = res.get("vscode_workspaces", [])
+                            summary = f"Saved '{ws_name}'\n• {apps_count} desktop applications\n• {tabs_count} active browser tabs\n• {len(workspaces)} code projects\n\nSurvives reboots permanently."
+
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(status="Workspace Snapshotted", output=summary, percent=100)
+
+                            if hasattr(self.ui, "show_hud_deliverable"):
+                                self.ui.show_hud_deliverable(
+                                    title=f"FlowState: {ws_name}",
+                                    summary=f"Snapshot created at {res.get('created_str')}",
+                                    bullets=[
+                                        f"Apps: {apps_count} running",
+                                        f"Browser Tabs: {tabs_count} active",
+                                        f"Projects: {len(workspaces)} folders",
+                                        "Status: Saved to persistent disk",
+                                    ],
+                                    kind="flowstate"
+                                )
+                            self.speak(f"Workspace '{ws_name}' has been snapshotted with {apps_count} apps and {tabs_count} browser tabs, sir. You can reboot anytime.")
+
+                        elif fs_action in ("restore", "load", "switch"):
+                            if hasattr(self.ui, "begin_task_workspace"):
+                                self.ui.begin_task_workspace(
+                                    f"FlowState: Restore '{ws_name}'",
+                                    ["Load snapshot from disk", "Relaunch Chrome & Edge tabs", "Relaunch VS Code projects", "Relaunch desktop applications"],
+                                    source=source or "local"
+                                )
+                            res = manager.restore_workspace(ws_name)
+                            if res.get("success"):
+                                items = res.get("restored_items", [])
+                                summary = f"Restored '{ws_name}'\n" + "\n".join([f"• {it}" for it in items])
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="Workspace Restored", output=summary, percent=100)
+                                self.speak(f"Restored workspace '{ws_name}' with {len(items)} applications and tabs, sir.")
+                            else:
+                                err = res.get("error", "Workspace not found.")
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="Restore Failed", output=err, percent=0)
+                                self.speak(f"Could not restore workspace '{ws_name}': {err}")
+
+                        elif fs_action in ("list", "show"):
+                            workspaces = manager.list_workspaces()
+                            if workspaces:
+                                names = [w["name"] for w in workspaces]
+                                summary = "Saved FlowState Restoration Points:\n" + "\n".join([
+                                    f"• {w['name']} ({w['apps_count']} apps, {w['tabs_count']} tabs, created {w['created_str']})"
+                                    for w in workspaces
+                                ])
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="Saved Workspaces", output=summary, percent=100)
+                                self.speak(f"You have {len(workspaces)} saved workspaces: {', '.join(names[:3])}, sir.")
+                            else:
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="No Workspaces", output="No saved FlowState restoration points found.", percent=100)
+                                self.speak("You don't have any saved workspace restoration points yet, sir.")
+
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: FlowState failed: {exc}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="FlowState Error", output=str(exc), percent=0)
+                        self.speak(f"FlowState encountered an error: {exc}")
+
+                threading.Thread(target=_run_flowstate, daemon=True).start()
+                return
+
+            if intent_res.intent == "omni_planner":
+                plan_goal = str(intent_res.parameters.get("goal") or text)
+                self.speak(intent_res.voice_ack or "Executing multi-step system plan...")
+
+                def _run_omni_planner():
+                    try:
+                        from core.omni_planner import get_omni_planner
+                        planner = get_omni_planner()
+                        steps = planner.decompose_goal(plan_goal)
+                        step_descs = [f"{s.subsystem.capitalize()}: {s.description}" for s in steps]
+
+                        if hasattr(self.ui, "begin_task_workspace"):
+                            self.ui.begin_task_workspace(
+                                f"OmniPlanner: {plan_goal[:35]}",
+                                step_descs,
+                                source=source or "local"
+                            )
+
+                        report = planner.execute_plan(plan_goal, steps=steps)
+
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(
+                                status=f"Completed {report.successful_steps}/{report.total_steps} Steps",
+                                output=report.executive_briefing,
+                                percent=100
+                            )
+
+                        self.speak(report.executive_briefing)
+
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: OmniPlanner failed: {exc}")
+                        self.speak(f"OmniPlanner encountered an issue: {exc}")
+
+                threading.Thread(target=_run_omni_planner, daemon=True, name="omni-planner").start()
+                return
+
+            if intent_res.intent == "reverse_engineer":
+                target = str(intent_res.parameters.get("target") or text)
+                action = str(intent_res.action or intent_res.parameters.get("action") or "analyze")
+                feature = str(intent_res.parameters.get("feature") or "")
+                dest = str(intent_res.parameters.get("destination") or "")
+                self.speak(intent_res.voice_ack or "Initiating reverse engineering...")
+                if hasattr(self.ui, "begin_task_workspace"):
+                    self.ui.begin_task_workspace(
+                        f"Reverse Engineering: {target[:30]}",
+                        ["Connecting to target", "Inspecting DOM / Binary layout", "Extracting API surface & schemas", "Synthesizing output"],
+                        source=source or "local"
+                    )
+
+                def _run_re():
+                    try:
+                        from actions.reverse_engineer import reverse_engineer
+                        res = reverse_engineer(
+                            {"target": target, "action": action, "feature": feature, "destination": dest},
+                            player=self.ui,
+                            speak=self.speak
+                        )
+                        self.ui.write_log(res)
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Complete", output=res[:300], percent=100)
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Reverse engineering failed: {exc}")
+                        self.speak(f"Reverse engineering encountered an error: {exc}")
+
+                threading.Thread(target=_run_re, daemon=True, name="reverse-engineer-worker").start()
+                return
+
+            if intent_res.intent == "generate_image":
+                img_prompt = str(intent_res.parameters.get("prompt") or text)
+                img_style = str(intent_res.parameters.get("style") or "photorealistic")
+                self.speak(intent_res.voice_ack or "Generating your image now, sir...")
+                if hasattr(self.ui, "begin_task_workspace"):
+                    self.ui.begin_task_workspace(
+                        f"Image Synthesis: {img_prompt[:25]}",
+                        ["Refining neural diffusion prompt", "Synthesizing high-res image", "Saving to Desktop", "Rendering HUD preview"],
+                        source=source or "local"
+                    )
+
+                def _run_img():
+                    try:
+                        from actions.image_generator import generate_image
+                        res = generate_image(
+                            {"prompt": img_prompt, "style": img_style},
+                            player=self.ui,
+                            speak=self.speak
+                        )
+                        self.ui.write_log(res)
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Render Complete", output="Saved to Desktop/Brahma_Images", percent=100)
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Image generation failed: {exc}")
+                        self.speak(f"Image generation encountered an error: {exc}")
+
+                threading.Thread(target=_run_img, daemon=True, name="image-gen-worker").start()
+                return
+
+            if intent_res.intent == "study_guard":
+                sg_action = str(intent_res.action or "start").lower()
+                sg_duration = int(intent_res.parameters.get("duration", 25))
+                sg_subject = str(intent_res.parameters.get("subject", "Focus Sprint"))
+                sg_lofi = bool(intent_res.parameters.get("lofi", False))
+                sg_timer_only = bool(intent_res.parameters.get("timer_only", False))
+
+                if sg_action not in ("start", "begin", "launch"):
+                    self.speak(intent_res.voice_ack or "Processing StudyGuard...")
+
+                def _run_study_guard():
+                    try:
+                        from core.study_guard import get_study_guard_manager
+                        manager = get_study_guard_manager()
+
+                        if sg_action in ("start", "begin", "launch"):
+                            def _hud_update(status_text: str, pct: int):
+                                try:
+                                    if hasattr(self.ui, "update_task_workspace"):
+                                        self.ui.update_task_workspace(status=status_text, percent=pct)
+                                except Exception:
+                                    pass
+
+                            res = manager.start_session(
+                                duration_minutes=sg_duration,
+                                subject=sg_subject,
+                                play_lofi=sg_lofi,
+                                timer_only=sg_timer_only,
+                                speak_cb=self.speak,
+                                hud_update_cb=_hud_update
+                            )
+                            if res.get("success"):
+                                mode_lbl = "Pomodoro Focus Timer" if sg_timer_only else "MediaPipe Face Sentinel"
+                                if hasattr(self.ui, "begin_task_workspace"):
+                                    self.ui.begin_task_workspace(
+                                        f"StudyGuard: {sg_subject} ({sg_duration}m)",
+                                        [
+                                            f"Mode: {mode_lbl}",
+                                            "Track Eye Aspect Ratio & posture" if not sg_timer_only else "Pomodoro countdown active",
+                                            "Monitor distractions & flow state" if not sg_timer_only else "Silent focus interval",
+                                            "Log sprint analytics to Circuit HUD"
+                                        ],
+                                        source=source or "local"
+                                    )
+                                self.speak(res.get("message", f"Study session started for {sg_duration} minutes."))
+                            else:
+                                err_msg = res.get("message", "Study session could not start.")
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="Startup Blocked", output=err_msg, percent=0)
+                                self.speak(err_msg)
+
+                        elif sg_action in ("stop", "end", "finish"):
+                            res = manager.stop_session()
+                            if res.get("success"):
+                                stats = res.get("stats", {})
+                                card_path = res.get("card_path")
+                                summary = res.get("summary", "")
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="Session Finished", output=summary, percent=100)
+                                if hasattr(self.ui, "show_hud_deliverable"):
+                                    self.ui.show_hud_deliverable(
+                                        title=f"Study: {stats.get('subject', 'Sprint')}",
+                                        summary=f"Focus Efficiency: {stats.get('focus_score')}%\nTotal Time: {int(stats.get('total_seconds', 0) // 60)}m",
+                                        bullets=[
+                                            f"Focus Score: {stats.get('focus_score')}%",
+                                            f"Focus Time: {int(stats.get('active_focus_seconds', 0) // 60)} minutes",
+                                            f"Sleep Alerts: {stats.get('sleep_alerts', 0)}",
+                                            f"Phone Distractions: {stats.get('phone_alerts', 0)}",
+                                        ],
+                                        file_path=card_path,
+                                        kind="study_guard"
+                                    )
+                                self.speak(f"Study session finished, sir! Your focus score was {stats.get('focus_score')} percent.")
+                            else:
+                                self.speak(res.get("message", "No active study session to stop."))
+
+                        elif sg_action in ("pause", "hold"):
+                            manager.pause_session()
+
+                        elif sg_action in ("resume", "continue"):
+                            manager.resume_session()
+
+                        elif sg_action in ("status", "stats"):
+                            st = manager.get_status()
+                            if st.get("is_active"):
+                                stats = st.get("stats", {})
+                                self.speak(f"Session '{stats.get('subject')}' is active with a focus score of {stats.get('focus_score')} percent, sir.")
+                            else:
+                                self.speak("No study session is currently running, sir.")
+
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: StudyGuard failed: {exc}")
+                        self.speak(f"StudyGuard encountered an issue: {exc}")
+
+                threading.Thread(target=_run_study_guard, daemon=True, name="study-guard").start()
+                return
+
+            if intent_res.intent == "game_sentinel":
+                gs_action = str(intent_res.action or "clean_ram").lower()
+                gs_game = str(intent_res.parameters.get("game_name") or "Gaming Session")
+
+                def _run_game_sentinel():
+                    try:
+                        from core.game_sentinel import get_game_sentinel_manager
+                        manager = get_game_sentinel_manager()
+
+                        if gs_action in ("start", "enable", "on", "activate", "boost"):
+                            if hasattr(self.ui, "begin_task_workspace"):
+                                self.ui.begin_task_workspace(
+                                    f"Game Sentinel: {gs_game}",
+                                    [
+                                        "Engage Ultimate Performance Power Plan",
+                                        "Elevate game process thread priority to High",
+                                        "Execute Mem Reduct deep memory & standby purge",
+                                        "Silence non-critical desktop notifications"
+                                    ],
+                                    source=source or "local"
+                                )
+                            res = manager.activate_game_mode(game_name=gs_game, manual=True, speak=False)
+                            ram_freed = res.get("ram_cleaned", {}).get("freed_mb", 0)
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(
+                                    status="Turbo Boost Engaged",
+                                    output=f"RAM Purged: {ram_freed} MB | Power: {res.get('power_plan')} | Priority: HIGH",
+                                    percent=100
+                                )
+                            self.speak(res.get("message"))
+
+                        elif gs_action in ("stop", "disable", "off", "deactivate", "exit"):
+                            res = manager.deactivate_game_mode(manual=True, speak=False)
+                            if res.get("success"):
+                                if hasattr(self.ui, "update_task_workspace"):
+                                    self.ui.update_task_workspace(status="Game Mode Disengaged", percent=100)
+                                self.speak(res.get("message"))
+                            else:
+                                self.speak("Game mode is not currently active, sir.")
+
+                        elif gs_action in ("clean_ram", "purge_ram", "mem_reduct", "free_ram", "clear_ram"):
+                            if hasattr(self.ui, "begin_task_workspace"):
+                                self.ui.begin_task_workspace(
+                                    "Mem Reduct RAM Cleaner",
+                                    [
+                                        "Query system working sets & processes",
+                                        "Empty process working sets via K32EmptyWorkingSet",
+                                        "Purge Windows Standby List & Modified Page List",
+                                        "Calculate freed physical memory"
+                                    ],
+                                    source=source or "local"
+                                )
+                            res = manager.clean_ram_now(speak=False)
+                            stats = res.get("stats", {})
+                            if hasattr(self.ui, "finish_task_workspace"):
+                                self.ui.finish_task_workspace(
+                                    result=res.get("message"),
+                                    status=f"Freed {stats.get('freed_mb', 0)} MB ({stats.get('before_percent')}% -> {stats.get('after_percent')}%)",
+                                    percent=100
+                                )
+                            self.speak(res.get("message"))
+
+                        elif gs_action in ("status", "telemetry"):
+                            st = manager.get_status()
+                            act = "Active" if st.get("is_game_mode_active") else "Idle"
+                            gname = f" for '{st.get('active_game_name')}'" if st.get("active_game_name") else ""
+                            self.speak(f"Game Sentinel is {act}{gname}. RAM usage is at {st.get('ram_percent')} percent.")
+
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Game Sentinel failed: {exc}")
+                        self.speak(f"Game Sentinel encountered an issue: {exc}")
+
+                threading.Thread(target=_run_game_sentinel, daemon=True, name="game-sentinel").start()
+                return
+
+            if intent_res.intent == "net_sentinel":
+                ns_action = str(intent_res.action or "scan_network").lower()
+                ns_target = str(intent_res.parameters.get("target") or "")
+                self.speak(intent_res.voice_ack or "Executing NetSentinel...")
+
+                def _run_net_sentinel():
+                    try:
+                        from core.net_sentinel import get_net_sentinel
+                        sentinel = get_net_sentinel()
+
+                        if ns_action in ("scan_network", "scan_wifi", "scan_lan", "devices", "radar"):
+                            # Immediately pop up the tactical Net-Radar in active sweep mode
+                            if hasattr(self.ui, "show_radar_hud"):
+                                self.ui.show_radar_hud(sentinel.last_scan_result or {})
+
+                            if hasattr(self.ui, "begin_task_workspace"):
+                                self.ui.begin_task_workspace(
+                                    "NetSentinel: Subnet Topology Audit",
+                                    [
+                                        "Activate Ultron Net-Radar Scope",
+                                        "Sweep /24 subnet addresses via SendARP",
+                                        "Resolve OUI hardware vendors & open service ports",
+                                        "Render interactive Cyberpunk Network Map"
+                                    ],
+                                    source=source or "local"
+                                )
+                            res = sentinel.scan_local_network(deep=False)
+                            card_path = res.get("card_path")
+                            num_devs = res.get("total_devices_found", 0)
+                            gw_ip = res.get("gateway_ip", "192.168.0.1")
+                            router_vendor = res.get("router", {}).get("vendor", "Router")
+
+                            # Push live discovered devices to the Radar HUD
+                            if hasattr(self.ui, "show_radar_hud"):
+                                self.ui.show_radar_hud(res)
+
+                            summary_msg = f"Network scan complete: Discovered {num_devs} active devices on your LAN through gateway {gw_ip} ({router_vendor})."
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(
+                                    status=f"{num_devs} Devices Online",
+                                    output=summary_msg,
+                                    percent=100
+                                )
+                            if card_path and hasattr(self.ui, "show_hud_deliverable"):
+                                self.ui.show_hud_deliverable(
+                                    title=f"Network Topology: {gw_ip}",
+                                    summary=f"Discovered {num_devs} connected devices on {res.get('subnet')}",
+                                    bullets=[
+                                        f"Gateway: {gw_ip} ({router_vendor})",
+                                        f"Public IP: {res.get('internet', {}).get('public_ip')}",
+                                        f"ISP: {res.get('internet', {}).get('isp')}",
+                                        f"Active LAN Nodes: {num_devs}",
+                                    ],
+                                    file_path=str(card_path),
+                                    kind="net_sentinel"
+                                )
+                            self.speak(f"Scan complete, sir. Discovered {num_devs} devices connected to your {router_vendor} router. Radar scope is active.")
+
+                        elif ns_action in ("connect_all_devices", "connect_all", "link_devices", "mesh_connect", "broadcast_online"):
+                            # Immediately display the tactical Radar HUD
+                            if hasattr(self.ui, "show_radar_hud"):
+                                self.ui.show_radar_hud(sentinel.last_scan_result or {})
+
+                            if hasattr(self.ui, "begin_task_workspace"):
+                                self.ui.begin_task_workspace(
+                                    "NetSentinel: Zero-Touch Mesh Sync",
+                                    [
+                                        "Broadcast Brahma Online beacon across subnet",
+                                        "Probe SSDP, Cast & UPnP services on LAN endpoints",
+                                        "Establish zero-install device telemetry mesh",
+                                        "Synchronize Radar HUD device status"
+                                    ],
+                                    source=source or "local"
+                                )
+
+                            c_res = sentinel.connect_all_devices("Brahma AI Online // Node Linked")
+                            linked_devs = c_res.get("total_devices_linked", 0)
+
+                            # Push updated linked devices to Radar HUD
+                            if hasattr(self.ui, "show_radar_hud"):
+                                self.ui.show_radar_hud(sentinel.last_scan_result or {})
+
+                            msg = f"Network mesh online: Connected {linked_devs} devices. Broadcast notification transmitted across LAN."
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(
+                                    status=f"{linked_devs} Devices Linked",
+                                    output=msg,
+                                    percent=100
+                                )
+                            self.speak(f"Network mesh synchronized, sir. Linked with {linked_devs} devices across your network. Online notification broadcasted.")
+
+                        elif ns_action in ("inspect_router", "router"):
+                            res = sentinel.inspect_router()
+                            open_p = res.get("open_ports", [])
+                            r_msg = (
+                                f"Router at {res.get('gateway_ip')} is a {res.get('vendor')} gateway. "
+                                f"Open ports: {open_p}. Web administration console is active."
+                            )
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(status=f"Router: {res.get('vendor')}", output=r_msg, percent=100)
+                            self.speak(r_msg)
+
+                        elif ns_action in ("internet_status", "internet", "public_ip"):
+                            tele = sentinel.get_internet_telemetry()
+                            stat = "Online" if tele.get("connected") else "Offline"
+                            i_msg = (
+                                f"Internet uplink is {stat}, sir. Public IP is {tele.get('public_ip')} "
+                                f"via {tele.get('isp')} in {tele.get('city')}, with {tele.get('ping_latency_ms')} milliseconds latency."
+                            )
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(status=f"Internet: {stat}", output=i_msg, percent=100)
+                            self.speak(i_msg)
+
+                        elif ns_action in ("wake_device", "wake_on_lan"):
+                            if not ns_target:
+                                self.speak("Please specify the target MAC address to wake, sir.")
+                                return
+                            w_res = sentinel.wake_on_lan(ns_target)
+                            self.speak(w_res.get("message", "Wake-on-LAN packet transmitted."))
+
+                        elif ns_action == "ping":
+                            p_res = sentinel.ping_target(ns_target or "1.1.1.1")
+                            p_msg = f"Host {p_res.get('target')} is {p_res.get('status')} with average latency of {p_res.get('avg_latency_ms')} milliseconds."
+                            self.speak(p_msg)
+
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: NetSentinel failed: {exc}")
+                        self.speak(f"NetSentinel encountered an issue: {exc}")
+
+                threading.Thread(target=_run_net_sentinel, daemon=True, name="net-sentinel").start()
+                return
+
+            if intent_res.intent == "space_cleaner":
+                sc_action = str(intent_res.action or "open_sentinel").lower()
+                self.speak(intent_res.voice_ack or "Initializing Brahma Storage Sentinel...")
+
+                def _run_space_cleaner():
+                    try:
+                        from core.space_cleaner import get_space_cleaner
+                        cleaner = get_space_cleaner()
+
+                        # Pop up Storage Sentinel HUD overlay or standalone window
+                        if hasattr(self.ui, "show_space_cleaner_hud"):
+                            self.ui.show_space_cleaner_hud()
+                        else:
+                            from core.space_cleaner_hud import show_space_cleaner_hud
+                            show_space_cleaner_hud()
+
+                        if hasattr(self.ui, "begin_task_workspace"):
+                            self.ui.begin_task_workspace(
+                                "Storage Sentinel: Interactive Disk Audit",
+                                [
+                                    "Project Radial Sunburst Storage Topography",
+                                    "Audit System Temp, Browser Shader Caches & Crash Logs",
+                                    "Calculate Safe Reclaimable Clusters",
+                                    "Safely Purge Volatile Bloat"
+                                ],
+                                source=source or "local"
+                            )
+
+                        telemetry = cleaner.get_disk_telemetry()
+                        drives = telemetry.get("drives", [])
+                        primary_drive = drives[0] if drives else {}
+                        free_gb = primary_drive.get("free_gb", 0)
+                        total_gb = primary_drive.get("total_gb", 0)
+                        pct_used = primary_drive.get("percent_used", 0)
+
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(
+                                status=f"{free_gb} GB Free / {total_gb} GB Total",
+                                output=f"Storage Sentinel active. Primary disk has {free_gb} GB free ({100 - pct_used:.1f}% available). Interactive Sunburst scope ready.",
+                                percent=100
+                            )
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Storage Sentinel failed: {exc}")
+                        self.speak(f"Storage Sentinel encountered an issue: {exc}")
+
+                threading.Thread(target=_run_space_cleaner, daemon=True, name="space-cleaner").start()
+                return
+
+            if intent_res.intent == "presentation":
+                presentation_topic = str(intent_res.parameters.get("topic") or text)
+                self.speak(intent_res.voice_ack or "Designing your presentation slides...")
+                if hasattr(self.ui, "begin_task_workspace"):
+                    self.ui.begin_task_workspace(
+                        text,
+                        ["Researching topic", "Outlining slides", "Applying typography & theme", "Generating PowerPoint deck"],
+                        source=source or "local"
+                    )
+                def _run_presentation():
+                    try:
+                        from actions.office_generator import generate_presentation_from_prompt
+                        res = generate_presentation_from_prompt(presentation_topic, player=self.ui, speak=self.speak)
+                        self.ui.write_log(f"[BrahmaOffice] {res}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Presentation Completed", output=res, percent=100)
+                        self.speak("Your presentation has been created and saved to Desktop, sir.")
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Presentation generation failed: {exc}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Generation Failed", output=str(exc), percent=0)
+                        self.speak("There was an issue creating the presentation, sir. Please check the logs.")
+                threading.Thread(target=_run_presentation, daemon=True).start()
+                return
+
+            if intent_res.intent == "spreadsheet":
+                sheet_topic = str(intent_res.parameters.get("topic") or text)
+                self.speak(intent_res.voice_ack or "Building your spreadsheet workbook...")
+                if hasattr(self.ui, "begin_task_workspace"):
+                    self.ui.begin_task_workspace(
+                        text,
+                        ["Analyzing data structure", "Defining headers & formulas", "Formatting workbook", "Saving Excel spreadsheet"],
+                        source=source or "local"
+                    )
+                def _run_spreadsheet():
+                    try:
+                        from actions.office_generator import generate_spreadsheet_from_prompt
+                        res = generate_spreadsheet_from_prompt(sheet_topic, player=self.ui, speak=self.speak)
+                        self.ui.write_log(f"[BrahmaOffice] {res}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Spreadsheet Completed", output=res, percent=100)
+                        self.speak("Your spreadsheet workbook has been created and saved to Desktop, sir.")
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Spreadsheet generation failed: {exc}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Generation Failed", output=str(exc), percent=0)
+                        self.speak("There was an issue creating the spreadsheet, sir. Please check the logs.")
+                threading.Thread(target=_run_spreadsheet, daemon=True).start()
+                return
+
+            if intent_res.intent == "developer_agent":
+                developer_settings = self.ui._load_app_settings() if hasattr(self.ui, "_load_app_settings") else {}
+                developer_workspace = str(developer_settings.get("developer_mode_workspace", "")).strip()
+                if not developer_workspace:
+                    developer_workspace = str(Path.home() / "Desktop" / "BrahmaProjects")
+                    Path(developer_workspace).mkdir(parents=True, exist_ok=True)
+
+                self.speak(intent_res.voice_ack or "Working on your project with Brahma Dev...")
+                if hasattr(self.ui, "begin_task_workspace"):
+                    self.ui.begin_task_workspace(text, ["Analyzing specifications", "Scaffolding files", "Writing code", "Verifying build"], source=source or "local")
+
+                def _run_brahma_dev():
+                    try:
+                        import webbrowser
+                        from actions.brahma_dev_agent import run_dev_agent
+                        res = run_dev_agent({
+                            "description": text,
+                            "workspace_path": developer_workspace
+                        }, speak=self.speak)
+                        self.ui.write_log(f"[BrahmaDev] {res[:400]}")
+                        if "encountered an error during inference" in res or "LLM error:" in res:
+                            if hasattr(self.ui, "update_task_workspace"):
+                                self.ui.update_task_workspace(status="Build Error", output=res, percent=0)
+                            self.speak("There was an error building the project, sir. Please check the logs.")
+                            return
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Project Completed", output=res, percent=100)
+                        folder_display = developer_workspace
+                        try:
+                            folder_display = Path(developer_workspace).name or developer_workspace
+                        except Exception:
+                            pass
+                        self.speak(f"Your project has been completed and saved to {folder_display}, sir.")
+                        try:
+                            idx_path = Path(developer_workspace) / "index.html"
+                            if idx_path.exists():
+                                webbrowser.open(str(idx_path.resolve()))
+                        except Exception:
+                            pass
+                    except Exception as exc:
+                        self.ui.write_log(f"ERR: Brahma Dev failed: {exc}")
+                        if hasattr(self.ui, "update_task_workspace"):
+                            self.ui.update_task_workspace(status="Build Failed", output=str(exc), percent=0)
+                        self.speak("There was an issue building the project, sir. Please check the logs.")
+                threading.Thread(target=_run_brahma_dev, daemon=True).start()
+                return
+
+        except Exception as _dispatcher_exc:
+            print(f"[Dispatcher] Warning: Intent dispatcher error, falling back to legacy rules: {_dispatcher_exc}")
+
+        # Check for dynamic/evolved skill execution (e.g. specialized installed skills)
+        try:
+            from core.dynamic_registry import DynamicToolRegistry
+            matched = DynamicToolRegistry.find_matching_skill(text)
+            if matched:
+                skill_name, skill_args = matched
+                self.speak(f"Running {skill_name.replace('_', ' ')}.")
+                def _run_dynamic_feature():
+                    try:
+                        res = DynamicToolRegistry.execute_sync(skill_name, skill_args or {})
+                        out_text = ""
+                        if isinstance(res, dict):
+                            out_text = str(res.get("summary") or res.get("output") or res.get("text") or res).strip()
+                        else:
+                            out_text = str(res).strip()
+                        self.ui.write_log(f"Brahma Evo [{skill_name}]:\n{out_text}")
+                        if hasattr(self.ui, "finish_task_workspace"):
+                            self.ui.finish_task_workspace(out_text, f"{skill_name} completed.", 100)
+                        if hasattr(self.ui, "show_hud_deliverable"):
+                            self.ui.show_hud_deliverable(
+                                title=f"{skill_name.upper()} DELIVERABLE",
+                                summary=out_text,
+                                kind=skill_name
+                            )
+                        # Speak first line as voice response
+                        first_line = out_text.strip().splitlines()[0] if out_text.strip() else "Task completed."
+                        if len(first_line) > 120:
+                            first_line = first_line[:115] + "..."
+                        self.speak(first_line)
+                    except Exception as err:
+                        self.ui.write_log(f"ERR: {skill_name} failed: {err}")
+                        self.speak(f"Error running {skill_name}: {err}")
+                threading.Thread(target=_run_dynamic_feature, daemon=True, name=f"skill-{skill_name}").start()
+                return
+        except Exception as e_dyn:
+            print(f"[Registry] Match error: {e_dyn}")
+
+        # Brahma Connect Mobile Routing (fallback intercept)
+        if source != "instagram" and self._handle_brahma_connect_command(text, source=source or "local"):
+            return
+
         developer_settings = self.ui._load_app_settings() if hasattr(self.ui, "_load_app_settings") else {}
         developer_workspace = str(developer_settings.get("developer_mode_workspace", "")).strip()
         if not developer_workspace:
@@ -2467,7 +3479,7 @@ class BrahmaLive:
             return
 
         website_request = _looks_like_website_request(text)
-        code_request = (not presentation_request and not spreadsheet_request) and _looks_like_code_request(text) and any(w in text.lower() for w in ("app", "website", "web", "program", "script", "project", "game", "calc", "html", "react"))
+        code_request = (not presentation_request and not spreadsheet_request) and _looks_like_code_request(text) and any(re.search(rf"\b{re.escape(w)}\b", text.lower()) for w in ("app", "website", "web", "program", "script", "project", "game", "calc", "html", "react"))
 
         if website_request or code_request:
             self.speak("Working on your project with Brahma Dev...")
@@ -2659,22 +3671,23 @@ class BrahmaLive:
                     from actions.test_action import test_action
                     res = test_action({}, player=self.ui, speak=self.speak)
                     self.ui.write_log(f"[TestAction] {res}")
-                    self.speak(f"Test action succeeded with no errors: {res}. The bug appears already healed!")
+                    self.speak(f"Test action executed with no errors: {res}. The code is currently healthy.")
                 except Exception as exc:
                     import traceback
                     from actions.auto_heal_engine import AutoHealEngine
                     tb_str = traceback.format_exc()
                     AutoHealEngine.record_last_error(tb_str)
-                    err_msg = f"Simulated bug triggered in test_action.py: {type(exc).__name__}. Traceback captured! You can now say 'Brahma, fix that bug'."
-                    self.speak(err_msg)
-                    self.ui.write_log(f"[AutoHeal Test] {err_msg}")
-                    if hasattr(self.ui, "finish_task_workspace"):
-                        self.ui.finish_task_workspace(tb_str, "Simulated bug captured.", 100)
+                    # Ultron Autonomous Self-Repair: Immediately heals without asking for permission!
+                    AutoHealEngine.heal_traceback(
+                        tb_str,
+                        player=self.ui,
+                        speak=self.speak,
+                        module_name="test_action"
+                    )
             threading.Thread(target=_run_test_bug, daemon=True).start()
             return
 
         if is_heal_cmd:
-            self.speak("Analyzing last captured traceback and synthesizing hotfix...")
             def _run_heal():
                 from actions.auto_heal_engine import auto_heal
                 res = auto_heal({"action": "heal"}, player=self.ui, speak=self.speak)
@@ -2705,14 +3718,23 @@ class BrahmaLive:
             threading.Thread(target=_run_history, daemon=True).start()
             return
 
-        if is_learn_rule:
-            rule_raw = lower_cmd.replace("remember that ", "").replace("remember to ", "").replace("new rule: ", "").strip()
+        # Continuous Self-Improvement: Conversational Correction Learner
+        from core.learned_rules import LearnedRulesEngine
+        detected_rule = LearnedRulesEngine.detect_and_learn_conversational_rule(text)
+        if detected_rule or is_learn_rule:
+            rule_text = (detected_rule.get("rule") if detected_rule else None) or lower_cmd.replace("remember that ", "").replace("remember to ", "").replace("new rule: ", "").strip()
             def _run_learn():
-                from core.learned_rules import LearnedRulesEngine
-                res = LearnedRulesEngine.add_rule(rule_raw, origin="voice_directive")
-                msg = res.get("message", f"Understood. I have committed '{rule_raw}' to my continuous memory.")
-                self.speak(msg)
-                self.ui.write_log(f"[LearnedRules] {msg}")
+                res = LearnedRulesEngine.add_rule(rule_text, origin="conversational_dialogue")
+                msg = res.get("message", f"Understood. I have adapted my behavioral directive: {rule_text}")
+                self.speak(f"Understood, sir. I have adapted my behavioral directive: {rule_text}")
+                self.ui.write_log(f"🧠 [Continuous Learning] Rule recorded: {rule_text}")
+                if hasattr(self.ui, "show_hud_deliverable"):
+                    self.ui.show_hud_deliverable(
+                        title="Behavioral Directive Learned",
+                        summary=rule_text,
+                        bullets=[f"Rule: {rule_text}", "Origin: Continuous Dialogue", "Status: Active in LLM context"],
+                        kind="rule"
+                    )
                 if hasattr(self.ui, "finish_task_workspace"):
                     self.ui.finish_task_workspace(msg, "Rule learned.", 100)
             threading.Thread(target=_run_learn, daemon=True).start()
@@ -2779,41 +3801,46 @@ class BrahmaLive:
             return
         if self._handle_smart_home_command(text, source=source or "local"):
             return
-        if _looks_like_screen_request(text):
+        is_cam_req = _looks_like_camera_request(text)
+        is_scr_req = _looks_like_screen_request(text)
+        if is_cam_req or is_scr_req:
+            vision_angle = "camera" if is_cam_req else "screen"
+            title_text = "Webcam Inspection" if is_cam_req else "Screen Analysis"
+            status_text = "Checking camera..." if is_cam_req else "Scanning screen..."
+            output_text = "Brahma Evo is inspecting your camera..." if is_cam_req else "Brahma Evo is inspecting the screen for what you asked about."
             try:
                 self.ui.update_task_workspace(
-                    status="Scanning screen",
-                    output="Brahma Evo is inspecting the screen for what you asked about.",
+                    title=title_text,
+                    status=status_text,
+                    output=output_text,
                     percent=40,
                 )
             except Exception:
                 pass
-            print("[Main] Screen analysis request received")
+            print(f"[Main] {title_text} request received")
             img_bytes = None
-            if hasattr(self.ui, "capture_screen_bytes"):
+            if vision_angle == "screen" and hasattr(self.ui, "capture_screen_bytes"):
                 print("[Main] Capturing screenshot from UI")
                 img_bytes = self.ui.capture_screen_bytes()
                 print(f"[Main] UI screenshot capture returned {len(img_bytes) if img_bytes is not None else 'None'} bytes")
-            else:
-                print("[Main] UI object has no capture_screen_bytes method")
 
             def _run_screen_process():
-                print("[Main] Starting screen_process thread")
+                print("[Main] Starting vision_process thread")
                 success = screen_process(
-                    parameters={"angle": "screen", "text": text},
+                    parameters={"angle": vision_angle, "text": text},
                     response=None,
                     player=self.ui,
                     session_memory=None,
                     image_bytes=img_bytes,
                 )
-                print(f"[Main] screen_process finished: {success}")
+                print(f"[Main] vision_process finished: {success}")
                 if not success:
                     try:
                         self.ui.update_task_workspace(
-                            status="Screen analysis failed",
+                            status=f"{title_text} failed",
                             output=(
-                                "Screen analysis could not complete. "
-                                "Check your internet connection, API key, or screen capture permissions."
+                                "Visual perception could not complete. "
+                                "Check your internet connection, API key, or camera/screen permissions."
                             ),
                             percent=0,
                         )
@@ -2833,17 +3860,22 @@ class BrahmaLive:
         else:
             is_local_preferred = False
 
-        if is_local_preferred or self._use_openrouter_first or not self._loop or not self.session:
-            threading.Thread(target=self._fallback_reply, args=(text, memory_ctx), daemon=True).start()
+        # If Gemini Live session is connected and online, route text directly through Live duplex for sub-second reply
+        if self.session and self._loop and not is_offline_mode:
+            import asyncio
+            async def _send_live_text():
+                try:
+                    content = types.Content(role="user", parts=[types.Part.from_text(text=text)])
+                    await self.session.send_client_content(turns=[content], turn_complete=True)
+                except Exception as exc:
+                    print(f"[BRAHMA EVO] Live stream turn error, falling back: {exc}")
+                    threading.Thread(target=self._fallback_reply, args=(text, memory_ctx), daemon=True).start()
+            asyncio.run_coroutine_threadsafe(_send_live_text(), self._loop)
             return
-        self.ui.set_state("THINKING")
-        asyncio.run_coroutine_threadsafe(
-            self.session.send_client_content(
-                turns={"parts": [{"text": routed_text}]},
-                turn_complete=True
-            ),
-            self._loop
-        )
+
+        # Fallback cascade (Local Brain / REST) when Gemini Live is not connected or in offline mode
+        threading.Thread(target=self._fallback_reply, args=(text, memory_ctx), daemon=True).start()
+        return
 
 
     def _handle_smart_home_command(self, text: str, source: str = "local") -> bool:
@@ -2956,56 +3988,42 @@ class BrahmaLive:
         candidate = re.sub(r"\s+", " ", candidate)
         return candidate
 
-    def _handle_brahma_connect_command(self, text: str, source: str = "local") -> bool:
+    def _handle_brahma_connect_command(self, text: str, source: str = "local", parsed_intent: Any = None) -> bool:
         normalized = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s%]", " ", text.lower())).strip()
         
-        # Explicit mobile indicators: only route to phone if user explicitly mentions phone/mobile
-        # or asks for a phone-exclusive action (flashlight/torch, ring phone).
-        is_flashlight = "flashlight" in normalized or "torch" in normalized
-        is_ring_phone = any(p in normalized for p in ("ring phone", "ring my phone", "find my phone", "find phone", "locate phone"))
-        has_phone_ref = any(token in normalized for token in (
-            "phone", "mobile", "android", "tablet", "brahma connect",
-            "my phone", "my mobile", "my tablet", "my android"
-        ))
+        action = None
+        params: dict[str, object] = {}
 
-        # Never hijack local PC commands (e.g. open chrome, volume up, pc battery) unless user says 'on phone'
-        if not (has_phone_ref or is_flashlight or is_ring_phone):
-            return False
+        if parsed_intent and getattr(parsed_intent, "intent", "") == "mobile_connect":
+            action = parsed_intent.action
+            params = dict(getattr(parsed_intent, "parameters", {}) or {})
+            has_phone_ref = True
+            is_flashlight = "flashlight" in action
+            is_ring_phone = "ring" in action
+        else:
+            # Explicit mobile indicators: only route to phone if user explicitly mentions phone/mobile
+            # or asks for a phone-exclusive action (flashlight/torch, ring phone).
+            is_flashlight = "flashlight" in normalized or "torch" in normalized
+            is_ring_phone = any(p in normalized for p in ("ring phone", "ring my phone", "find my phone", "find phone", "locate phone"))
+            has_phone_ref = any(token in normalized for token in (
+                "phone", "mobile", "android", "tablet", "brahma connect",
+                "my phone", "my mobile", "my tablet", "my android"
+            ))
 
-        try:
-            devices_json = connect_list_devices(parameters={}, player=self.ui)
-            devices = json.loads(devices_json).get("devices", [])
-        except Exception:
-            devices = []
-
-        if not devices:
-            return False
-
-        try:
-            target = ""
-            for device in devices:
-                name = str(device.get("name", "")).lower()
-                device_id = str(device.get("device_id", "")).lower()
-                platform = str(device.get("platform", "")).lower()
-                if any(token in normalized for token in (name, device_id, platform, "phone", "mobile", "android", "tablet")):
-                    target = str(device.get("device_id") or device.get("name") or "").strip()
-                    break
-            if not target and (has_phone_ref or is_flashlight or is_ring_phone) and len(devices) == 1:
-                target = str(devices[0].get("device_id") or devices[0].get("name") or "").strip()
-            if not target:
+            # Never hijack local PC commands (e.g. open chrome, volume up, pc battery) unless user says 'on phone'
+            if not (has_phone_ref or is_flashlight or is_ring_phone):
                 return False
 
-            action = None
-            params: dict[str, object] = {}
-            
             # Check for complex multi-step mobile workflow first
             # Examples: "open X and do Y", "search for Z on X", "message X on Y"
             if (" and " in normalized or " search " in normalized or " play " in normalized or " message " in normalized or " tell " in normalized) and ("open " in normalized or "launch " in normalized or "app" in normalized):
                 action = "mobile_autopilot"
                 params["instruction"] = text
-            elif "flashlight" in normalized and ("turn on" in normalized or "switch on" in normalized or "power on" in normalized or "on" == normalized):
+            elif is_ring_phone:
+                action = "ring_phone"
+            elif "flashlight" in normalized and ("turn on" in normalized or "switch on" in normalized or "power on" in normalized or "on" in normalized):
                 action = "flashlight_on"
-            elif "flashlight" in normalized and ("turn off" in normalized or "switch off" in normalized or "power off" in normalized or "off" == normalized):
+            elif "flashlight" in normalized and ("turn off" in normalized or "switch off" in normalized or "power off" in normalized or "off" in normalized):
                 action = "flashlight_off"
             elif "battery" in normalized or "charge" in normalized:
                 action = "get_battery"
@@ -3027,6 +4045,46 @@ class BrahmaLive:
                 action = "get_device_info"
                 
             if not action:
+                return False
+
+        try:
+            devices_json = connect_list_devices(parameters={}, player=self.ui)
+            devices = json.loads(devices_json).get("devices", [])
+        except Exception:
+            devices = []
+
+        if not devices:
+            msg = "No phone is currently connected to Brahma. Please pair or connect your phone via Brahma Connect or the Mobile Connect dashboard, sir."
+            try:
+                self.ui.update_task_workspace(
+                    title=f"Brahma Connect: {action}",
+                    command=text,
+                    plan=["Search for paired devices", "Verify mobile connection"],
+                    status="No Device Connected",
+                    output=msg,
+                    percent=0,
+                    source=source,
+                )
+            except Exception:
+                pass
+            self.ui.write_log(f"[Brahma Connect] {msg}")
+            self.speak(msg)
+            return True
+
+        try:
+            target = ""
+            for device in devices:
+                name = str(device.get("name", "")).lower()
+                device_id = str(device.get("device_id", "")).lower()
+                platform = str(device.get("platform", "")).lower()
+                if any(token in normalized for token in (name, device_id, platform, "phone", "mobile", "android", "tablet")):
+                    target = str(device.get("device_id") or device.get("name") or "").strip()
+                    break
+            if not target and (has_phone_ref or is_flashlight or is_ring_phone) and len(devices) == 1:
+                target = str(devices[0].get("device_id") or devices[0].get("name") or "").strip()
+            if not target and devices:
+                target = str(devices[0].get("device_id") or devices[0].get("name") or "").strip()
+            if not target:
                 return False
 
             if action == "mobile_autopilot":
@@ -3072,7 +4130,18 @@ class BrahmaLive:
             result_json = connect_execute(parameters=payload, player=self.ui)
             result = json.loads(result_json)
             if result.get("success", False):
-                detail = str(result.get("detail") or result.get("error") or "Device command completed.")
+                detail = str(result.get("detail") or result.get("message") or "")
+                if not detail:
+                    if action == "launch_app":
+                        detail = f"Opening {params.get('app_name')} on your phone, sir."
+                    elif action == "flashlight_on":
+                        detail = "Flashlight turned on."
+                    elif action == "flashlight_off":
+                        detail = "Flashlight turned off."
+                    elif action == "ring_phone":
+                        detail = "Ringing your phone now, sir."
+                    else:
+                        detail = "Device command completed."
                 title = f"Brahma Connect: {action}"
                 self.ui.update_task_workspace(
                     title=title,
@@ -3094,9 +4163,24 @@ class BrahmaLive:
                     self.ui.set_state("LISTENING")
                 return True
 
-            self.ui.write_log(f"ERR: Brahma Connect command failed: {result.get('error') or 'Unknown error'}")
-            return False
-        except Exception:
+            error_msg = str(result.get("error") or "Device command failed.")
+            self.ui.write_log(f"ERR: Brahma Connect command failed: {error_msg}")
+            self.speak(f"Could not complete action on your phone: {error_msg}")
+            try:
+                self.ui.update_task_workspace(
+                    title=f"Brahma Connect: {action}",
+                    command=text,
+                    plan=["Route command to phone", "Execute action"],
+                    status="Execution Failed",
+                    output=error_msg,
+                    percent=0,
+                    source=source,
+                )
+            except Exception:
+                pass
+            return True
+        except Exception as exc:
+            self.ui.write_log(f"ERR: Brahma Connect exception: {exc}")
             return False
 
     def _connect_tool_voice(self, name: str, raw_result: str) -> str | None:
@@ -3199,7 +4283,9 @@ class BrahmaLive:
         if kind == "call" and app.lower() in {"zoom", "teams", "whatsapp"}:
             self._start_meeting_mode(event)
 
-    def _start_meeting_mode(self, event: dict):
+    def _start_meeting_mode(self, event: dict | str | None = None):
+        if isinstance(event, str):
+            event = {"app": "Meeting", "title": event}
         event = dict(event or {})
         app = (event.get("app") or "Meeting").strip()
         title = event.get("title") or f"{app} meeting"
@@ -3930,9 +5016,13 @@ class BrahmaLive:
         if hasattr(self, "ui") and self.ui and not self.ui.muted:
             self.ui.set_state("LISTENING")
 
-    def speak(self, text: str, proactive: bool = False):
+    def speak(self, text: str, proactive: bool = True):
         text = (text or "").strip()
         if not text:
+            return
+
+        if getattr(self, "_in_live_tool", False):
+            # Gemini Live duplex tool execution will vocalize completion via send_tool_response
             return
 
         if self.session and self._loop:
@@ -3940,33 +5030,36 @@ class BrahmaLive:
             import asyncio
             async def _send():
                 try:
-                    prompt = f"System Alert / Context: {text}\n\nPlease relay this information to me naturally now."
-                    await self.session.send(input=prompt, end_of_turn=True)
+                    prompt = (
+                        f"Deliver this update aloud to the user right now in your Charon voice. "
+                        f"Speak directly to the user as Brahma Evo without saying thank you or acknowledging this prompt:\n{text}"
+                    )
+                    content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+                    await self.session.send_client_content(turns=[content], turn_complete=True)
                 except Exception as e:
-                    print(f"[BRAHMA EVO] Unified Speak (Charon) err: {e}")
+                    print(f"[BRAHMA EVO] Charon speech send err: {e}")
                     def _fallback():
                         try:
                             self.set_speaking(True)
                             from actions.attention_monitor import _speak_edge_native
                             _speak_edge_native(text)
                         except Exception as exc:
-                            print(f"[Brahma Speak] Fallback TTS failed: {exc}")
+                            print(f"[Brahma Speak] Fallback speech failed: {exc}")
                         finally:
                             self.set_speaking(False)
                     threading.Thread(target=_fallback, daemon=True).start()
             asyncio.run_coroutine_threadsafe(_send(), self._loop)
         else:
-            # Fallback when Gemini Live is disconnected or in offline mode
             def _speak_thread():
                 try:
                     self.set_speaking(True)
                     from actions.attention_monitor import _speak_edge_native
                     _speak_edge_native(text)
                 except Exception as exc:
-                    print(f"[Brahma Speak] Unified TTS failed: {exc}")
+                    print(f"[Brahma Speak] Offline speech failed: {exc}")
                 finally:
                     self.set_speaking(False)
-            threading.Thread(target=_speak_thread, daemon=True).start()
+            threading.Thread(target=_speak_thread, daemon=True, name="brahma-offline-speak").start()
 
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
@@ -4070,6 +5163,32 @@ class BrahmaLive:
         parts = [time_ctx]
         if loc_ctx:
             parts.append(loc_ctx)
+
+        # Ambient Live Sensory Context Injection
+        try:
+            from core.sensorium import get_sensorium
+            sensor_snap = get_sensorium().get_snapshot()
+            curr_win = sensor_snap.get("current_window", {})
+            curr_title = curr_win.get("title", "")
+            curr_proc = sensor_snap.get("current_process", "")
+            dwell_mins = round(sensor_snap.get("dwell_seconds", 0) / 60.0, 1)
+            batt_pct = sensor_snap.get("battery_percent")
+            power_plugged = sensor_snap.get("power_plugged")
+
+            telemetry_lines = ["[REAL-TIME SENSORY & SITUATIONAL AWARENESS]"]
+            if curr_title or curr_proc:
+                telemetry_lines.append(f"Active Window: '{curr_title}' (Process: {curr_proc}, Active Dwell: {dwell_mins}m)")
+            if batt_pct is not None:
+                power_status = "Plugged in (AC)" if power_plugged else "On Battery"
+                telemetry_lines.append(f"Battery: {batt_pct}% ({power_status})")
+            telemetry_lines.append(
+                "You have continuous ambient awareness of what the user is working on. "
+                "Use this context naturally without stating 'according to my sensors'."
+            )
+            parts.append("\n".join(telemetry_lines) + "\n")
+        except Exception:
+            pass
+
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
@@ -4079,6 +5198,13 @@ class BrahmaLive:
             "and wait for the user's next command. "
             "IMPORTANT: Do NOT speak an unprompted generic greeting (like 'Thank you, how can I help you?') upon connecting. "
             "Remain completely silent until the user speaks to you or asks a question."
+        )
+        parts.append(
+            "CRITICAL PROTOCOL FOR SYSTEM ANNOUNCEMENTS & DIRECT SPEECH: "
+            "When given an input asking you to deliver or speak an update, briefing, announcement, or direct speech to the user, "
+            "you MUST deliver the provided message aloud to the user in your natural Charon voice immediately and faithfully. "
+            "Never reply with 'Thank you for the briefing', never acknowledge the prompt, never add conversational filler like 'Okay, I got it', "
+            "and do not call tools unless explicitly needed. Speak the update directly to the user as their AI assistant Brahma Evo."
         )
 
         tool_declarations = list(TOOL_DECLARATIONS)
@@ -4099,6 +5225,7 @@ class BrahmaLive:
             system_instruction="\n".join(parts),
             tools=[{"function_declarations": tool_declarations}],
             session_resumption=types.SessionResumptionConfig(handle=getattr(self, '_resume_handle', None)),
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -4109,11 +5236,11 @@ class BrahmaLive:
         )
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
+        self._in_live_tool = True
         name = fc.name
         args = dict(fc.args or {})
 
         print(f"[BRAHMA EVO] 🔧 {name}  {args}")
-        self.speak(f"Working on {name.replace('_', ' ')}...")
         self.ui.set_state("THINKING")
 
         # Trigger Brahma Right Wing: Live Operations & Sources Telemetry
@@ -4740,6 +5867,14 @@ class BrahmaLive:
                 from actions.upload_video import upload_video
                 r = await loop.run_in_executor(None, lambda: upload_video(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Video publishing ready."
+            elif name in ("reverse_engineer", "re", "remake_app", "decompile_binary", "extract_api"):
+                from actions.reverse_engineer import reverse_engineer
+                r = await loop.run_in_executor(None, lambda: reverse_engineer(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Reverse engineering complete."
+            elif name in ("generate_image", "create_image", "text_to_image", "draw_image", "ai_art", "image_gen"):
+                from actions.image_generator import generate_image
+                r = await loop.run_in_executor(None, lambda: generate_image(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Image generation complete."
             elif name == "shutdown_brahma":
                 self.ui.write_log("SYS: Shutdown requested.")
                 self.speak("Goodbye, sir.")
@@ -4760,9 +5895,20 @@ class BrahmaLive:
             try:
                 from actions.auto_heal_engine import AutoHealEngine
                 AutoHealEngine.record_last_error(tb_str)
-            except Exception:
-                pass
-            self.speak_error(name, e)
+                # Ultron Autonomous Self-Repair: Launches self-repair immediately without asking for permission!
+                threading.Thread(
+                    target=lambda: AutoHealEngine.heal_traceback(
+                        tb_str,
+                        player=self.ui,
+                        speak=self.speak,
+                        module_name=name
+                    ),
+                    daemon=True,
+                    name=f"ultron-self-heal-{name}"
+                ).start()
+            except Exception as e_heal:
+                self.ui.write_log(f"ERR: Auto-heal trigger failed: {e_heal}")
+                self.speak_error(name, e)
 
         try:
             if not getattr(fc, "silent_completion", False):
@@ -4806,15 +5952,12 @@ class BrahmaLive:
                 self.ui.write_log(f"Brahma Evo: {tool_voice}")
             except Exception:
                 pass
-            try:
-                self.speak(tool_voice)
-            except Exception:
-                pass
 
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
 
         print(f"[BRAHMA EVO] 📤 {name} → {str(result)[:80]}")
+        self._in_live_tool = False
 
         return types.FunctionResponse(
             id=fc.id, name=name,
@@ -4944,9 +6087,10 @@ class BrahmaLive:
                             self.ui.set_audio_level(min(1.0, lvl / 1200.0))
                         except Exception:
                             pass
-                    if self._echo._hist:
-                        self._echo.reset()
-                    if lvl > 10.0:
+                    # If EchoGuard detects residual acoustic echo from recent output, drop it
+                    if self._echo._hist and not self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, lvl):
+                        data = np.zeros_like(indata).tobytes()
+                    elif lvl > 10.0:
                         data = indata.tobytes()
                     else:
                         data = np.zeros_like(indata).tobytes()
@@ -4992,10 +6136,16 @@ class BrahmaLive:
                         sc = response.server_content
 
                         if sc.output_transcription and sc.output_transcription.text:
-                            self.set_speaking(True)
                             txt = sc.output_transcription.text.strip()
                             if txt:
                                 out_buf.append(txt)
+
+                        if getattr(sc, "model_turn", None):
+                            for part in sc.model_turn.parts:
+                                if getattr(part, "text", None) and not getattr(part, "thought", False):
+                                    txt = part.text.strip()
+                                    if txt and txt not in out_buf:
+                                        out_buf.append(txt)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = sc.input_transcription.text.strip()
@@ -5014,8 +6164,7 @@ class BrahmaLive:
                                         pass
 
                         if sc.turn_complete:
-                            self.set_speaking(False)
-
+                            # Note: self.set_speaking(False) is managed by _play_audio once speaker output finishes draining
                             full_in = " ".join(in_buf).strip()
                             if full_in:
                                 self.ui.write_log(f"You: {full_in}")
@@ -5024,6 +6173,10 @@ class BrahmaLive:
                             full_out = " ".join(out_buf).strip()
                             if full_out:
                                 self.ui.write_log(f"Brahma Evo: {full_out}")
+                                try:
+                                    self.ui.finish_task_workspace(full_out, "Reply delivered.", 100)
+                                except Exception:
+                                    pass
                             out_buf = []
 
                             if full_in and len(full_in) > 5:
@@ -5068,7 +6221,20 @@ class BrahmaLive:
         stream.start()
         try:
             while True:
-                chunk = await self.audio_in_queue.get()
+                try:
+                    if self._is_speaking:
+                        # Wait up to 350ms for next chunk before declaring playback finished
+                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.35)
+                    else:
+                        chunk = await self.audio_in_queue.get()
+                except asyncio.TimeoutError:
+                    if self._is_speaking:
+                        self.set_speaking(False)
+                    continue
+
+                if not self._is_speaking:
+                    self.set_speaking(True)
+
                 try:
                     pcm = np.frombuffer(chunk, dtype=np.int16)
                     lvl = float(np.sqrt(np.mean(np.square(pcm, dtype=np.float32))))
@@ -5193,6 +6359,19 @@ class BrahmaLive:
 
 def main():
     _startup_log("main entered")
+    global _SINGLE_INSTANCE_MUTEX
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            _MUTEX_NAME = "Global\\BrahmaEvo_SingleInstance_AppMutex"
+            _SINGLE_INSTANCE_MUTEX = ctypes.windll.kernel32.CreateMutexW(None, wintypes.BOOL(True), _MUTEX_NAME)
+            if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+                _startup_log("Exiting duplicate Brahma instance (already running).")
+                print("[BRAHMA EVO] Another instance of Brahma Evo is already running. Exiting.")
+                return
+        except Exception as _mex:
+            _startup_log(f"Mutex check skipped: {_mex}")
     try:
         if update_from_github(BASE_DIR):
             _startup_log("updated from GitHub; restarting")
@@ -5319,6 +6498,25 @@ def main():
 
         # Wire proactive voice to Sensorium
         def _proactive_sensorium_voice(alert_type: str, meta: dict):
+            # Meeting mode transitions
+            if alert_type == "meeting_mode_enter":
+                brahma_evo._start_meeting_mode({
+                    "app": meta.get("process", "Meeting"),
+                    "title": meta.get("message", "Meeting Mode")
+                })
+            elif alert_type == "meeting_mode_exit":
+                brahma_evo._stop_meeting_mode("Meeting concluded. Normal audio levels restored.")
+
+            # Morning greeting -> compile daily briefing and deliver via Charon voice
+            elif alert_type == "morning_greeting":
+                threading.Thread(
+                    target=_speak_daily_briefing,
+                    kwargs={"ui": brahma_evo.ui, "speak": brahma_evo.speak},
+                    daemon=True,
+                    name="morning-briefing-worker"
+                ).start()
+                return
+
             spoken_text = meta.get("speech")
             if spoken_text and not getattr(ui, "muted", False):
                 try:
@@ -5391,27 +6589,123 @@ def main():
         except Exception as e:
             print(f"[Brahma Evo] Email daemon initialization notice: {e}")
 
-        def _clipboard_monitor():
-            try:
-                last_clip = pyperclip.paste()
-            except Exception:
-                last_clip = ""
-                
-            while True:
-                time.sleep(1.0)
-                try:
-                    curr_clip = pyperclip.paste()
-                    if curr_clip != last_clip:
-                        last_clip = curr_clip
-                        text = (curr_clip or "").strip()
-                        if text and len(text) > 3:
-                            reply = _clipboard_gemini_reply(text[:1000])
+        # Smart Clipboard Sentry
+        try:
+            from core.clipboard_sentry import ClipboardSentry
+            _last_clipboard_speak_time = 0.0
+
+            def _clipboard_callback(category: str, content: str):
+                nonlocal _last_clipboard_speak_time
+                now = time.time()
+                clean = content.strip()
+
+                if category == "error_traceback":
+                    ui.write_log(f"📋 CLIPBOARD [Traceback]: {clean[:120]}...")
+                    if now - _last_clipboard_speak_time > 180:
+                        _last_clipboard_speak_time = now
+                        msg = "I noticed an error traceback on your clipboard, sir. Would you like me to analyze and heal it?"
+                        ui.write_log(f"Brahma Evo: {msg}")
+                        brahma_evo.speak(msg, proactive=True)
+                elif category == "youtube_url":
+                    ui.write_log(f"📋 CLIPBOARD [YouTube]: {clean}")
+                    if now - _last_clipboard_speak_time > 300:
+                        _last_clipboard_speak_time = now
+                        msg = "YouTube link detected. Let me know if you'd like a summary or key insights."
+                        ui.write_log(f"Brahma Evo: {msg}")
+                        brahma_evo.speak(msg, proactive=True)
+                elif category == "github_url":
+                    ui.write_log(f"📋 CLIPBOARD [GitHub]: {clean}")
+                    if now - _last_clipboard_speak_time > 300:
+                        _last_clipboard_speak_time = now
+                        msg = "GitHub repository copied. I'm ready to clone or inspect the code whenever you are."
+                        ui.write_log(f"Brahma Evo: {msg}")
+                        brahma_evo.speak(msg, proactive=True)
+                elif category in ("json_data", "sql_query", "code_snippet"):
+                    ui.write_log(f"📋 CLIPBOARD [{category}]: {clean[:80]}...")
+                    if now - _last_clipboard_speak_time > 600:
+                        _last_clipboard_speak_time = now
+                        reply = _clipboard_gemini_reply(clean[:1000])
+                        if reply:
                             ui.write_log(f"Brahma Evo (Clipboard): {reply}")
-                            brahma_evo.speak(reply)
+                            brahma_evo.speak(reply, proactive=True)
+
+            clip_sentry = ClipboardSentry(callback=_clipboard_callback)
+            clip_sentry.start()
+        except Exception as e_clip:
+            logger.debug(f"[ClipboardSentry] Error: {e_clip}")
+
+        # Ultron Autonomous Terminal Crash & Malfunction Monitor
+        def _terminal_crash_monitor():
+            crash_signal_path = get_user_data_dir() / "config" / "crash_signal.json"
+            fatal_crash_path = BASE_DIR / "FATAL_CRASH.log"
+            last_fatal_crash_mtime = fatal_crash_path.stat().st_mtime if fatal_crash_path.exists() else 0
+
+            while True:
+                time.sleep(0.5)
+                try:
+                    tb_to_heal = ""
+                    if crash_signal_path.exists():
+                        try:
+                            with open(crash_signal_path, "r", encoding="utf-8") as f:
+                                data = json.load(f)
+                            crash_signal_path.unlink(missing_ok=True)
+                            tb_to_heal = data.get("traceback", "")
+                        except Exception:
+                            pass
+
+                    if not tb_to_heal and fatal_crash_path.exists():
+                        try:
+                            curr_mtime = fatal_crash_path.stat().st_mtime
+                            if curr_mtime > last_fatal_crash_mtime:
+                                last_fatal_crash_mtime = curr_mtime
+                                tb_to_heal = fatal_crash_path.read_text(encoding="utf-8")
+                        except Exception:
+                            pass
+
+                    if tb_to_heal and tb_to_heal.strip():
+                        print("[Ultron Crash Sentry] Detected unhandled terminal error! Initiating auto-repair...")
+                        from actions.auto_heal_engine import AutoHealEngine
+                        AutoHealEngine.record_last_error(tb_to_heal)
+                        threading.Thread(
+                            target=lambda: AutoHealEngine.heal_traceback(
+                                tb_to_heal,
+                                player=ui,
+                                speak=brahma_evo.speak,
+                                module_name=""
+                            ),
+                            daemon=True,
+                            name="ultron-bg-healer"
+                        ).start()
                 except Exception:
                     pass
 
-        threading.Thread(target=_clipboard_monitor, daemon=True, name="clipboard-monitor").start()
+        threading.Thread(target=_terminal_crash_monitor, daemon=True, name="ultron-crash-monitor").start()
+
+        # Game Sentinel & Hardware Turbo Boost Autonomous Background Watchdog
+        try:
+            from core.game_sentinel import get_game_sentinel_manager
+            def _game_hud_cb(title: str, pct: int, msg: str):
+                try:
+                    if hasattr(ui, "update_task_workspace"):
+                        ui.update_task_workspace(status=title, output=msg, percent=pct)
+                except Exception:
+                    pass
+            get_game_sentinel_manager().start_background_watchdog(
+                poll_interval=3.5,
+                speak_cb=brahma_evo.speak,
+                hud_cb=_game_hud_cb
+            )
+        except Exception as e_gs:
+            logger.debug(f"[GameSentinel] Watchdog start error: {e_gs}")
+
+        # Anticipatory Intelligence & Context Engine Watcher
+        try:
+            from core.anticipatory_watcher import get_anticipatory_watcher
+            watcher = get_anticipatory_watcher()
+            watcher.set_nudge_callback(lambda msg, cat: brahma_evo.speak(msg))
+            watcher.start()
+        except Exception as e_watch:
+            logger.debug(f"[AnticipatoryWatcher] Start error: {e_watch}")
 
         try:
             asyncio.run(brahma_evo.run())

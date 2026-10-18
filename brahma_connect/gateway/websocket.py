@@ -65,6 +65,15 @@ class ConnectionHub:
             except Exception:
                 pass
 
+    async def broadcast_notification(self, message: dict[str, Any]) -> None:
+        async with self._lock:
+            states = list(self._connections.values())
+        for state in states:
+            try:
+                await state.websocket.send_json(message)
+            except Exception:
+                pass
+
     async def set_pending(self, device_id: str, request_id: str) -> asyncio.Future:
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()

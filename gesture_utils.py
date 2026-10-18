@@ -109,12 +109,12 @@ def estimate_gesture_state(
             dx = end_x - start_x
 
             # Fast horizontal movement
-            if dt > 0.04 and abs(dx) > 0.18:
-                if dx > 0.18:
+            if dt > 0.03 and abs(dx) > 0.15:
+                if dx > 0.15:
                     swipe_action = "swipe_right"
                     gesture_name = "Swipe Right 👉"
                     tracker.last_swipe_time = now
-                elif dx < -0.18:
+                elif dx < -0.15:
                     swipe_action = "swipe_left"
                     gesture_name = "Swipe Left 👈"
                     tracker.last_swipe_time = now

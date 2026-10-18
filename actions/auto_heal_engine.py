@@ -54,6 +54,141 @@ PROTECTED_CORE_FILES = {
 }
 
 
+# ── Terminal & Scope Context Helpers ───────────────────────────────────────
+
+def bring_terminal_to_front(player: Any = None) -> None:
+    """Brings the console/terminal window and Brahma app into focus."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            # 1. Check direct console HWND
+            hwnd = kernel32.GetConsoleWindow()
+            if hwnd:
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE = 9
+                user32.SetForegroundWindow(hwnd)
+
+            # 2. Enumerate visible windows for terminal / powershell / cmd
+            def enum_proc(w_hwnd, lParam):
+                if user32.IsWindowVisible(w_hwnd):
+                    length = user32.GetWindowTextLengthW(w_hwnd)
+                    if length > 0:
+                        buf = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(w_hwnd, buf, length + 1)
+                        title = buf.value.lower()
+                        if any(t in title for t in ("powershell", "cmd.exe", "terminal", "console", "brahma")):
+                            user32.ShowWindow(w_hwnd, 9)
+                            user32.SetForegroundWindow(w_hwnd)
+                return True
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+    except Exception as exc:
+        logger.debug(f"[AutoHeal] Could not foreground terminal: {exc}")
+
+    # 3. Bring Brahma UI to front
+    if player and hasattr(player, "show_app"):
+        try:
+            player.show_app()
+        except Exception:
+            pass
+
+
+def extract_ast_context(full_source: str, line_num: int) -> Tuple[str, str]:
+    """
+    Extracts module imports + the full enclosing function/method/class around line_num.
+    Falls back to a ±35 line window if AST parse fails.
+    """
+    source_lines = full_source.splitlines(keepends=True)
+    enclosing_name = ""
+
+    try:
+        tree = ast.parse(full_source)
+        import_lines = []
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                start = getattr(node, "lineno", 1) - 1
+                end = getattr(node, "end_lineno", start + 1)
+                import_lines.extend(source_lines[start:end])
+
+        # Find deepest node containing line_num
+        target_node = None
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                start = getattr(node, "lineno", 0)
+                end = getattr(node, "end_lineno", 0)
+                if start <= line_num <= end:
+                    if target_node is None or (end - start) < (getattr(target_node, "end_lineno", 0) - getattr(target_node, "lineno", 0)):
+                        target_node = node
+
+        if target_node:
+            enclosing_name = getattr(target_node, "name", "")
+            start = max(0, getattr(target_node, "lineno", 1) - 1)
+            end = min(len(source_lines), getattr(target_node, "end_lineno", len(source_lines)))
+            func_code = "".join(source_lines[start:end])
+            imports_code = "".join(import_lines[:25])
+            return f"{imports_code}\n# [Context around line {line_num} in {enclosing_name}()]:\n{func_code}", enclosing_name
+    except Exception:
+        pass
+
+    start_idx = max(0, line_num - 35)
+    end_idx = min(len(source_lines), line_num + 35)
+    return "".join(source_lines[start_idx:end_idx]), enclosing_name
+
+
+def apply_patch_resiliently(full_source: str, target_chunk: str, replacement_chunk: str, line_num: int) -> Tuple[bool, str]:
+    """
+    Applies replacement_chunk into full_source with indentation and line-ending resilience.
+    """
+    if target_chunk in full_source:
+        return True, full_source.replace(target_chunk, replacement_chunk, 1)
+
+    # 1. Normalize line endings
+    full_norm = full_source.replace("\r\n", "\n")
+    target_norm = target_chunk.replace("\r\n", "\n")
+    rep_norm = replacement_chunk.replace("\r\n", "\n")
+    if target_norm in full_norm:
+        return True, full_norm.replace(target_norm, rep_norm, 1)
+
+    # 2. Indentation-insensitive sliding match
+    source_lines = full_norm.split("\n")
+    target_lines = [l.strip() for l in target_norm.split("\n") if l.strip()]
+    if not target_lines:
+        return False, full_source
+
+    window_start = max(0, line_num - 60)
+    window_end = min(len(source_lines), line_num + 60)
+
+    best_start = -1
+    best_len = 0
+    for i in range(window_start, window_end):
+        s_idx = i
+        t_idx = 0
+        while s_idx < len(source_lines) and t_idx < len(target_lines):
+            s_line = source_lines[s_idx].strip()
+            if not s_line:
+                s_idx += 1
+                continue
+            if s_line == target_lines[t_idx]:
+                t_idx += 1
+                s_idx += 1
+            else:
+                break
+        if t_idx == len(target_lines):
+            best_start = i
+            best_len = s_idx - i
+            break
+
+    if best_start != -1:
+        new_lines = source_lines[:best_start] + [rep_norm] + source_lines[best_start + best_len:]
+        return True, "\n".join(new_lines)
+
+    return False, full_source
+
+
 # ── 1. Traceback Analyzer ───────────────────────────────────────────────────
 
 class TracebackAnalyzer:
@@ -115,14 +250,17 @@ class TracebackAnalyzer:
                             resolved = c2
                             break
 
-            if resolved and resolved.exists():
+            if not resolved:
+                resolved = p if p.is_absolute() else (BASE_DIR / p)
+
+            if resolved:
                 # Check immunity
                 if resolved.name in PROTECTED_CORE_FILES:
                     logger.warning(f"[AutoHeal] File '{resolved.name}' is core-protected and cannot be patched.")
                     continue
 
                 result["success"] = True
-                result["target_file"] = str(resolved.resolve())
+                result["target_file"] = str(resolved.resolve() if resolved.exists() else resolved)
                 result["line_number"] = int(line_str)
                 result["function_name"] = func_name.strip() if func_name else None
                 break
@@ -232,16 +370,85 @@ class AutoHealEngine:
         traceback_text: str,
         context_notes: str = "",
         dry_run: bool = False,
+        player: Any = None,
+        speak: Optional[Callable[[str], None]] = None,
+        module_name: str = "",
     ) -> Dict[str, Any]:
         """
-        Analyzes a traceback, pinpoints the root cause, synthesizes a patch,
-        verifies AST syntax in memory, and safely applies it with backup.
+        Autonomous Ultron Self-Repair:
+        1. Pulls terminal and Brahma UI to front immediately.
+        2. Speaks malfunction detection announcement.
+        3. Visualizes diagnosis, problem, planned fix, and patch diff on the UI workspace.
+        4. Synthesizes surgical patch with AST-level context scope.
+        5. Validates AST in memory sandbox and applies resiliently.
+        6. Commits atomic patch, updates HUD deliverable, and confirms success.
         """
+        # 1. Bring Terminal & Brahma UI to front
+        bring_terminal_to_front(player=player)
+
         parsed = TracebackAnalyzer.parse(traceback_text)
+        target_name = (Path(parsed.get("target_file", "")).name if parsed.get("target_file") else None) or module_name or "an internal module"
+
+        # 2. Trigger Ultron Malfunction Popup Window immediately
+        if player and hasattr(player, "show_ultron_malfunction"):
+            try:
+                player.show_ultron_malfunction({
+                    "action": "show",
+                    "file_name": target_name,
+                    "target_file": parsed.get("target_file") or "",
+                    "line_number": parsed.get("line_number"),
+                    "exception_type": parsed.get("exception_type", "Error"),
+                    "exception_message": parsed.get("exception_message", ""),
+                    "explanation": "Isolating failing line and extracting AST context...",
+                    "status": f"Synthesizing surgical hotfix for {target_name}...",
+                    "percent": 30,
+                })
+            except Exception:
+                pass
+
+        # 3. Speak initial alert
+        if speak:
+            try:
+                speak(f"Sir, I detected a malfunction in {target_name.replace('.py', '')}. Stand by, I am initiating self-repair now.")
+            except Exception as s_err:
+                logger.debug(f"Speak error: {s_err}")
+
+        # 4. Initialize UI Task Workspace
+        if player and hasattr(player, "begin_task_workspace"):
+            try:
+                player.begin_task_workspace(
+                    f"⚡ Ultron Autonomous Self-Repair: {target_name}",
+                    [
+                        "Inspect traceback & isolate failing line",
+                        "Extract AST scope & dependency imports",
+                        "Synthesize verified surgical patch",
+                        "Validate syntax & commit atomic hotfix"
+                    ],
+                    source="local"
+                )
+            except Exception:
+                pass
+
         if not parsed.get("success"):
+            err_msg = "Could not identify a modifiable first-party source file from the traceback."
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="Diagnosis Failed", output=err_msg, percent=0)
+            if player and hasattr(player, "show_ultron_malfunction"):
+                try:
+                    player.show_ultron_malfunction({
+                        "action": "update",
+                        "file_name": target_name,
+                        "exception_type": parsed.get("exception_type", "Error"),
+                        "exception_message": parsed.get("exception_message", ""),
+                        "explanation": err_msg,
+                        "status": f"⚠️ Malfunction Analysis: {err_msg}",
+                        "percent": 0,
+                    })
+                except Exception:
+                    pass
             return {
                 "success": False,
-                "message": "Could not identify a modifiable first-party source file from the traceback.",
+                "message": err_msg,
                 "parsed": parsed,
             }
 
@@ -253,15 +460,21 @@ class AutoHealEngine:
             with open(target_path, "r", encoding="utf-8") as f:
                 full_source = f.read()
         except Exception as e:
-            return {"success": False, "message": f"Unable to read target file '{target_path.name}': {e}"}
+            err_msg = f"Unable to read target file '{target_path.name}': {e}"
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="File Read Error", output=err_msg, percent=0)
+            return {"success": False, "message": err_msg}
 
-        # Extract code context around the failing line
-        source_lines = full_source.splitlines(keepends=True)
-        start_idx = max(0, line_num - 25)
-        end_idx = min(len(source_lines), line_num + 25)
-        code_context = "".join(source_lines[start_idx:end_idx])
+        # 4. Extract AST Scope Context
+        code_context, enclosing_name = extract_ast_context(full_source, line_num)
 
-        # Generate patch via LLM
+        if player and hasattr(player, "update_task_workspace"):
+            player.update_task_workspace(
+                status=f"Synthesizing hotfix for {target_path.name}:{line_num}...",
+                percent=40
+            )
+
+        # 5. Generate patch via LLM
         patch_spec = cls._synthesize_patch_code(
             file_name=target_path.name,
             line_num=line_num,
@@ -272,9 +485,26 @@ class AutoHealEngine:
         )
 
         if not patch_spec.get("success"):
+            err_msg = f"Failed to synthesize patch: {patch_spec.get('error')}"
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="Synthesis Failed", output=err_msg, percent=0)
+            if player and hasattr(player, "show_ultron_malfunction"):
+                try:
+                    player.show_ultron_malfunction({
+                        "action": "update",
+                        "file_name": target_path.name,
+                        "line_number": line_num,
+                        "exception_type": parsed.get("exception_type", "Error"),
+                        "exception_message": parsed.get("exception_message", ""),
+                        "explanation": err_msg,
+                        "status": f"⚠️ Synthesis Failed: {err_msg}",
+                        "percent": 0,
+                    })
+                except Exception:
+                    pass
             return {
                 "success": False,
-                "message": f"Failed to synthesize patch: {patch_spec.get('error')}",
+                "message": err_msg,
                 "parsed": parsed,
             }
 
@@ -282,23 +512,66 @@ class AutoHealEngine:
         replacement_chunk = patch_spec["replacement_chunk"]
         explanation = patch_spec.get("explanation", "Bug hotfix.")
 
-        if target_chunk not in full_source:
+        # 6. Display Problem, Fix, and How it patches in the Brahma UI workspace & Ultron popup!
+        diag_output = (
+            f"🚨 MALFUNCTION DETECTED:\n"
+            f"• Component: {target_path.name} (line {line_num})"
+            + (f" in {enclosing_name}()" if enclosing_name else "") + "\n"
+            f"• Exception: {parsed.get('exception_type')}: {parsed.get('exception_message')}\n\n"
+            f"🔍 ROOT CAUSE & PLANNED FIX:\n"
+            f"{explanation}\n\n"
+            f"🛠️ HOW IT WILL BE PATCHED:\n"
+            f"<<<< TARGET TO REMOVE:\n{target_chunk.strip()}\n====\n"
+            f">>>> REPLACEMENT TO INSERT:\n{replacement_chunk.strip()}\n"
+        )
+        if player and hasattr(player, "update_task_workspace"):
+            player.update_task_workspace(
+                title=f"Self-Repair: {target_path.name}",
+                status="Validating AST & Staging Patch...",
+                output=diag_output,
+                percent=70
+            )
+
+        if player and hasattr(player, "show_ultron_malfunction"):
+            try:
+                player.show_ultron_malfunction({
+                    "action": "update",
+                    "file_name": target_path.name,
+                    "target_file": str(target_path),
+                    "line_number": line_num,
+                    "exception_type": parsed.get("exception_type", "Error"),
+                    "exception_message": parsed.get("exception_message", ""),
+                    "explanation": explanation,
+                    "target_chunk": target_chunk,
+                    "replacement_chunk": replacement_chunk,
+                    "status": "Pre-flight AST syntax validation in sandbox...",
+                    "percent": 70,
+                })
+            except Exception:
+                pass
+
+        # 7. Apply candidate patch resiliently
+        patch_ok, staged_source = apply_patch_resiliently(full_source, target_chunk, replacement_chunk, line_num)
+        if not patch_ok:
+            err_msg = f"Target code chunk could not be matched precisely in {target_path.name}."
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="Chunk Matching Failed", output=err_msg, percent=0)
             return {
                 "success": False,
-                "message": "Target code chunk could not be matched precisely in source file.",
+                "message": err_msg,
                 "parsed": parsed,
             }
 
-        # Apply candidate patch in staging memory
-        staged_source = full_source.replace(target_chunk, replacement_chunk, 1)
-
-        # Pre-flight AST Syntax validation
+        # 8. Pre-flight AST Syntax validation
         valid, syntax_err = SafetySandbox.validate_code(staged_source, file_name=target_path.name)
         if not valid:
             logger.error(f"[AutoHeal] Patch rejected by SafetySandbox: {syntax_err}")
+            err_msg = f"Safety Guard: Patch rejected due to syntax error: {syntax_err}"
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="AST Rejected", output=err_msg, percent=0)
             return {
                 "success": False,
-                "message": f"Safety Guard: Patch rejected due to syntax error: {syntax_err}",
+                "message": err_msg,
                 "parsed": parsed,
             }
 
@@ -313,25 +586,28 @@ class AutoHealEngine:
                 "message": f"Dry-run passed syntax validation for {target_path.name}.",
             }
 
-        # Create atomic backup
+        # 9. Create atomic backup & commit patch
         backup_path = SafetySandbox.create_backup(target_path)
-
-        # Write patch to disk
         try:
             with open(target_path, "w", encoding="utf-8") as f:
                 f.write(staged_source)
         except Exception as e:
-            # Immediate rollback if write failed
             shutil.copy2(backup_path, target_path)
-            return {"success": False, "message": f"File write failed, restored backup: {e}"}
+            err_msg = f"File write failed, restored backup: {e}"
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="Write Error", output=err_msg, percent=0)
+            return {"success": False, "message": err_msg}
 
-        # Verify on-disk compilation via py_compile
+        # 10. Verify on-disk compilation via py_compile
         try:
             py_compile.compile(str(target_path), doraise=True)
         except Exception as pyc_err:
             logger.error(f"[AutoHeal] py_compile failed after write, rolling back: {pyc_err}")
             shutil.copy2(backup_path, target_path)
-            return {"success": False, "message": f"Post-write compilation failed, rolled back: {pyc_err}"}
+            err_msg = f"Post-write compilation failed, rolled back: {pyc_err}"
+            if player and hasattr(player, "update_task_workspace"):
+                player.update_task_workspace(status="Compile Failed - Rolled Back", output=err_msg, percent=0)
+            return {"success": False, "message": err_msg}
 
         patch_id = str(uuid.uuid4())[:8]
         entry = {
@@ -349,13 +625,69 @@ class AutoHealEngine:
         history.append(entry)
         SafetySandbox._save_history(history)
 
+        final_msg = f"Successfully auto-patched '{target_path.name}' at line {line_num} (Patch ID: {patch_id}). Backup preserved."
+
+        # 11. Finalize UI Task Workspace & Ultron Malfunction Popup Card
+        if player and hasattr(player, "show_ultron_malfunction"):
+            try:
+                player.show_ultron_malfunction({
+                    "action": "update",
+                    "file_name": target_path.name,
+                    "target_file": str(target_path),
+                    "line_number": line_num,
+                    "exception_type": parsed.get("exception_type", "Error"),
+                    "exception_message": parsed.get("exception_message", ""),
+                    "explanation": explanation,
+                    "target_chunk": target_chunk,
+                    "replacement_chunk": replacement_chunk,
+                    "patch_id": patch_id,
+                    "backup_name": backup_path.name,
+                    "status": f"✅ Autonomously Patched & Verified (Patch ID: {patch_id})",
+                    "percent": 100,
+                })
+            except Exception:
+                pass
+
+        if player and hasattr(player, "finish_task_workspace"):
+            try:
+                player.finish_task_workspace(
+                    result=diag_output + f"\n\n✅ VERIFIED & APPLIED:\nPatch ID: {patch_id}\nBackup: {backup_path.name}",
+                    status="Autonomous self-repair completed.",
+                    percent=100
+                )
+            except Exception:
+                pass
+
+        if player and hasattr(player, "show_hud_deliverable"):
+            try:
+                player.show_hud_deliverable(
+                    title=f"Ultron Self-Repair: {target_path.name}",
+                    summary=explanation,
+                    bullets=[
+                        f"Fixed: {parsed.get('exception_type')}",
+                        f"Line: {line_num}",
+                        f"Status: AST Validated & Committed",
+                        f"Patch ID: {patch_id}",
+                    ],
+                    kind="self_heal"
+                )
+            except Exception:
+                pass
+
+        # 12. Speak completion
+        if speak:
+            try:
+                speak(f"Self-repair complete, sir. I have patched {target_path.name} and eliminated the bug.")
+            except Exception:
+                pass
+
         return {
             "success": True,
             "patch_id": patch_id,
             "target_file": str(target_path),
             "backup_path": str(backup_path),
             "explanation": explanation,
-            "message": f"Successfully auto-patched '{target_path.name}' at line {line_num} (Patch ID: {patch_id}). Backup preserved.",
+            "message": final_msg,
         }
 
     @classmethod
@@ -513,10 +845,14 @@ def auto_heal(
                 speak(msg)
             return msg
 
-        res = AutoHealEngine.heal_traceback(tb, context_notes=notes)
+        res = AutoHealEngine.heal_traceback(
+            tb,
+            context_notes=notes,
+            player=player,
+            speak=speak,
+            module_name=params.get("module", "")
+        )
         msg = res.get("message", "Done.")
-        if speak:
-            speak(msg)
         return msg
 
     elif action in ("learn_rule", "add_rule", "remember_rule"):

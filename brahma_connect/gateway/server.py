@@ -20,6 +20,7 @@ from .models import PairingOffer
 from .pairing import PairingManager
 from .protocol import ProtocolTypes, build_message, validate_message, now_iso, new_request_id
 from .websocket import ConnectionHub
+from .mobile_portal import get_mobile_portal_html
 
 
 def _default_config_path(base_dir: Path) -> Path:
@@ -353,6 +354,12 @@ class BrahmaGateway:
     def _build_app(self) -> FastAPI:
         app = FastAPI(docs_url=None, redoc_url=None)
 
+        @app.get("/", response_class=HTMLResponse)
+        @app.get("/mobile", response_class=HTMLResponse)
+        async def mobile_companion():
+            host = local_ip() if self.config.host in {"0.0.0.0", "::"} else self.config.host
+            return HTMLResponse(get_mobile_portal_html(host_ip=host, port=self.config.port))
+
         @app.get("/health")
         async def health():
             return {"ok": True, "running": self.is_running(), "host": self.config.host, "port": self.config.port}
@@ -519,10 +526,30 @@ class BrahmaGateway:
 
         return app
 
+    def broadcast_push_notification_threadsafe(self, message: str, target: str = "all") -> None:
+        """Safely pushes notification to mobile companion websockets from any thread."""
+        loop = getattr(self, "_loop", None)
+        if not self._running or not loop or loop.is_closed():
+            return
+        payload = {
+            "type": "notification",
+            "request_id": f"notif-{new_request_id()}",
+            "timestamp": now_iso(),
+            "payload": {"message": message, "target": target}
+        }
+        try:
+            asyncio.run_coroutine_threadsafe(self.hub.broadcast_notification(payload), loop)
+        except Exception:
+            pass
+
     async def serve(self) -> None:
         if not self.config.enabled:
             return
         self._running = True
+        try:
+            self._loop = asyncio.get_running_loop()
+        except Exception:
+            self._loop = None
         advertised = False
         if self.config.advertise:
             advertised = self.discovery.start(host=self.config.host, port=self.config.port, properties={"service": "brahma", "version": "1"})
@@ -541,5 +568,6 @@ class BrahmaGateway:
             await self._server.serve()
         finally:
             self._server = None
+            self._loop = None
             self.discovery.stop()
             self._running = False

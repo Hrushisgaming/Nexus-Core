@@ -74,6 +74,45 @@ def kill_browser_processes():
         pass
 
 
+def launch_robust_browser_context(playwright_instance, profile_dir: Path, headless: bool = False, **kwargs):
+    """
+    Robustly launches a persistent Chromium context.
+    Tries in order:
+    1. Bundled Playwright Chromium (if downloaded)
+    2. System Microsoft Edge (pre-installed on 100% of Windows 10/11 machines)
+    3. System Google Chrome (installed on most desktops)
+    """
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    # Remove stale singleton lock files if previous browser crashed
+    for lock_name in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+        lock_file = profile_dir / lock_name
+        if lock_file.exists():
+            try:
+                lock_file.unlink()
+            except Exception:
+                pass
+
+    channels_to_try = [None, "msedge", "chrome"]
+    last_err = None
+    for channel in channels_to_try:
+        try:
+            launch_kwargs = dict(kwargs)
+            if channel:
+                launch_kwargs["channel"] = channel
+            return playwright_instance.chromium.launch_persistent_context(
+                str(profile_dir),
+                headless=headless,
+                **launch_kwargs
+            )
+        except Exception as e:
+            last_err = e
+            err_str = str(e).lower()
+            if "executable doesn't exist" in err_str or "cannot find" in err_str or "browsertype.launch" in err_str:
+                continue
+            raise e
+    raise RuntimeError(f"Could not launch browser. Neither Playwright Chromium, Microsoft Edge, nor Google Chrome were found: {last_err}")
+
+
 class BrowserInstagramWorker(threading.Thread):
     """
     Dedicated worker thread managing persistent Playwright Chromium browser.
@@ -112,8 +151,9 @@ class BrowserInstagramWorker(threading.Thread):
 
         with sync_playwright() as p:
             try:
-                ctx = p.chromium.launch_persistent_context(
-                    str(BROWSER_PROFILE_DIR),
+                ctx = launch_robust_browser_context(
+                    p,
+                    BROWSER_PROFILE_DIR,
                     headless=True,
                     args=["--disable-blink-features=AutomationControlled"],
                     viewport={"width": 1280, "height": 800},
@@ -347,12 +387,25 @@ class InstagramService:
     def is_browser_ready(self) -> bool:
         """Checks if persistent browser profile exists and has completed login."""
         try:
-            if not (BROWSER_PROFILE_DIR.exists() and (BROWSER_PROFILE_DIR / "Default").exists()):
+            prof_dirs = [BROWSER_PROFILE_DIR, Path("config/ig_browser_profile").resolve()]
+            has_profile = False
+            for pdir in prof_dirs:
+                if pdir.exists() and (pdir / "Default").exists():
+                    has_profile = True
+                    break
+            if not has_profile:
                 return False
-            if CONFIG_PATH.exists():
-                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return bool(data.get("instagram_browser_authenticated") and data.get("instagram_sessionid"))
+
+            cfg_files = [CONFIG_PATH, Path("config/api_keys.json")]
+            for cfile in cfg_files:
+                if cfile.exists():
+                    try:
+                        with open(cfile, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            if data.get("instagram_browser_authenticated") and data.get("instagram_sessionid"):
+                                return True
+                    except Exception:
+                        pass
             return False
         except Exception:
             return False
@@ -365,13 +418,17 @@ class InstagramService:
             return self._browser_worker
 
     def load_credentials(self) -> Tuple[str, str]:
-        try:
-            if CONFIG_PATH.exists():
-                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return data.get("instagram_username", "").strip(), data.get("instagram_password", "").strip()
-        except Exception as e:
-            ig_log(f"Error reading credentials: {e}")
+        for cfile in [CONFIG_PATH, Path("config/api_keys.json")]:
+            try:
+                if cfile.exists():
+                    with open(cfile, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        u = data.get("instagram_username", "").strip()
+                        p = data.get("instagram_password", "").strip()
+                        if u or p:
+                            return u, p
+            except Exception as e:
+                ig_log(f"Error reading credentials from {cfile}: {e}")
         return "", ""
 
     def get_client(self, require_auth: bool = True) -> Client:
@@ -917,8 +974,9 @@ def launch_browser_login():
     from playwright.sync_api import sync_playwright
     BROWSER_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            str(BROWSER_PROFILE_DIR),
+        ctx = launch_robust_browser_context(
+            p,
+            BROWSER_PROFILE_DIR,
             headless=False,
             args=["--disable-blink-features=AutomationControlled"],
             viewport={"width": 1080, "height": 800},
@@ -949,17 +1007,26 @@ def launch_browser_login():
                     except Exception:
                         pass
 
-                    cfg = {}
-                    if CONFIG_PATH.exists():
-                        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                            cfg = json.load(f)
-                    if detected_username:
-                        cfg["instagram_username"] = detected_username
-                    cfg["instagram_sessionid"] = sid
-                    cfg["instagram_user_id"] = uid
-                    cfg["instagram_browser_authenticated"] = True
-                    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                        json.dump(cfg, f, indent=4)
+                    cfg_targets = [CONFIG_PATH, Path("config/api_keys.json")]
+                    for target_file in cfg_targets:
+                        cfg = {}
+                        if target_file.exists():
+                            try:
+                                with open(target_file, "r", encoding="utf-8") as f:
+                                    cfg = json.load(f)
+                            except Exception:
+                                cfg = {}
+                        if detected_username:
+                            cfg["instagram_username"] = detected_username
+                        cfg["instagram_sessionid"] = sid
+                        cfg["instagram_user_id"] = uid
+                        cfg["instagram_browser_authenticated"] = True
+                        try:
+                            target_file.parent.mkdir(parents=True, exist_ok=True)
+                            with open(target_file, "w", encoding="utf-8") as f:
+                                json.dump(cfg, f, indent=4)
+                        except Exception:
+                            pass
                     print(f"\n[SUCCESS] Instagram connected as @{detected_username or 'user'}!")
                     break
             except Exception:

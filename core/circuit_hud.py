@@ -122,11 +122,17 @@ def generate_circuit_html(circuit: Dict[str, Any]) -> str:
     pointer-events: none;
   }}
 
+  .wire-glow {{
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+    opacity: 0.35;
+  }}
+
   .wire-path {{
     fill: none;
-    stroke-width: 3.5;
+    stroke-width: 2.2;
     stroke-linecap: round;
-    filter: drop-shadow(0 0 6px currentColor);
   }}
 
   /* Components Container */
@@ -390,27 +396,43 @@ def generate_circuit_html(circuit: Dict[str, Any]) -> str:
           const dx = Math.max(30, Math.abs(x2 - x1) * 0.5);
           const pathD = `M ${{x1}} ${{y1}} C ${{x1 + dx}} ${{y1}}, ${{x2 - dx}} ${{y2}}, ${{x2}} ${{y2}}`;
 
+          // Ambient glow wire (GPU accelerated)
+          const glowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          glowPath.setAttribute('d', pathD);
+          glowPath.setAttribute('class', 'wire-glow');
+          glowPath.setAttribute('stroke', safeColor(w.color));
+
           const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           path.setAttribute('d', pathD);
           path.setAttribute('class', 'wire-path');
           path.setAttribute('id', `wire-${{idx}}`);
           path.setAttribute('stroke', safeColor(w.color));
-          path.style.color = safeColor(w.color);
 
-          // Flowing electron pulse dot
+          // Flowing electron pulse dot (Dual-circle glow, zero CPU filter redraw)
+          const glowCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          glowCircle.setAttribute('r', '5.5');
+          glowCircle.setAttribute('fill', safeColor(w.color));
+          glowCircle.setAttribute('opacity', '0.45');
+
+          const animGlow = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+          animGlow.setAttribute('path', pathD);
+          animGlow.setAttribute('dur', `${{1.6 + idx * 0.25}}s`);
+          animGlow.setAttribute('repeatCount', 'indefinite');
+          glowCircle.appendChild(animGlow);
+
           const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          circle.setAttribute('r', '3.5');
+          circle.setAttribute('r', '2.8');
           circle.setAttribute('fill', '#ffffff');
-          circle.style.filter = 'drop-shadow(0 0 6px #ffffff)';
 
           const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
           anim.setAttribute('path', pathD);
           anim.setAttribute('dur', `${{1.6 + idx * 0.25}}s`);
           anim.setAttribute('repeatCount', 'indefinite');
-
           circle.appendChild(anim);
 
+          svgLayer.appendChild(glowPath);
           svgLayer.appendChild(path);
+          svgLayer.appendChild(glowCircle);
           svgLayer.appendChild(circle);
         }}
       }});
@@ -508,6 +530,26 @@ class CircuitPopupOverlay(QWidget):
 
         # Escape key closes overlay
         QShortcut(QKeySequence("Escape"), self, self._do_close)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        p = self.parent()
+        while p:
+            bg = getattr(p, "_bg_widget", None)
+            if bg and hasattr(bg, "pause_rendering"):
+                bg.pause_rendering()
+                break
+            p = p.parent()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        p = self.parent()
+        while p:
+            bg = getattr(p, "_bg_widget", None)
+            if bg and hasattr(bg, "resume_rendering"):
+                bg.resume_rendering()
+                break
+            p = p.parent()
 
     def _do_close(self):
         self.closed.emit()

@@ -95,9 +95,9 @@ _KEY_CHARS = [c for c in (string.ascii_uppercase + string.digits)
 _AES_SALT = b'BRAHMA-DASHBOARD-v1'
 
 
-def _derive_key(session_key: str) -> bytes:
+def _derive_key(session_key: str, salt: bytes = _AES_SALT) -> bytes:
     """SHA-256(sessionKey‖salt) → 32-byte AES-256 key (microseconds, no PBKDF2 needed)."""
-    return hashlib.sha256(session_key.encode('utf-8') + _AES_SALT).digest()
+    return hashlib.sha256(session_key.encode('utf-8') + salt).digest()
 
 
 def _decrypt_cbc(aes_key: bytes, enc_b64: str) -> str:
@@ -542,10 +542,19 @@ class DashboardServer:
         sk = self._token_keys.get(token)
         if not sk:
             return None
+        # Try primary salt
         try:
             return _decrypt_cbc(self._aes_key(sk), enc_b64)
         except Exception:
-            return None
+            pass
+        # Fallback to alternate salts
+        for alt_salt in (b'BRAHMA EVO-DASHBOARD-v1', b'BRAHMA-DASHBOARD-v1'):
+            try:
+                alt_key = _derive_key(sk, salt=alt_salt)
+                return _decrypt_cbc(alt_key, enc_b64)
+            except Exception:
+                pass
+        return None
 
     # ── callbacks ────────────────────────────────────────────────────────
 
@@ -727,6 +736,57 @@ class DashboardServer:
                 self._wake_callback()
             return JSONResponse({"ok": True})
 
+        @app.post("/api/action")
+        async def remote_action_ep(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            body = await req.json()
+            act_type = body.get("type", "")
+            action = body.get("action", "")
+            try:
+                import pyautogui
+                if act_type == "media":
+                    if action == "playpause":
+                        pyautogui.press("playpause")
+                    elif action == "next":
+                        pyautogui.press("nexttrack")
+                    elif action == "prev":
+                        pyautogui.press("prevtrack")
+                    elif action == "volume_up":
+                        pyautogui.press("volumeup")
+                    elif action == "volume_down":
+                        pyautogui.press("volumedown")
+                    elif action == "mute":
+                        pyautogui.press("volumemute")
+                elif act_type == "system":
+                    if action == "lock":
+                        import ctypes
+                        ctypes.windll.user32.LockWorkStation()
+                    elif action == "desktop":
+                        pyautogui.hotkey("win", "d")
+                    elif action == "screenshot":
+                        pyautogui.hotkey("win", "printscreen")
+                    elif action == "browser":
+                        import webbrowser
+                        webbrowser.open("https://www.google.com")
+                    elif action == "taskmgr":
+                        pyautogui.hotkey("ctrl", "shift", "esc")
+                elif act_type == "mouse_click":
+                    btn = body.get("button", "left")
+                    if btn == "right":
+                        pyautogui.rightClick()
+                    elif btn == "double":
+                        pyautogui.doubleClick()
+                    else:
+                        pyautogui.click()
+                elif act_type == "type_text":
+                    text = body.get("text", "")
+                    if text:
+                        pyautogui.write(text, interval=0.01)
+                return JSONResponse({"ok": True})
+            except Exception as exc:
+                return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
         # ── Phone mic real-time audio → Gemini Live ──────────────────────────
 
         @app.websocket("/ws/phone-audio")
@@ -868,13 +928,87 @@ class DashboardServer:
             try:
                 while True:
                     data = await websocket.receive_json()
-                    if data.get("type") == "command":
+                    msg_type = data.get("type")
+                    if msg_type == "command":
                         enc = data.get("enc", "")
                         t   = self._decrypt(tok, enc) if enc else (data.get("text") or "").strip()
                         if t:
                             await self._command_queue.put(t)
                             if self._wake_callback:
                                 self._wake_callback()
+                    elif msg_type == "mouse_move":
+                        dx = float(data.get("dx", 0))
+                        dy = float(data.get("dy", 0))
+                        try:
+                            import pyautogui
+                            pyautogui.moveRel(dx, dy, _pause=False)
+                        except Exception:
+                            pass
+                    elif msg_type == "mouse_click":
+                        btn = data.get("button", "left")
+                        try:
+                            import pyautogui
+                            if btn == "right":
+                                pyautogui.rightClick()
+                            elif btn == "double":
+                                pyautogui.doubleClick()
+                            elif btn == "middle":
+                                pyautogui.middleClick()
+                            else:
+                                pyautogui.click()
+                        except Exception:
+                            pass
+                    elif msg_type == "mouse_scroll":
+                        dy = int(data.get("dy", 0))
+                        try:
+                            import pyautogui
+                            pyautogui.scroll(dy)
+                        except Exception:
+                            pass
+                    elif msg_type == "media":
+                        action = data.get("action", "")
+                        try:
+                            import pyautogui
+                            if action == "playpause":
+                                pyautogui.press("playpause")
+                            elif action == "next":
+                                pyautogui.press("nexttrack")
+                            elif action == "prev":
+                                pyautogui.press("prevtrack")
+                            elif action == "volume_up":
+                                pyautogui.press("volumeup")
+                            elif action == "volume_down":
+                                pyautogui.press("volumedown")
+                            elif action == "mute":
+                                pyautogui.press("volumemute")
+                        except Exception:
+                            pass
+                    elif msg_type == "system":
+                        action = data.get("action", "")
+                        try:
+                            import pyautogui
+                            if action == "lock":
+                                import ctypes
+                                ctypes.windll.user32.LockWorkStation()
+                            elif action == "desktop":
+                                pyautogui.hotkey("win", "d")
+                            elif action == "screenshot":
+                                pyautogui.hotkey("win", "printscreen")
+                            elif action == "browser":
+                                import webbrowser
+                                webbrowser.open("https://www.google.com")
+                            elif action == "taskmgr":
+                                pyautogui.hotkey("ctrl", "shift", "esc")
+                        except Exception:
+                            pass
+                    elif msg_type == "type_text":
+                        text = data.get("text", "")
+                        if text:
+                            try:
+                                import pyautogui
+                                pyautogui.write(text, interval=0.01)
+                            except Exception:
+                                pass
             except WebSocketDisconnect:
                 pass
             finally:

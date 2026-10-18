@@ -396,7 +396,7 @@ _speak_lock = threading.Lock()
 
 
 def _speak_edge_native(text: str, force_edge: bool = False) -> None:
-    global _current_player_alias, _current_audio_path
+    global _current_player_alias, _current_audio_path, _current_speech_proc
     text = (text or "").strip()
     if not text:
         return
@@ -425,32 +425,61 @@ def _speak_edge_native(text: str, force_edge: bool = False) -> None:
         except Exception:
             pass
 
+        # Multilingual voice detection: use Hindi neural voice for Devanagari script, English neural voice otherwise
+        voice = "en-US-GuyNeural"
+        if any('\u0900' <= ch <= '\u097f' for ch in text):
+            voice = "hi-IN-MadhurNeural"
+
         audio_path = os.path.join(tempfile.gettempdir(), f"brahma_edge_tts_{uuid.uuid4().hex}.mp3")
         try:
-            communicator = edge_tts.Communicate(text, voice="en-US-GuyNeural")
+            communicator = edge_tts.Communicate(text, voice=voice)
             communicator.save_sync(audio_path)
         except Exception as exc:
-            print(f"[AttentionMonitor] Edge TTS generation failed: {exc}. Falling back to offline male voice.")
-            _cleanup_current_audio()
-            _speak_sapi_male(text)
-            return
+            print(f"[AttentionMonitor] Edge TTS generation failed ({voice}): {exc}. Retrying with default voice...")
+            try:
+                communicator = edge_tts.Communicate(text, voice="en-US-GuyNeural")
+                communicator.save_sync(audio_path)
+            except Exception as exc2:
+                print(f"[AttentionMonitor] Edge TTS secondary generation failed: {exc2}. Falling back to offline male voice.")
+                _cleanup_current_audio()
+                _speak_sapi_male(text)
+                return
 
-        # Play Edge TTS audio via Windows PresentationCore MediaPlayer (native across Windows 10 & 11)
         _current_audio_path = audio_path
+        player_alias = f"brahma_tts_{uuid.uuid4().hex[:8]}"
+        _current_player_alias = player_alias
+
+        # Try fast, zero-latency native Windows MCI playback first
+        played_via_mci = False
         try:
-            cmd = [
-                "powershell", "-NoProfile", "-NonInteractive", "-Command",
-                f"Add-Type -AssemblyName presentationCore; $p = New-Object System.Windows.Media.MediaPlayer; $p.Open([System.Uri]'{audio_path}'); $p.Play(); Start-Sleep -Milliseconds 400; while($p.NaturalDuration.HasTimeSpan -and $p.Position -lt $p.NaturalDuration.TimeSpan){{Start-Sleep -Milliseconds 80}}"
-            ]
-            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-            _current_speech_proc = subprocess.Popen(cmd, creationflags=flags)
-            _current_speech_proc.wait()
-            _current_speech_proc = None
+            short_buf = ctypes.create_unicode_buffer(500)
+            ctypes.windll.kernel32.GetShortPathNameW(audio_path, short_buf, 500)
+            mci_path = short_buf.value or audio_path
+
+            r_open = ctypes.windll.winmm.mciSendStringW(f'open "{mci_path}" type mpegvideo alias {player_alias}', None, 0, None)
+            if r_open == 0:
+                r_play = ctypes.windll.winmm.mciSendStringW(f"play {player_alias} wait", None, 0, None)
+                if r_play == 0:
+                    played_via_mci = True
         except Exception as exc:
-            print(f"[AttentionMonitor] MediaPlayer playback failed: {exc}. Falling back to offline male voice.")
-            _speak_sapi_male(text)
-        finally:
-            _cleanup_current_audio()
+            print(f"[AttentionMonitor] MCI playback attempt failed: {exc}")
+
+        # If MCI wasn't available or errored, fallback to Windows PresentationCore MediaPlayer
+        if not played_via_mci:
+            try:
+                cmd = [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    f"Add-Type -AssemblyName presentationCore; $p = New-Object System.Windows.Media.MediaPlayer; $p.Open([System.Uri]'{audio_path}'); $p.Play(); Start-Sleep -Milliseconds 400; while($p.NaturalDuration.HasTimeSpan -and $p.Position -lt $p.NaturalDuration.TimeSpan){{Start-Sleep -Milliseconds 80}}"
+                ]
+                flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                _current_speech_proc = subprocess.Popen(cmd, creationflags=flags)
+                _current_speech_proc.wait()
+                _current_speech_proc = None
+            except Exception as exc:
+                print(f"[AttentionMonitor] MediaPlayer playback failed: {exc}. Falling back to offline male voice.")
+                _speak_sapi_male(text)
+
+        _cleanup_current_audio()
 
 
 

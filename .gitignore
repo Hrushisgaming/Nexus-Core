@@ -34,22 +34,34 @@ brahma-connect-android/.cxx/
 # Scratch & temporary logs
 scratch/
 *.log
+.playwright-mcp/
+reengineered_apps/
+.coverage
+htmlcov/
+.vscode/
+.idea/
 
 # Browser & runtime cache / backups
 config/ig_browser_profile/
 config/patch_backups/
 config/ppt_template_cache/
+config/.desktop_shortcut_created
 
 # Credentials & Sensitive Configurations
+.env
+.env.*
+*.env
 config/api_keys.json
 config/email_credentials.json
 config/ig_session.json
+config/spotify-config.json
+*spotify-config.json
 config/*.key
 config/.*key
 config/*.sqlite3
 *.sqlite3
 
-# Personal Data
+# Personal Data & Local Runtime History
 config/identity.json
 config/device_location_cache.json
 config/learned_rules.json
@@ -63,9 +75,11 @@ memory/nutrition_log.json
 ig_session.json
 api_keys.json
 email_credentials.json
+Brahma_Images/
 
 build/
 dist/
+actions/spotify_mcp_server/build/
 gradle-8.7-bin.zip
 setup_android_sdk.ps1
 build_apk.ps1

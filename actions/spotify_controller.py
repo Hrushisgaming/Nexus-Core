@@ -355,9 +355,47 @@ def clear_spotify_credentials() -> bool:
         return False
 
 
+def _ensure_spotify_mcp_built() -> bool:
+    """Ensures the TypeScript Spotify MCP server is compiled into build/."""
+    if MCP_BUILD_INDEX.exists() and MCP_BUILD_AUTH.exists():
+        return True
+    try:
+        npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+        subprocess.run(
+            [npm_cmd, "run", "build"],
+            cwd=str(MCP_SERVER_DIR.resolve()),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+            text=True,
+            check=False
+        )
+        return MCP_BUILD_INDEX.exists() and MCP_BUILD_AUTH.exists()
+    except Exception as e:
+        print(f"[Spotify] Build error: {e}")
+        return False
+
+
+def _free_port_8888_if_busy() -> None:
+    """Frees TCP port 8888 if an orphaned node process is still listening."""
+    if sys.platform == "win32":
+        try:
+            out = subprocess.check_output("netstat -ano", shell=True, text=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines():
+                if ":8888" in line and "LISTENING" in line:
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        pid = parts[-1]
+                        subprocess.run(f"taskkill /F /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+
 def _spotify_mcp_call(tool_name: str, arguments: dict | None = None) -> dict:
     if not MCP_BUILD_INDEX.exists():
-        return {"success": False, "error": "Spotify MCP server is not built."}
+        _ensure_spotify_mcp_built()
+    if not MCP_BUILD_INDEX.exists():
+        return {"success": False, "error": "Spotify MCP server is not built. Please run 'npm run build' inside actions/spotify_mcp_server."}
     env = os.environ.copy()
     env["SPOTIFY_CONFIG_PATH"] = str(SPOTIFY_CONFIG_PATH.resolve())
     process = None
@@ -390,8 +428,11 @@ def _spotify_mcp_call(tool_name: str, arguments: dict | None = None) -> dict:
         if "error" in response:
             return {"success": False, "error": response["error"].get("message", "Spotify MCP call failed.")}
         result = response.get("result", {})
-        output = "\n".join(item.get("text", "") for item in result.get("content", []) if isinstance(item, dict) and item.get("type") == "text")
-        return {"success": not result.get("isError", False), "output": output}
+        content = result.get("content", [])
+        output = "\n".join(item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text")
+        has_item_error = any(isinstance(item, dict) and item.get("isError") for item in content)
+        is_error = result.get("isError", False) or has_item_error or output.lower().startswith("error")
+        return {"success": not is_error, "output": output}
     except Exception as exc:
         return {"success": False, "error": str(exc)}
     finally:
@@ -412,13 +453,41 @@ def _spotify_mcp_action(parameters: dict) -> str:
     device_id = parameters.get("device_id")
     if action in ("auth", "login", "authenticate", "setup"):
         if not is_spotify_configured():
-            return "Add Spotify clientId and clientSecret to the local spotify-config.json before authenticating."
+            return "Please enter your Spotify clientId and clientSecret in Settings and click 'Save Credentials' before authenticating."
+        if not MCP_BUILD_AUTH.exists() or not MCP_BUILD_INDEX.exists():
+            _ensure_spotify_mcp_built()
         if not MCP_BUILD_AUTH.exists():
-            return "Spotify MCP auth helper is not built."
+            return "Spotify MCP auth helper is not built. Please run 'npm run build' inside actions/spotify_mcp_server."
+        
+        _free_port_8888_if_busy()
+
         env = os.environ.copy()
         env["SPOTIFY_CONFIG_PATH"] = str(SPOTIFY_CONFIG_PATH.resolve())
-        subprocess.Popen(["node", str(MCP_BUILD_AUTH.resolve())], cwd=str(MCP_SERVER_DIR.resolve()), env=env)
-        return "Started Spotify authorization in your browser."
+        proc = subprocess.Popen(
+            ["node", str(MCP_BUILD_AUTH.resolve())],
+            cwd=str(MCP_SERVER_DIR.resolve()),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8"
+        )
+
+        def _monitor_auth_url():
+            try:
+                for line in iter(proc.stdout.readline, ''):
+                    line = line.strip()
+                    if "https://accounts.spotify.com/authorize" in line:
+                        _open_url_in_chrome(line)
+                        break
+            except Exception:
+                pass
+        threading.Thread(target=_monitor_auth_url, daemon=True).start()
+
+        return (
+            "Started Spotify authorization server on port 8888.\n"
+            "Your browser should open automatically. Log in to Spotify and click 'Agree' to grant playback permissions."
+        )
     if not is_spotify_configured():
         return "Spotify MCP is not configured. Add clientId and clientSecret to the local spotify-config.json, then authenticate."
 
@@ -426,24 +495,53 @@ def _spotify_mcp_action(parameters: dict) -> str:
         if not query:
             return "Tell me a song, artist, album, or playlist to play."
         found = _spotify_mcp_call("searchSpotify", {"query": query, "type": "track", "limit": 3})
-        if not found.get("success"):
-            return f"Spotify search failed: {found.get('error') or found.get('output')}"
         uri = None
+        track_id = None
         title = query
-        try:
-            data = json.loads(found.get("output", ""))
-            tracks = data.get("tracks", {}).get("items", []) or data.get("items", [])
-            if tracks:
-                uri = tracks[0].get("uri")
-                title = tracks[0].get("name", query)
-        except Exception:
-            match = re.search(r"spotify:track:[a-zA-Z0-9]+", found.get("output", ""))
-            uri = match.group(0) if match else None
+        if found.get("success"):
+            out_text = found.get("output", "")
+            m_id = re.search(r"ID:\s*([a-zA-Z0-9]+)", out_text)
+            if m_id:
+                track_id = m_id.group(1)
+                uri = f"spotify:track:{track_id}"
+            m_title = re.search(r'"([^"]+)"', out_text)
+            if m_title:
+                title = m_title.group(1)
+            else:
+                try:
+                    data = json.loads(out_text)
+                    tracks = data.get("tracks", {}).get("items", []) or data.get("items", [])
+                    if tracks:
+                        uri = tracks[0].get("uri", uri)
+                        title = tracks[0].get("name", title)
+                except Exception:
+                    pass
+
         args = {"uri": uri or f"spotify:search:{query}"}
         if device_id:
             args["deviceId"] = device_id
         played = _spotify_mcp_call("playMusic", args)
-        return f"Playing '{title}' on Spotify." if played.get("success") else f"Playback failed: {played.get('error') or played.get('output')}"
+        if played.get("success"):
+            return f"Playing '{title}' on Spotify."
+
+        # If Spotify Connect API has no active device or playback fails:
+        err_msg = played.get("error") or played.get("output") or ""
+        print(f"[Music] Spotify Connect device unavailable ({err_msg}). Engaging instant playback fallback...")
+
+        # 1. Guaranteed instant direct sound via Google Chrome
+        direct_url = _scrape_direct_playable_url(title or query)
+        if direct_url:
+            _open_url_in_chrome(direct_url)
+            return f"Playing '{title}' in Google Chrome."
+
+        # 2. Or launch Spotify Web directly to the track
+        spotify_web_url = f"https://open.spotify.com/track/{track_id}" if track_id else f"https://open.spotify.com/search/{urllib.parse.quote(query)}"
+        _open_url_in_chrome(spotify_web_url)
+        threading.Thread(
+            target=lambda: [time.sleep(2.5), _find_and_click_spotify_play_button()],
+            daemon=True
+        ).start()
+        return f"Opened and playing '{title}' on Spotify Web."
 
     calls = {
         "play": ("resumePlayback", {}), "resume": ("resumePlayback", {}),

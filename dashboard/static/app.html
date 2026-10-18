@@ -2,590 +2,670 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Brahma Evo Remote</title>
   <script src="/static/crypto.js"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     :root {
-      --bg:      #000000;
-      --surface: rgba(255,255,255,0.045);
-      --border:  rgba(255,255,255,0.12);
-      --accent:  #00e5ff;
-      --adim:    rgba(255, 170, 48,0.14);
-      --text:    #ffffff;
-      --muted:   rgba(255,255,255,0.58);
-      --green:   #ffffff;
-      --gdim:    rgba(255,255,255,0.12);
+      --bg: #030712;
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-card: rgba(15, 23, 42, 0.7);
+      --border: rgba(255, 255, 255, 0.1);
+      --accent: #00e5ff;
+      --accent-glow: rgba(0, 229, 255, 0.25);
+      --accent-blue: #38bdf8;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --danger: #f87171;
+      --success: #34d399;
     }
     html, body {
-      height: 100%; background: var(--bg); color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex; flex-direction: column; overflow: hidden;
-    }
-
-    /* ── APP LAYOUT ── */
-    html, body {
-      height: 100%; width: 100%; margin: 0; padding: 0;
-      background: #000000;
+      height: 100%; width: 100%;
+      background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
-    }
-    .app-shell {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      height: 100%;
-      gap: 18px;
-      padding: 18px;
-    }
-    .sidebar {
       display: flex;
       flex-direction: column;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 28px;
-      padding: 24px 20px;
-      gap: 24px;
-      min-height: 0;
     }
-    .brand {
+
+    /* ── TOP HEADER ── */
+    header {
+      flex: 0 0 auto;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      z-index: 50;
     }
-    .logo {
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: var(--text);
-    }
-    .logo em { color: var(--accent); font-style: normal; }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: rgba(255, 170, 48,0.12);
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .nav {
+    .brand-wrap {
       display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: 10px;
     }
-    .nav-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.02);
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.18s ease;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-    .nav-item.active,
-    .nav-item:hover {
-      background: rgba(255, 170, 48,0.12);
-      border-color: rgba(255, 170, 48,0.38);
-      color: var(--text);
-    }
-    .nav-item::after {
-      content: '›';
-      opacity: 0.6;
-      transition: transform 0.18s ease;
-    }
-    .nav-item.active::after { transform: translateX(2px); }
-    .status-card,
-    .user-card {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.03);
-      border-radius: 24px;
-      padding: 18px;
-    }
-    .status-title,
-    .section-title {
-      font-size: 12px;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-    .status-note,
-    .user-role,
-    .section-subtitle {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-    .status-card .pill,
-    .top-actions .pill {
-      margin-top: 10px;
-    }
-    .user-card {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .user-icon {
-      width: 46px;
-      height: 46px;
-      border-radius: 18px;
-      display: grid;
-      place-items: center;
-      background: rgba(255,255,255,0.08);
+    .brand-logo {
+      font-size: 17px;
       font-weight: 800;
-      color: var(--text);
-      font-size: 18px;
+      letter-spacing: 1.5px;
+      color: #fff;
     }
-    .user-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .main-panel {
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      gap: 18px;
-    }
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      padding: 24px;
-      border-radius: 28px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      min-height: 128px;
-    }
-    .page-title {
-      font-size: 34px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      color: var(--text);
-    }
-    .page-subtitle {
-      margin-top: 8px;
-      font-size: 14px;
-      color: var(--muted);
-    }
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      min-width: 260px;
-      justify-content: flex-end;
-    }
-    .top-actions .url {
-      font-size: 12px;
-      padding: 6px 12px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.04);
-    }
-    .content-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr);
-      gap: 18px;
-      min-height: 0;
-    }
-    .devices-panel,
-    .activity-card,
-    .voice-card {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.03);
-      border-radius: 28px;
-      padding: 24px;
-    }
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    .section-title {
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-    .section-subtitle {
-      font-size: 13px;
-      max-width: 420px;
-    }
-    .devices-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-    }
-    .device-card {
-      display: grid;
-      gap: 14px;
-      padding: 18px;
-      border-radius: 24px;
-      border: 1px solid rgba(255,255,255,0.06);
-      background: rgba(255,255,255,0.02);
-      min-height: 160px;
-    }
-    .device-card .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-    .device-icon {
-      display: grid;
-      place-items: center;
-      width: 46px;
-      height: 46px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.06);
-      color: var(--accent);
-      font-size: 19px;
-    }
-    .device-title {
-      font-size: 15px;
-      font-weight: 800;
-      color: var(--text);
-    }
-    .device-type {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .device-status {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .device-status strong {
-      color: #a5f3fc;
-      font-weight: 700;
-    }
-    .bar-track {
-      height: 6px;
-      background: rgba(255,255,255,0.06);
-      border-radius: 999px;
-      overflow: hidden;
-      margin-top: 10px;
-    }
-    .bar-fill {
-      height: 100%;
-      width: 0;
-      background: linear-gradient(90deg, #ff6a6a, #ff5252);
-      border-radius: 999px;
-      transition: width 0.2s ease;
-    }
-    .bar-fill.level-4 { width: 66%; }
-    .bar-fill.level-3 { width: 50%; }
-    .bar-fill.level-2 { width: 34%; }
-    .bar-fill.level-1 { width: 16%; }
-    .device-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .device-toggle {
-      width: 32px;
-      height: 32px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255, 170, 48,0.12);
-      color: var(--accent);
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-    }
-    .right-panel {
-      display: grid;
-      grid-template-rows: minmax(220px, 1fr) minmax(180px, 1fr);
-      gap: 18px;
-      min-height: 0;
-    }
-    .activity-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: calc(100vh - 360px);
-      overflow: auto;
-      padding-right: 4px;
-    }
-    .activity-list::-webkit-scrollbar { width: 6px; }
-    .activity-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
-    .activity-item {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px;
-      padding: 16px;
-      display: grid;
-      gap: 8px;
-    }
-    .activity-item.system {
-      border-color: rgba(255, 170, 48,0.24);
-      background: rgba(255, 170, 48,0.08);
-    }
-    .activity-item .item-title { font-size: 13px; font-weight: 700; color: var(--text); }
-    .activity-item .item-text { font-size: 13px; color: var(--muted); line-height: 1.5; }
-    .activity-item .item-meta { font-size: 11px; color: rgba(255,255,255,0.55); display: flex; justify-content: space-between; gap: 10px; }
-    .voice-card {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 18px;
-    }
-    .voice-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-    .voice-status {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .voice-note {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.5;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 18px;
-      padding: 14px 16px;
-    }
-    .voice-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .voice-actions .btn-send {
-      padding: 12px 18px;
-      min-width: 110px;
-    }
-    footer {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 18px 24px;
-      border-radius: 24px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    #inp { flex: 1; min-width: 0; }
-    .btn-secondary {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: var(--muted);
-    }
-    .btn-secondary:hover { background: rgba(255,255,255,0.09); }
-    .status-pill {
+    .brand-logo span { color: var(--accent); }
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
+      gap: 6px;
+      padding: 4px 10px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text);
-      font-size: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .status-badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #e2e8f0;
+    }
+    .status-badge.online .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .status-badge.offline .dot { background: var(--danger); }
+    .status-badge.connecting .dot { background: #fbbf24; }
+
+    /* ── MAIN VIEW CONTAINER ── */
+    main {
+      flex: 1 1 auto;
+      position: relative;
+      overflow: hidden;
+    }
+    .tab-view {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px;
+    }
+    .tab-view.active {
+      display: flex;
+    }
+
+    /* ── BOTTOM NAV BAR ── */
+    nav.bottom-nav {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: rgba(10, 15, 29, 0.95);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      padding: 8px 10px;
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+      z-index: 50;
+    }
+    .nav-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px 0;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+    .nav-btn .icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+    .nav-btn .label {
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.5px;
       text-transform: uppercase;
     }
-    .status-pill .dot { width: 8px; height: 8px; }
-    .pill.on .dot { background: var(--accent); }
-    .voice-card .pill { margin:0; }
-    @media (max-width: 1240px) {
-      .app-shell { grid-template-columns: 1fr; }
-      .content-grid { grid-template-columns: 1fr; }
-      .right-panel { grid-template-rows: repeat(2, minmax(180px, auto)); }
+    .nav-btn.active {
+      color: var(--accent);
+      background: rgba(0, 229, 255, 0.08);
     }
-    @media (max-width: 720px) {
-      .app-shell { padding: 12px; }
-      .sidebar { padding: 18px; }
-      .topbar, .devices-panel, .activity-card, .voice-card, footer { padding: 18px; }
-      .devices-grid { grid-template-columns: 1fr; }
+
+    /* ── TAB 1: TRACKPAD ── */
+    #view-trackpad {
+      padding: 12px;
+      gap: 12px;
+    }
+    .trackpad-card {
+      flex: 1 1 auto;
+      display: flex;
+      position: relative;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-radius: 20px;
+      overflow: hidden;
+      touch-action: none;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    #trackpad-surface {
+      flex: 1 1 auto;
+      height: 100%;
+      touch-action: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.25);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      user-select: none;
+    }
+    #trackpad-surface .hint {
+      pointer-events: none;
+      text-align: center;
+      line-height: 1.6;
+    }
+    #scroll-strip {
+      width: 48px;
+      background: rgba(0, 229, 255, 0.05);
+      border-left: 1px dashed rgba(0, 229, 255, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      color: var(--muted);
+      font-size: 14px;
+      touch-action: none;
+      user-select: none;
+    }
+    .mouse-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+    .btn-mouse {
+      padding: 14px;
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-mouse:active {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .type-bar {
+      display: flex;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+    .type-input {
+      flex: 1;
+      padding: 12px 14px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+    .type-input:focus { border-color: var(--accent); }
+    .btn-type {
+      padding: 0 16px;
+      background: var(--accent);
+      color: #030712;
+      border: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* ── TAB 2: MEDIA & SYSTEM ── */
+    #view-media {
+      gap: 18px;
+    }
+    .section-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title span { color: var(--accent); }
+    .media-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .media-btn {
+      padding: 16px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+    .media-btn .icon { font-size: 20px; }
+    .media-btn:active {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: scale(0.97);
+    }
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .action-btn {
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s ease;
+    }
+    .action-btn:active {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── TAB 3: CHAT & VOICE ── */
+    #view-chat {
+      padding: 12px;
+      gap: 12px;
+    }
+    #feed {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 4px;
+      min-height: 120px;
+    }
+    .chat-bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #0099ff, #00e5ff);
+      color: #030712;
+      font-weight: 600;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-bubble.brahma {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: #f1f5f9;
+      border-bottom-left-radius: 4px;
+    }
+    .chat-bubble.sys {
+      align-self: center;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      color: #7dd3fc;
+      font-size: 11px;
+      text-align: center;
+      padding: 6px 14px;
+      border-radius: 999px;
+    }
+    .quick-prompts {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      flex: 0 0 auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .quick-prompts::-webkit-scrollbar { display: none; }
+    .chip {
+      white-space: nowrap;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .chip:active { background: rgba(0, 229, 255, 0.15); color: #fff; }
+    .chat-input-bar {
+      display: flex;
+      gap: 8px;
+      flex: 0 0 auto;
+      align-items: center;
+    }
+    #chat-inp {
+      flex: 1;
+      padding: 12px 14px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+    #chat-inp:focus { border-color: var(--accent); }
+    .btn-voice {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-size: 18px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .btn-voice.listening {
+      background: var(--danger);
+      box-shadow: 0 0 16px rgba(248, 113, 113, 0.5);
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    .btn-send-chat {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--accent);
+      color: #030712;
+      border: none;
+      font-size: 16px;
+      font-weight: bold;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .btn-wake-sm {
+      padding: 0 12px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+
+    /* ── TAB 4: FILES ── */
+    #view-files {
+      gap: 14px;
+    }
+    .upload-box {
+      border: 2px dashed rgba(0, 229, 255, 0.3);
+      background: rgba(0, 229, 255, 0.03);
+      border-radius: 20px;
+      padding: 24px 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .upload-box .icon { font-size: 32px; color: var(--accent); }
+    .upload-box .text { font-size: 13px; font-weight: 600; color: #fff; }
+    .upload-box .subtext { font-size: 11px; color: var(--muted); }
+    .files-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      gap: 10px;
+    }
+    .file-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow: hidden;
+    }
+    .file-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-size { font-size: 11px; color: var(--muted); }
+    .btn-download {
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    /* ── TOAST NOTIFICATION ── */
+    #toast {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      padding: 10px 18px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+      border-radius: 999px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 100;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
   </style>
 </head>
 <body>
   <div id="toast"></div>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="logo"><em>Brahma Evo</em></div>
-        <div class="badge">Online</div>
-      </div>
-      <div class="nav">
-        <div class="nav-item active">Dashboard</div>
-        <div class="nav-item">Brahma Evo Home</div>
-        <div class="nav-item">Settings</div>
-      </div>
-      <div class="status-card">
-        <div class="status-title">Home Status</div>
-        <div class="status-note">Connected devices are ready for voice and remote control.</div>
-        <div id="pill" class="pill on"><span class="dot"></span><span id="st">System Online</span></div>
-      </div>
-      <div class="user-card">
-        <div class="user-icon">S</div>
-        <div>
-          <div class="user-name">User</div>
-          <div class="user-role">Local Profile</div>
-        </div>
-      </div>
-    </aside>
-    <section class="main-panel">
-      <div class="topbar">
-        <div>
-          <div class="page-title">Brahma Evo Home</div>
-          <div class="page-subtitle">Control your home with Brahma Evo.</div>
-        </div>
-        <div class="top-actions">
-          <div class="badge">Home Status</div>
-          <div class="url">__IP__:__PORT__</div>
-        </div>
-      </div>
-      <div class="content-grid">
-        <div class="devices-panel">
-          <div class="section-head">
-            <div>
-              <div class="section-title">My Devices</div>
-              <div class="section-subtitle">Quick access to smart devices and live state.</div>
-            </div>
-            <button class="btn btn-secondary">+ Add Device</button>
-          </div>
-          <div class="devices-grid">
-            <div class="device-card">
-              <div class="top">
-                <div>
-                  <div class="device-title">Bedroom Fan</div>
-                  <div class="device-type">Atomberg Renesa</div>
-                </div>
-                <div class="device-toggle">⏻</div>
-              </div>
-              <div class="device-status"><span>Speed 4</span><strong>Online</strong></div>
-              <div class="bar-track"><div class="bar-fill level-4"></div></div>
-              <div class="device-footer"><span>Fan</span><span>Room: Bedroom</span></div>
-            </div>
-            <div class="device-card">
-              <div class="top">
-                <div>
-                  <div class="device-title">Bedroom Light</div>
-                  <div class="device-type">Philips Hue</div>
-                </div>
-                <div class="device-toggle">⏻</div>
-              </div>
-              <div class="device-status"><span>Off</span><strong>Offline</strong></div>
-              <div class="bar-track"><div class="bar-fill level-1"></div></div>
-              <div class="device-footer"><span>Light</span><span>Room: Bedroom</span></div>
-            </div>
-            <div class="device-card">
-              <div class="top">
-                <div>
-                  <div class="device-title">Living Room TV</div>
-                  <div class="device-type">LG WebOS</div>
-                </div>
-                <div class="device-toggle">⏻</div>
-              </div>
-              <div class="device-status"><span>On</span><strong>Online</strong></div>
-              <div class="bar-track"><div class="bar-fill level-3"></div></div>
-              <div class="device-footer"><span>TV</span><span>Room: Living</span></div>
-            </div>
-            <div class="device-card">
-              <div class="top">
-                <div>
-                  <div class="device-title">Study Room Plug</div>
-                  <div class="device-type">TP-Link Kasa</div>
-                </div>
-                <div class="device-toggle">⏻</div>
-              </div>
-              <div class="device-status"><span>Off</span><strong>Offline</strong></div>
-              <div class="bar-track"><div class="bar-fill level-1"></div></div>
-              <div class="device-footer"><span>Plug</span><span>Room: Study</span></div>
-            </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand-wrap">
+      <div class="brand-logo">⚡ BRAHMA <span>EVO</span></div>
+    </div>
+    <div id="status-badge" class="status-badge connecting">
+      <span class="dot"></span>
+      <span id="status-text">Connecting...</span>
+    </div>
+  </header>
+
+  <!-- Views -->
+  <main>
+    <!-- TAB 1: TRACKPAD -->
+    <div id="view-trackpad" class="tab-view active">
+      <div class="trackpad-card">
+        <div id="trackpad-surface">
+          <div class="hint">
+            <div>🖱️ Touch & Drag</div>
+            <div style="font-size:10px; color: rgba(255,255,255,0.4); margin-top:4px;">Tap = Left Click • Double Tap = Double Click</div>
           </div>
         </div>
-        <div class="right-panel">
-          <div class="activity-card">
-            <div class="section-head">
-              <div>
-                <div class="section-title">Recent Activity</div>
-                <div class="section-subtitle">Latest smart home events and device changes.</div>
-              </div>
-              <button class="btn btn-secondary">View All</button>
-            </div>
-            <div class="activity-list">
-              <div class="activity-item">
-                <div class="item-title">Bedroom Fan</div>
-                <div class="item-text">Speed set to 4</div>
-                <div class="item-meta"><span>12:08 PM</span><span>Fan</span></div>
-              </div>
-              <div class="activity-item">
-                <div class="item-title">Living Room TV</div>
-                <div class="item-text">Turned On</div>
-                <div class="item-meta"><span>12:05 PM</span><span>TV</span></div>
-              </div>
-              <div class="activity-item system">
-                <div class="item-title">Bedroom Light</div>
-                <div class="item-text">Turned Off</div>
-                <div class="item-meta"><span>11:58 AM</span><span>Light</span></div>
-              </div>
-              <div class="activity-item">
-                <div class="item-title">Bedroom AC</div>
-                <div class="item-text">Temperature set to 24°C</div>
-                <div class="item-meta"><span>11:45 AM</span><span>AC</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="voice-card">
-            <div class="voice-header">
-              <div>
-                <div class="section-title">Voice Control</div>
-                <div class="section-subtitle">Use Brahma Evo voice commands to control devices quickly.</div>
-              </div>
-              <div class="status-pill"><span class="dot"></span>Listening</div>
-            </div>
-            <div class="voice-note">Say “Brahma Evo” followed by your command, or type it below.</div>
-            <div class="voice-actions">
-              <button class="btn btn-secondary" onclick="doWake()">Wake</button>
-              <button class="btn btn-send" onclick="doSend()">Send</button>
-            </div>
-          </div>
+        <div id="scroll-strip">
+          <span>▲</span>
+          <span style="font-size:10px; transform:rotate(-90deg);">SCROLL</span>
+          <span>▼</span>
         </div>
       </div>
-      <footer>
-        <input id="inp" placeholder="Send a command to Brahma Evo…" autocomplete="off">
-        <label class="btn-attach" for="file-inp" title="Send file">📎</label>
-        <input type="file" id="file-inp" multiple accept="*/*" style="display:none">
-        <button id="mic-btn" onclick="doMic()" title="Voice command">🎤</button>
-        <button class="btn btn-wake" id="wake" onclick="doWake()">WAKE</button>
-        <button class="btn btn-send" onclick="doSend()">SEND</button>
-      </footer>
-    </section>
-  </div>
+      <div class="mouse-btns">
+        <button class="btn-mouse" onclick="sendMouseClick('left')">🖱️ Left Click</button>
+        <button class="btn-mouse" onclick="sendMouseClick('right')">🖱️ Right Click</button>
+      </div>
+      <div class="type-bar">
+        <input id="type-inp" class="type-input" placeholder="Type text to PC keyboard..." autocomplete="off">
+        <button class="btn-type" onclick="sendTypeText()">SEND</button>
+      </div>
+    </div>
+
+    <!-- TAB 2: MEDIA & SYSTEM -->
+    <div id="view-media" class="tab-view">
+      <div class="section-card">
+        <div class="card-title"><span>⏯️</span> Media Playback</div>
+        <div class="media-grid">
+          <button class="media-btn" onclick="sendMedia('prev')"><span class="icon">⏮️</span>Prev Track</button>
+          <button class="media-btn" onclick="sendMedia('playpause')"><span class="icon">⏯️</span>Play / Pause</button>
+          <button class="media-btn" onclick="sendMedia('next')"><span class="icon">⏭️</span>Next Track</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-title"><span>🔊</span> System Audio</div>
+        <div class="media-grid">
+          <button class="media-btn" onclick="sendMedia('volume_down')"><span class="icon">🔉</span>Vol Down</button>
+          <button class="media-btn" onclick="sendMedia('mute')"><span class="icon">🔇</span>Mute</button>
+          <button class="media-btn" onclick="sendMedia('volume_up')"><span class="icon">🔊</span>Vol Up</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-title"><span>⚡</span> Quick PC Actions</div>
+        <div class="actions-grid">
+          <button class="action-btn" onclick="sendSystem('lock')">🔒 Lock PC</button>
+          <button class="action-btn" onclick="sendSystem('screenshot')">📸 Screenshot</button>
+          <button class="action-btn" onclick="sendSystem('desktop')">🖥️ Show Desktop</button>
+          <button class="action-btn" onclick="sendSystem('browser')">🌐 Open Browser</button>
+          <button class="action-btn" onclick="sendSystem('taskmgr')">📊 Task Manager</button>
+          <button class="action-btn" onclick="doWake()">⚡ Wake Brahma</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: CHAT & VOICE -->
+    <div id="view-chat" class="tab-view">
+      <div id="feed">
+        <div class="chat-bubble sys">Remote connection to Brahma Evo established.</div>
+      </div>
+
+      <div class="quick-prompts">
+        <div class="chip" onclick="sendQuick('What are you doing?')">What are you doing?</div>
+        <div class="chip" onclick="sendQuick('Take a screenshot')">Take a screenshot</div>
+        <div class="chip" onclick="sendQuick('Show desktop')">Show desktop</div>
+        <div class="chip" onclick="sendQuick('Check system specs')">System status</div>
+      </div>
+
+      <div class="chat-input-bar">
+        <button class="btn-wake-sm" onclick="doWake()">WAKE</button>
+        <button id="mic-btn" class="btn-voice" onclick="toggleVoiceDictation()" title="Voice Dictation">🎤</button>
+        <input id="chat-inp" placeholder="Message Brahma Evo..." autocomplete="off">
+        <button class="btn-send-chat" onclick="sendChatMessage()">➔</button>
+      </div>
+    </div>
+
+    <!-- TAB 4: FILES -->
+    <div id="view-files" class="tab-view">
+      <label class="upload-box" for="file-upload-input">
+        <div class="icon">📤</div>
+        <div class="text">Tap to Send Files to PC</div>
+        <div class="subtext">Photos, videos, and documents will be saved to your PC's Brahma Uploads folder.</div>
+        <input type="file" id="file-upload-input" multiple style="display:none;" onchange="handleFileUpload(this)">
+      </label>
+
+      <div class="section-card">
+        <div class="card-title"><span>📂</span> Transferred Files</div>
+        <div id="files-list" class="files-list">
+          <div style="font-size:12px; color:var(--muted); text-align:center; padding:10px;">Loading files...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" onclick="switchTab('trackpad')">
+      <span class="icon">🖱️</span>
+      <span class="label">Touchpad</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('media')">
+      <span class="icon">⏯️</span>
+      <span class="label">Media</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('chat')">
+      <span class="icon">💬</span>
+      <span class="label">Brahma</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('files')">
+      <span class="icon">📁</span>
+      <span class="label">Files</span>
+    </button>
+  </nav>
 
   <script>
-    // ── Auth — bearer token ───────────────────────────────────────────────────
+    // ── Authentication & Security ──────────────────────────────────────────
     const _authToken  = sessionStorage.getItem('brahma_token');
     const _sessionKey = sessionStorage.getItem('brahma_key');
 
@@ -593,14 +673,14 @@
       location.replace('/login');
     }
 
-    function _authHeader() { return { 'Authorization': `Bearer ${_authToken}` }; }
+    function _authHeader() { return { 'Authorization': `Bearer ${_authToken}`, 'Content-Type': 'application/json' }; }
     function _authFetch(url, opts = {}) {
       opts.headers = Object.assign({}, opts.headers, _authHeader());
       return fetch(url, opts);
     }
 
-    // ── Local session encryption (CryptoJS) ──────────────────────────────────
-    const _AES_SALT = 'BRAHMA EVO-DASHBOARD-v1';
+    // Fixed AES Salt matching server.py
+    const _AES_SALT = 'BRAHMA-DASHBOARD-v1';
     let _aesKey = null;
 
     function _initCrypto(key) {
@@ -627,363 +707,403 @@
       } catch { return null; }
     }
 
-    const _encReady = _sessionKey ? _initCrypto(_sessionKey) : false;
-    // Encryption stays enabled silently; no technical badge is shown in the header.
+    if (_sessionKey) _initCrypto(_sessionKey);
 
-    // ── WebSocket ─────────────────────────────────────────────────────────────
-    const feed  = document.getElementById('feed');
-    const pill  = document.getElementById('pill');
-    const stTxt = document.getElementById('st');
-    const wake  = document.getElementById('wake');
+    // ── Toast Utility ──────────────────────────────────────────────────────
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
 
-    const _wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const _wsUrl   = `${_wsProto}://${location.host}/ws?token=${encodeURIComponent(_authToken)}`;
-    const ws       = new WebSocket(_wsUrl);
+    // ── Tab Navigation ─────────────────────────────────────────────────────
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
-    ws.onopen    = () => { sys('Remote session active.'); toast('Connected to Brahma Evo'); };
-    ws.onclose   = () => sys('Connection lost — refresh to reconnect.');
-    ws.onerror   = () => sys('Connection error.');
-    ws.onmessage = (e) => {
-      const m = JSON.parse(e.data);
-      if (m.type === 'log')           append(m.speaker, m.text);
-      if (m.type === 'status')        setStatus(m.state);
-      if (m.type === 'wake')          sys('Wake word detected — connecting…');
-      if (m.type === 'sys')           sys(m.text);
-      if (m.type === 'file_received') _onFileReceived(m);
-    };
+      const targetView = document.getElementById(`view-${tabId}`);
+      if (targetView) targetView.classList.add('active');
 
-    function setStatus(s) {
-      if (s === 'active') {
-        pill.className = 'pill on'; stTxt.textContent = 'Active'; wake.classList.remove('show');
-      } else {
-        pill.className = 'pill'; stTxt.textContent = 'Sleeping'; wake.classList.add('show');
+      const tabs = ['trackpad', 'media', 'chat', 'files'];
+      const idx = tabs.indexOf(tabId);
+      if (idx !== -1) {
+        document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+      }
+
+      if (tabId === 'files') loadFiles();
+    }
+
+    // ── WebSocket Connection Management ────────────────────────────────────
+    let ws = null;
+    let reconnectTimer = null;
+
+    function initWebSocket() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        return;
+      }
+
+      updateStatus('connecting', 'Connecting...');
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${proto}://${location.host}/ws?token=${encodeURIComponent(_authToken)}`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          updateStatus('online', 'Connected');
+          toast('Connected to Brahma Evo');
+          if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+        };
+
+        ws.onclose = () => {
+          updateStatus('offline', 'Disconnected');
+          scheduleReconnect();
+        };
+
+        ws.onerror = () => {
+          updateStatus('offline', 'Error');
+          scheduleReconnect();
+        };
+
+        ws.onmessage = (e) => {
+          try {
+            const m = JSON.parse(e.data);
+            if (m.type === 'log') appendChat(m.speaker || 'Brahma', m.text);
+            else if (m.type === 'sys') appendSys(m.text);
+            else if (m.type === 'file_received') {
+              toast(`Received: ${m.name}`);
+              loadFiles();
+            }
+          } catch (err) {}
+        };
+      } catch (err) {
+        updateStatus('offline', 'Connection failed');
+        scheduleReconnect();
       }
     }
 
-    function append(speaker, text) {
-      const d = document.createElement('div');
-      if (speaker === 'brahma evo') {
-        d.className = 'msg msg-j';
-        d.innerHTML = `<div class="lbl">Brahma Evo</div>${esc(text)}`;
-      } else {
-        d.className = 'msg msg-u';
-        d.innerHTML = `<div class="lbl">You</div>${esc(text)}`;
+    function scheduleReconnect() {
+      if (!reconnectTimer) {
+        reconnectTimer = setInterval(() => {
+          if (!ws || ws.readyState === WebSocket.CLOSED) {
+            initWebSocket();
+          }
+        }, 3000);
       }
-      feed.appendChild(d);
-      feed.scrollTop = feed.scrollHeight;
     }
 
-    function sys(text) {
-      const d = document.createElement('div');
-      d.className = 'msg msg-sys'; d.textContent = text;
-      feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+    // Auto-reconnect when screen wakes up or tab is foregrounded
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        initWebSocket();
+      }
+    });
+    window.addEventListener('focus', initWebSocket);
+
+    function updateStatus(state, text) {
+      const badge = document.getElementById('status-badge');
+      const label = document.getElementById('status-text');
+      badge.className = `status-badge ${state}`;
+      label.textContent = text;
     }
 
-    function esc(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    function wsSend(payload) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+        return true;
+      }
+      return false;
     }
 
-    // ── File helpers ──────────────────────────────────────────────────────────
-    function _fileIcon(name) {
-      const ext = (name.split('.').pop() || '').toLowerCase();
-      if (['jpg','jpeg','png','gif','webp','heic','heif','avif','bmp','svg'].includes(ext)) return '🖼️';
-      if (['mp4','mov','avi','mkv','webm','m4v','3gp'].includes(ext))                       return '🎬';
-      if (['mp3','m4a','wav','flac','aac','ogg','opus'].includes(ext))                      return '🎵';
-      if (['pdf'].includes(ext))                                                             return '📋';
-      if (['doc','docx','txt','md','rtf','odt'].includes(ext))                              return '📝';
-      if (['xls','xlsx','csv','ods'].includes(ext))                                         return '📊';
-      if (['ppt','pptx','odp'].includes(ext))                                               return '📑';
-      if (['zip','rar','7z','tar','gz','bz2','xz'].includes(ext))                          return '📦';
-      if (['apk','exe','dmg','deb','rpm','msi'].includes(ext))                              return '⚙️';
-      return '📎';
-    }
+    // ── Trackpad & Mouse Control ───────────────────────────────────────────
+    const surface = document.getElementById('trackpad-surface');
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let touchStartTime = 0;
+    let totalMovement = 0;
 
-    function _fmtSize(bytes) {
-      if (bytes < 1024)             return bytes + ' B';
-      if (bytes < 1024 * 1024)     return (bytes / 1024).toFixed(1) + ' KB';
-      if (bytes < 1024 ** 3)       return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-      return (bytes / 1024 ** 3).toFixed(2) + ' GB';
-    }
+    surface.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        totalMovement = 0;
+      }
+    }, { passive: false });
 
-    // ── File upload (phone → computer) ────────────────────────────────────────
-    function _uploadFile(file) {
-      const id = 'fc_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    surface.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const cx = e.touches[0].clientX;
+        const cy = e.touches[0].clientY;
+        const dx = (cx - lastTouchX) * 1.5;
+        const dy = (cy - lastTouchY) * 1.5;
+        totalMovement += Math.abs(dx) + Math.abs(dy);
+        lastTouchX = cx;
+        lastTouchY = cy;
 
-      // Create file card in feed
-      const card = document.createElement('div');
-      card.className = 'msg-file';
-      card.id = id;
-      card.innerHTML = `
-        <div class="fc-icon">${_fileIcon(file.name)}</div>
-        <div class="fc-meta">
-          <div class="fc-lbl">Sending</div>
-          <div class="fc-name">${esc(file.name)}</div>
-          <div class="fc-size">${_fmtSize(file.size)}</div>
-          <div class="fc-bar-wrap"><div class="fc-bar" id="${id}_bar"></div></div>
-        </div>
-        <div class="fc-status" id="${id}_st">0%</div>
-      `;
-      feed.appendChild(card);
-      feed.scrollTop = feed.scrollHeight;
+        wsSend({ type: 'mouse_move', dx: Math.round(dx), dy: Math.round(dy) });
+      }
+    }, { passive: false });
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/upload');
-      xhr.setRequestHeader('Authorization', `Bearer ${_authToken}`);
+    surface.addEventListener('touchend', (e) => {
+      const duration = Date.now() - touchStartTime;
+      if (duration < 240 && totalMovement < 8) {
+        sendMouseClick('left');
+      }
+    }, { passive: false });
 
-      xhr.upload.onprogress = (e) => {
-        if (!e.lengthComputable) return;
-        const pct = Math.round(e.loaded / e.total * 100);
-        const bar = document.getElementById(`${id}_bar`);
-        const st  = document.getElementById(`${id}_st`);
-        if (bar) bar.style.width = pct + '%';
-        if (st)  st.textContent  = pct + '%';
-      };
+    // Scroll strip
+    const scrollStrip = document.getElementById('scroll-strip');
+    let lastScrollY = 0;
 
-      xhr.onload = () => {
-        const bar  = document.getElementById(`${id}_bar`);
-        const st   = document.getElementById(`${id}_st`);
-        const meta = card.querySelector('.fc-meta');
-        const lbl  = card.querySelector('.fc-lbl');
-        if (xhr.status === 200) {
-          let savedName = file.name;
-          try { savedName = JSON.parse(xhr.responseText).name || file.name; } catch {}
-          const dlUrl = `/uploads/${encodeURIComponent(savedName)}?token=${encodeURIComponent(_authToken)}`;
-          if (bar)  { bar.style.width = '100%'; bar.style.background = 'var(--green)'; }
-          if (st)   { st.textContent = '✓'; st.className = 'fc-status done'; }
-          if (lbl)  lbl.textContent = 'Sent';
-          if (meta) meta.insertAdjacentHTML('beforeend',
-            `<a class="fc-dl" href="${dlUrl}" download="${esc(savedName)}">⬇ Download back</a>`);
-          toast('File sent!');
-        } else {
-          let errMsg = 'Upload failed';
-          try { errMsg = JSON.parse(xhr.responseText).error || errMsg; } catch {}
-          if (bar) bar.style.background = '#f87171';
-          if (st)  { st.textContent = 'ERR'; st.className = 'fc-status err'; }
-          if (lbl) lbl.textContent = errMsg;
+    scrollStrip.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 0) {
+        lastScrollY = e.touches[0].clientY;
+      }
+    }, { passive: false });
+
+    scrollStrip.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length > 0) {
+        const cy = e.touches[0].clientY;
+        const dy = lastScrollY - cy;
+        lastScrollY = cy;
+        if (Math.abs(dy) > 3) {
+          const scrollUnits = dy > 0 ? 80 : -80;
+          wsSend({ type: 'mouse_scroll', dy: scrollUnits });
         }
-      };
+      }
+    }, { passive: false });
 
-      xhr.onerror = () => {
-        const st  = document.getElementById(`${id}_st`);
-        const lbl = card.querySelector('.fc-lbl');
-        if (st)  { st.textContent = 'ERR'; st.className = 'fc-status err'; }
-        if (lbl) lbl.textContent = 'Connection error';
-      };
-
-      const fd = new FormData();
-      fd.append('file', file);
-      xhr.send(fd);
+    function sendMouseClick(btn) {
+      if (!wsSend({ type: 'mouse_click', button: btn })) {
+        _authFetch('/api/action', {
+          method: 'POST',
+          body: JSON.stringify({ type: 'mouse_click', button: btn })
+        });
+      }
     }
 
-    // File received by another WebSocket client (e.g., second open tab)
-    function _onFileReceived(m) {
-      const dlUrl = `/uploads/${encodeURIComponent(m.name)}?token=${encodeURIComponent(_authToken)}`;
-      const card  = document.createElement('div');
-      card.className = 'msg-file';
-      card.innerHTML = `
-        <div class="fc-icon">${_fileIcon(m.name)}</div>
-        <div class="fc-meta">
-          <div class="fc-lbl">Received</div>
-          <div class="fc-name">${esc(m.name)}</div>
-          <div class="fc-size">${_fmtSize(m.size)}</div>
-          <a class="fc-dl" href="${dlUrl}" download="${esc(m.name)}">⬇ Download</a>
-        </div>
-        <div class="fc-status done">✓</div>
-      `;
-      feed.appendChild(card);
-      feed.scrollTop = feed.scrollHeight;
-      toast('File received on computer!');
+    function sendTypeText() {
+      const inp = document.getElementById('type-inp');
+      const text = inp.value.trim();
+      if (!text) return;
+      if (!wsSend({ type: 'type_text', text: text })) {
+        _authFetch('/api/action', {
+          method: 'POST',
+          body: JSON.stringify({ type: 'type_text', text: text })
+        });
+      }
+      toast(`Typed: "${text.substring(0, 15)}..."`);
+      inp.value = '';
     }
 
-    // File input change handler
-    document.getElementById('file-inp').addEventListener('change', function () {
-      Array.from(this.files).forEach(_uploadFile);
-      this.value = ''; // reset so the same file can be re-sent
+    document.getElementById('type-inp').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendTypeText();
     });
 
-    // ── Commands ──────────────────────────────────────────────────────────────
-    function doSend() {
-      const inp = document.getElementById('inp');
-      const txt = inp.value.trim();
-      if (!txt) return;
-      inp.value = '';
-      append('user', txt);
-      const enc  = _encrypt(txt);
-      const body = enc ? { enc } : { text: txt };
-      _authFetch('/api/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+    // ── Media & System Actions ─────────────────────────────────────────────
+    function sendMedia(action) {
+      if (!wsSend({ type: 'media', action: action })) {
+        _authFetch('/api/action', {
+          method: 'POST',
+          body: JSON.stringify({ type: 'media', action: action })
+        });
+      }
+      toast(`Media: ${action.replace('_', ' ')}`);
+    }
+
+    function sendSystem(action) {
+      if (!wsSend({ type: 'system', action: action })) {
+        _authFetch('/api/action', {
+          method: 'POST',
+          body: JSON.stringify({ type: 'system', action: action })
+        });
+      }
+      toast(`Action: ${action}`);
     }
 
     function doWake() {
-      sys('Sending wake signal…');
       _authFetch('/api/wake', { method: 'POST' });
+      toast('⚡ Brahma Wake command sent!');
     }
 
-    document.getElementById('inp').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+    // ── AI Chat & Voice Dictation ──────────────────────────────────────────
+    const feed = document.getElementById('feed');
+
+    function appendChat(speaker, text) {
+      if (!feed) return;
+      const b = document.createElement('div');
+      const isUser = speaker.toLowerCase() === 'you' || speaker.toLowerCase() === 'user';
+      b.className = `chat-bubble ${isUser ? 'user' : 'brahma'}`;
+      b.textContent = text;
+      feed.appendChild(b);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function appendSys(text) {
+      if (!feed) return;
+      const b = document.createElement('div');
+      b.className = 'chat-bubble sys';
+      b.textContent = text;
+      feed.appendChild(b);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function sendChatMessage() {
+      const inp = document.getElementById('chat-inp');
+      const text = inp.value.trim();
+      if (!text) return;
+
+      appendChat('You', text);
+      inp.value = '';
+
+      const enc = _encrypt(text);
+      const payload = enc ? { type: 'command', enc } : { type: 'command', text };
+
+      if (!wsSend(payload)) {
+        _authFetch('/api/command', {
+          method: 'POST',
+          body: JSON.stringify(enc ? { enc } : { text })
+        });
+      }
+    }
+
+    function sendQuick(promptText) {
+      document.getElementById('chat-inp').value = promptText;
+      sendChatMessage();
+    }
+
+    document.getElementById('chat-inp').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
     });
 
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    let _toastTimer;
-    function toast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg; t.classList.add('show');
-      clearTimeout(_toastTimer);
-      _toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
-    }
+    // Web Speech API Voice Dictation
+    let recognition = null;
+    let isListening = false;
 
-    // ── Real-time Voice — PCM16 WebSocket → Gemini Live ──────────────────────
-    const micBtn  = document.getElementById('mic-btn');
-    let _voiceWs  = null;
-    let _audioCtx = null;
-    let _micStm   = null;
-    let _audioNd  = null;
+    function toggleVoiceDictation() {
+      const micBtn = document.getElementById('mic-btn');
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    function _micIdle() {
-      micBtn.innerHTML = '🎤';
-      micBtn.title     = 'Voice — tap to speak';
-      micBtn.classList.remove('recording');
-    }
-
-    // Float32 PCM → resample to 16 kHz + convert to Int16
-    function _f32toPcm16(f32, srcRate) {
-      let s = f32;
-      if (srcRate !== 16000) {
-        const ratio = srcRate / 16000;
-        const len   = Math.round(f32.length / ratio);
-        s = new Float32Array(len);
-        for (let i = 0; i < len; i++)
-          s[i] = f32[Math.min(Math.round(i * ratio), f32.length - 1)];
+      if (!SpeechRecognition) {
+        toast('Speech recognition not supported in this browser.');
+        return;
       }
-      const out = new Int16Array(s.length);
-      for (let i = 0; i < s.length; i++)
-        out[i] = Math.max(-32768, Math.min(32767, Math.round(s[i] * 32768)));
-      return out.buffer;
+
+      if (isListening && recognition) {
+        recognition.stop();
+        return;
+      }
+
+      try {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          isListening = true;
+          micBtn.classList.add('listening');
+          toast('Listening... Speak now');
+        };
+
+        recognition.onresult = (e) => {
+          const transcript = Array.from(e.results)
+            .map(r => r[0].transcript)
+            .join('');
+          document.getElementById('chat-inp').value = transcript;
+        };
+
+        recognition.onend = () => {
+          isListening = false;
+          micBtn.classList.remove('listening');
+          const finalPrompt = document.getElementById('chat-inp').value.trim();
+          if (finalPrompt) {
+            sendChatMessage();
+          }
+        };
+
+        recognition.onerror = (e) => {
+          isListening = false;
+          micBtn.classList.remove('listening');
+          toast(`Voice error: ${e.error}`);
+        };
+
+        recognition.start();
+      } catch (err) {
+        isListening = false;
+        micBtn.classList.remove('listening');
+        toast(`Voice init error: ${err.message}`);
+      }
     }
 
-    function _showVoiceSetup() {
-      if (document.getElementById('voice-setup')) return; // show once
-      const origin = location.origin;
-      const card = document.createElement('div');
-      card.id = 'voice-setup';
-      card.style.cssText = [
-        'align-self:stretch', 'background:rgba(255, 170, 48,0.08)',
-        'border:1px solid rgba(255, 170, 48,0.28)', 'border-radius:14px',
-        'padding:16px 18px', 'font-size:13px', 'line-height:1.8',
-        'animation:pop 0.18s ease'
-      ].join(';');
-      card.innerHTML =
-        '<div style="font-weight:700;color:#818cf8;letter-spacing:.5px;margin-bottom:10px">🎤 One-time voice setup</div>' +
-        '<ol style="padding-left:18px;color:#8899aa;margin:0;display:flex;flex-direction:column;gap:4px">' +
-        '<li>Open a new tab → go to <span style="background:rgba(255,255,255,0.07);padding:1px 6px;border-radius:4px;font-family:monospace;font-size:12px">chrome://flags</span></li>' +
-        '<li>Search: <strong style="color:#dde3ed">Insecure origins treated as secure</strong></li>' +
-        '<li>Paste this URL into the box:<br><span id="flags-url" style="background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;user-select:all;cursor:pointer">' + esc(origin) + '</span></li>' +
-        '<li>Set to <strong style="color:#ffffff">Enabled</strong> → tap <strong style="color:#ffffff">Relaunch</strong></li>' +
-        '<li>Return here and tap 🎤</li>' +
-        '</ol>';
-      feed.appendChild(card);
-      feed.scrollTop = feed.scrollHeight;
-      // tap to copy
-      card.querySelector('#flags-url').addEventListener('click', () => {
-        navigator.clipboard?.writeText(origin).then(() => toast('URL copied!')).catch(() => {});
+    // ── File Transfer ──────────────────────────────────────────────────────
+    function loadFiles() {
+      const listEl = document.getElementById('files-list');
+      _authFetch('/api/files')
+        .then(r => r.json())
+        .then(data => {
+          const files = data.files || [];
+          if (files.length === 0) {
+            listEl.innerHTML = '<div style="font-size:12px; color:var(--muted); text-align:center; padding:12px;">No uploaded files yet.</div>';
+            return;
+          }
+          listEl.innerHTML = '';
+          files.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
+            item.innerHTML = `
+              <div class="file-info">
+                <div class="file-name">📄 ${f.name}</div>
+                <div class="file-size">${sizeMb} MB</div>
+              </div>
+              <a class="btn-download" href="/uploads/${encodeURIComponent(f.name)}?token=${encodeURIComponent(_authToken)}" download="${f.name}">Download</a>
+            `;
+            listEl.appendChild(item);
+          });
+        })
+        .catch(() => {
+          listEl.innerHTML = '<div style="font-size:12px; color:var(--danger); text-align:center; padding:12px;">Failed to load files list.</div>';
+        });
+    }
+
+    function handleFileUpload(input) {
+      if (!input.files || input.files.length === 0) return;
+      const file = input.files[0];
+      const formData = new FormData();
+      formData.append('file', file);
+
+      toast(`Uploading ${file.name}...`);
+      fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${_authToken}` },
+        body: formData
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) {
+          toast(`✓ ${res.name} uploaded to PC!`);
+          loadFiles();
+        } else {
+          toast(`Upload error: ${res.error || 'Failed'}`);
+        }
+      })
+      .catch(err => {
+        toast(`Upload failed: ${err.message}`);
+      })
+      .finally(() => {
+        input.value = '';
       });
     }
 
-    async function doMic() {
-      if (_voiceWs) { _stopVoice(); return; }
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        _showVoiceSetup();
-        return;
-      }
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-        });
-      } catch (e) {
-        sys(e.name === 'NotAllowedError'
-          ? 'Microphone denied — tap the address bar lock and allow microphone.'
-          : 'Mic error: ' + e.message);
-        return;
-      }
-
-      // 16 kHz context (fall back to native rate — _f32toPcm16 resamples)
-      let ctx;
-      try { ctx = new AudioContext({ sampleRate: 16000 }); }
-      catch (_) { ctx = new AudioContext(); }
-      if (ctx.state === 'suspended') await ctx.resume();
-
-      const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(
-        `${wsProto}://${location.host}/ws/phone-audio?token=${encodeURIComponent(_authToken)}`
-      );
-      ws.binaryType = 'arraybuffer';
-
-      ws.onopen = async () => {
-        const rate = ctx.sampleRate;
-        const src  = ctx.createMediaStreamSource(stream);
-
-        // AudioWorklet (modern) — runs in dedicated audio thread
-        const wCode = `class J extends AudioWorkletProcessor{process(i){const c=i[0]?.[0];if(c)this.port.postMessage(c.slice());return true;}}registerProcessor('j',J);`;
-        try {
-          const burl = URL.createObjectURL(new Blob([wCode], { type: 'application/javascript' }));
-          await ctx.audioWorklet.addModule(burl);
-          URL.revokeObjectURL(burl);
-          const nd = new AudioWorkletNode(ctx, 'j');
-          // Buffer to 1024 samples (64 ms at 16 kHz) before sending —
-          // matches PC mic chunk size, prevents queue flooding on the server.
-          let _pbuf = [], _plen = 0;
-          nd.port.onmessage = e => {
-            const chunk = new Int16Array(_f32toPcm16(e.data, rate));
-            _pbuf.push(chunk); _plen += chunk.length;
-            if (_plen >= 1024) {
-              const out = new Int16Array(_plen); let off = 0;
-              for (const c of _pbuf) { out.set(c, off); off += c.length; }
-              if (ws.readyState === 1) ws.send(out.buffer);
-              _pbuf = []; _plen = 0;
-            }
-          };
-          src.connect(nd);
-          _audioNd = nd;
-        } catch (_) {
-          // ScriptProcessor fallback (deprecated, still works everywhere)
-          const sp = ctx.createScriptProcessor(4096, 1, 1);
-          sp.onaudioprocess = e => {
-            if (ws.readyState === 1) ws.send(_f32toPcm16(e.inputBuffer.getChannelData(0), rate));
-          };
-          src.connect(sp); sp.connect(ctx.destination);
-          _audioNd = sp;
-        }
-
-        micBtn.innerHTML = '⏹';
-        micBtn.title     = 'Tap to stop';
-        micBtn.classList.add('recording');
-        sys('Voice live — speak now');
-        toast('🎤 Live');
-      };
-
-      ws.onclose = () => { _stopVoice(); };
-      ws.onerror = () => { sys('Voice connection failed.'); _stopVoice(); };
-
-      _voiceWs  = ws;
-      _audioCtx = ctx;
-      _micStm   = stream;
-    }
-
-    function _stopVoice() {
-      if (_audioNd)  { try { _audioNd.disconnect(); }  catch (_) {}; _audioNd  = null; }
-      if (_audioCtx) { try { _audioCtx.close(); }      catch (_) {}; _audioCtx = null; }
-      if (_micStm)   { _micStm.getTracks().forEach(t => t.stop()); _micStm = null; }
-      if (_voiceWs)  {
-        const w = _voiceWs; _voiceWs = null;
-        if (w.readyState < 2) w.close();
-      }
-      _micIdle();
-    }
+    // Initialize on load
+    window.addEventListener('load', () => {
+      initWebSocket();
+    });
   </script>
 </body>
 </html>

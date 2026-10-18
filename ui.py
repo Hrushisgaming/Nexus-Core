@@ -7,13 +7,20 @@ import html as html_lib
 import math
 import os
 
-# Hardware acceleration & WebGL flags for smooth 180fps+ rendering in Chromium
-os.environ.setdefault(
-    "QTWEBENGINE_CHROMIUM_FLAGS",
-    "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-webgl --enable-webgl2-compute-context --disable-frame-rate-limit --disable-gpu-vsync --num-raster-threads=4 --use-angle=d3d11 --disable-gpu-driver-bug-workarounds"
-)
-
+import sys
 import platform
+
+# Hardware acceleration & WebGL flags for smooth 180fps+ rendering across Windows, macOS, and Linux
+_base_chromium_flags = (
+    "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist "
+    "--enable-accelerated-2d-canvas --enable-webgl --enable-webgl2-compute-context "
+    "--disable-frame-rate-limit --disable-gpu-vsync --num-raster-threads=4 --disable-gpu-driver-bug-workarounds"
+)
+if sys.platform == "win32":
+    _base_chromium_flags += " --use-angle=d3d11"
+elif sys.platform.startswith("linux"):
+    _base_chromium_flags += " --no-sandbox --disable-dev-shm-usage"
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _base_chromium_flags)
 import random
 import re
 import sys
@@ -328,14 +335,40 @@ class BackgroundWidget(QWidget):
         except Exception:
             pass
 
+    def pause_rendering(self) -> None:
+        self._is_paused = True
+        if self._web_view:
+            try:
+                page = self._web_view.page()
+                if page:
+                    page.runJavaScript("if(window.pauseBrahmaBackground) window.pauseBrahmaBackground();")
+            except Exception:
+                pass
+
+    def resume_rendering(self) -> None:
+        self._is_paused = False
+        if self._web_view:
+            try:
+                page = self._web_view.page()
+                if page:
+                    page.runJavaScript("if(window.resumeBrahmaBackground) window.resumeBrahmaBackground();")
+            except Exception:
+                pass
+
     def _do_set_audio_level(self, level: float) -> None:
-        now = time.monotonic()
-        if (now - self._last_audio_js_time) < 0.016:  # Ultra-smooth 60 FPS WebEngine bridge
+        if getattr(self, "_is_paused", False):
             return
+        now = time.monotonic()
+        if (now - self._last_audio_js_time) < 0.033:  # 30 FPS bridge throttling prevents IPC saturation
+            return
+        lv = max(0.0, min(1.0, float(level)))
+        last_sent = getattr(self, "_last_sent_audio_level", -1.0)
+        if lv < 0.015 and last_sent < 0.015:
+            return
+        self._last_sent_audio_level = lv
         self._last_audio_js_time = now
         if self._web_view:
             try:
-                lv = max(0.0, min(1.0, float(level)))
                 page = self._web_view.page()
                 if page:
                     page.runJavaScript(f"if(window.setAudioLevel) window.setAudioLevel({lv:.3f});")
@@ -343,6 +376,8 @@ class BackgroundWidget(QWidget):
                 pass
 
     def set_pointer_norm(self, nx: float, ny: float) -> None:
+        if getattr(self, "_is_paused", False):
+            return
         if self._web_view:
             try:
                 page = self._web_view.page()
@@ -1393,14 +1428,27 @@ def _quote_cmd_arg(path: str) -> str:
     return f'"{path}"'
 
 
+def _get_pythonw_path() -> Path | None:
+    venv_pythonw = BASE_DIR / ".venv" / "Scripts" / "pythonw.exe"
+    if venv_pythonw.exists():
+        return venv_pythonw
+    sibling_pythonw = Path(sys.executable).parent / "pythonw.exe"
+    if sibling_pythonw.exists():
+        return sibling_pythonw
+    which_pythonw = shutil.which("pythonw")
+    if which_pythonw:
+        return Path(which_pythonw)
+    return None
+
+
 def _hidden_launch_args(*extra_args: str) -> list[str]:
-    pythonw = Path(r"C:\Users\ravit\AppData\Local\Programs\Python\Python313\pythonw.exe")
+    pythonw = _get_pythonw_path()
     python = Path(sys.executable)
     main_py = BASE_DIR / "main.py"
     if getattr(sys, "frozen", False):
         exe = Path(sys.executable)
         return [str(exe), *extra_args]
-    if pythonw.exists():
+    if pythonw and pythonw.exists():
         return [str(pythonw), str(main_py), *extra_args]
     return [str(python), str(main_py), *extra_args]
 
@@ -1409,11 +1457,8 @@ def _startup_run_value() -> str:
         exe = Path(sys.executable)
         return f'{_quote_cmd_arg(str(exe))} --startup'
     main_py = BASE_DIR / "main.py"
-    venv_pythonw = BASE_DIR / ".venv" / "Scripts" / "pythonw.exe"
-    pythonw = Path(r"C:\Users\ravit\AppData\Local\Programs\Python\Python313\pythonw.exe")
-    if venv_pythonw.exists():
-        return f'{_quote_cmd_arg(str(venv_pythonw))} {_quote_cmd_arg(str(main_py))} --startup'
-    if pythonw.exists():
+    pythonw = _get_pythonw_path()
+    if pythonw and pythonw.exists():
         return f'{_quote_cmd_arg(str(pythonw))} {_quote_cmd_arg(str(main_py))} --startup'
     return f'{_quote_cmd_arg(sys.executable)} {_quote_cmd_arg(str(main_py))} --startup'
 
@@ -1920,14 +1965,32 @@ class GestureCameraPreview(QFrame):
             return
         try:
             import cv2
-            cap = cv2.VideoCapture(0, cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else cv2.CAP_ANY)
-            try:
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            except Exception:
-                pass
-            if not cap.isOpened():
-                cap.release()
+            cap = None
+            backends = [cv2.CAP_DSHOW] if hasattr(cv2, "CAP_DSHOW") else []
+            backends.append(cv2.CAP_ANY)
+            for backend in backends:
+                for idx in (0, 1):
+                    try:
+                        c = cv2.VideoCapture(idx, backend)
+                        if c is not None and c.isOpened():
+                            c.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+                            c.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+                            ret, test_frame = c.read()
+                            if ret and test_frame is not None:
+                                cap = c
+                                break
+                            c.release()
+                    except Exception:
+                        pass
+                if cap is not None:
+                    break
+
+            if cap is None or not cap.isOpened():
+                if cap is not None:
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
                 raise RuntimeError("camera unavailable")
             self._cap = cap
             self._timer = QTimer(self)
@@ -1979,7 +2042,11 @@ class GestureCameraPreview(QFrame):
 
             self._set_status("Downloading gesture model...", "searching")
             model_path.parent.mkdir(parents=True, exist_ok=True)
-            with urllib.request.urlopen(MODEL_DOWNLOAD_URL, timeout=60) as response:
+            req = urllib.request.Request(
+                MODEL_DOWNLOAD_URL,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BrahmaAI/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
                 with open(temp_path, "wb") as out_file:
                     while True:
                         chunk = response.read(8192)
@@ -2019,6 +2086,9 @@ class GestureCameraPreview(QFrame):
         except Exception as exc:
             self._set_status(f"Gesture camera unavailable: {exc}", "lost")
             return
+
+        # Mirror horizontally for natural webcam reflection and correct swipe direction
+        frame = cv2.flip(frame, 1)
 
         import importlib
 
@@ -2076,9 +2146,30 @@ class GestureCameraPreview(QFrame):
                 model_dir.mkdir(parents=True, exist_ok=True)
                 model_path = model_dir / "hand_landmarker.task"
                 if not model_path.exists():
-                    self._set_status("Downloading model", "searching")
-                    if not self._download_hand_landmarker_model(model_path):
-                        return
+                    # Check local bundled directories first before network download
+                    found_bundled = None
+                    candidate_dirs = [
+                        BASE_DIR / "config" / "models",
+                        Path(__file__).resolve().parent / "config" / "models",
+                        BASE_DIR / "dist" / "BrahmaEvo" / "_internal" / "config" / "models",
+                    ]
+                    if hasattr(sys, "_MEIPASS"):
+                        candidate_dirs.append(Path(sys._MEIPASS) / "config" / "models")
+                    for c_dir in candidate_dirs:
+                        c_file = c_dir / "hand_landmarker.task"
+                        if c_file.exists() and c_file.stat().st_size > 1000:
+                            found_bundled = c_file
+                            break
+                    if found_bundled:
+                        try:
+                            import shutil
+                            shutil.copy2(str(found_bundled), str(model_path))
+                        except Exception:
+                            model_path = found_bundled
+                    else:
+                        self._set_status("Downloading model", "searching")
+                        if not self._download_hand_landmarker_model(model_path):
+                            return
 
                 try:
                     self._hands = vision.HandLandmarker.create_from_model_path(str(model_path))
@@ -2645,27 +2736,27 @@ def _markdown_to_html(text: str, role: str = "assistant") -> str:
     safe = html_lib.escape(text or "")
     safe = safe.replace("\r\n", "\n").replace("\r", "\n")
 
-    def _code_block(match):
-        code = html_lib.escape(match.group(1).rstrip("\n"))
-        return (
-            '<pre style="margin:10px 0; padding:10px 12px; border-radius:10px; '
-            'background:rgba(0,0,0,0.35); color:#f4f6f8; border:1px solid rgba(255,255,255,0.10);">'
-            f'<code>{code}</code></pre>'
-        )
+    # Bold and Italic
+    safe = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", safe)
+    safe = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", safe)
 
-    safe = re.sub(r"```(?:[\w+-]+\n)?(.*?)```", _code_block, safe, flags=re.S)
+    # Inline monospace code
     safe = re.sub(
         r"`([^`]+)`",
-        r'<code style="padding:1px 5px; border-radius:5px; background:rgba(255,255,255,0.08); color:#fff;">\1</code>',
+        r'<code style="padding:1px 6px; border-radius:4px; background:rgba(0,229,255,0.12); color:#00e5ff; font-family:Consolas,monospace; font-size:11px;">\1</code>',
         safe,
     )
-    safe = re.sub(r"(?m)^### (.+)$", r'<h3 style="margin:10px 0 6px 0; font-size:13px;">\1</h3>', safe)
-    safe = re.sub(r"(?m)^## (.+)$", r'<h2 style="margin:10px 0 8px 0; font-size:15px;">\1</h2>', safe)
-    safe = re.sub(r"(?m)^# (.+)$", r'<h1 style="margin:10px 0 8px 0; font-size:17px;">\1</h1>', safe)
+    # Headers
+    safe = re.sub(r"(?m)^### (.+)$", r'<h3 style="margin:8px 0 4px 0; font-size:13px; color:#ffffff;">\1</h3>', safe)
+    safe = re.sub(r"(?m)^## (.+)$", r'<h2 style="margin:10px 0 6px 0; font-size:14px; color:#00e5ff;">\1</h2>', safe)
+    safe = re.sub(r"(?m)^# (.+)$", r'<h1 style="margin:12px 0 8px 0; font-size:16px; color:#00e5ff;">\1</h1>', safe)
+    # Bullet points
+    safe = re.sub(r"(?m)^[\*\-•] (.+)$", r'<div style="margin-left:8px; line-height:1.5;">• \1</div>', safe)
+
     safe = safe.replace("\n", "<br>")
     accent = C.WHITE if role == "assistant" else C.TEXT
     return (
-        f'<div style="color:{accent}; font-size:12px; line-height:1.45; white-space:normal;">'
+        f'<div style="color:{accent}; font-size:12px; line-height:1.5; white-space:normal;">'
         f"{safe}"
         "</div>"
     )
@@ -2832,6 +2923,147 @@ class ArtifactCard(QFrame):
             pass
 
 
+def _split_markdown_code_blocks(text: str) -> list[dict]:
+    """Splits markdown text into alternating chunks of normal text and code blocks."""
+    pattern = re.compile(r"```([a-zA-Z0-9_\-\+]*)\n?(.*?)```", re.DOTALL)
+    chunks = []
+    last_end = 0
+    for match in pattern.finditer(text or ""):
+        start, end = match.span()
+        if start > last_end:
+            chunks.append({"type": "text", "content": text[last_end:start]})
+        lang = (match.group(1) or "").strip().upper() or "CODE"
+        code = match.group(2) or ""
+        chunks.append({"type": "code", "lang": lang, "content": code})
+        last_end = end
+    if last_end < len(text or ""):
+        chunks.append({"type": "text", "content": text[last_end:]})
+    return chunks
+
+
+class CodeBlockWidget(QFrame):
+    """
+    Sleek Cyberpunk Code Block Container.
+    Features:
+    - Language badge (e.g. PYTHON, POWERSHELL, JSON, BASH, etc.)
+    - 1-click '📋 Copy' button that copies snippet to clipboard and switches to '✓ Copied!'
+    - Dark monospace styling with Consolas / JetBrains Mono font
+    - Subtle neon border matching theme
+    """
+    def __init__(self, code: str, lang: str = "CODE", parent=None):
+        super().__init__(parent)
+        self._raw_code = (code or "").rstrip("\r\n")
+        self._lang = (lang or "CODE").strip().upper()
+        self.setObjectName("CodeBlockWidget")
+        self.setStyleSheet("""
+            QFrame#CodeBlockWidget {
+                background: rgba(6, 8, 12, 245);
+                border: 1px solid rgba(0, 229, 255, 0.28);
+                border-radius: 10px;
+            }
+        """)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(10, 8, 10, 8)
+        lay.setSpacing(6)
+
+        # Header bar
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(6)
+
+        # Code language badge
+        lang_lbl = QLabel(self._lang)
+        lang_lbl.setFont(QFont("Consolas", 8, QFont.Weight.Bold))
+        lang_lbl.setStyleSheet("""
+            color: #00e5ff;
+            background: rgba(0, 229, 255, 0.12);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            border-radius: 4px;
+            padding: 2px 7px;
+        """)
+        head.addWidget(lang_lbl)
+        head.addStretch(1)
+
+        # Copy button
+        self._copy_btn = QPushButton("📋 Copy")
+        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.setFixedHeight(22)
+        self._copy_btn.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        self._copy_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.06);
+                color: #e2e8f0;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 1px 8px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.20);
+                color: #00e5ff;
+                border: 1px solid #00e5ff;
+            }
+        """)
+        self._copy_btn.clicked.connect(self._copy_code)
+        head.addWidget(self._copy_btn)
+        lay.addLayout(head)
+
+        # Monospace code view
+        self._code_edit = QTextEdit()
+        self._code_edit.setReadOnly(True)
+        self._code_edit.setPlainText(self._raw_code)
+        self._code_edit.setFont(QFont("Consolas", 9))
+        self._code_edit.setStyleSheet("""
+            QTextEdit {
+                background: transparent;
+                color: #e2e8f0;
+                border: none;
+                selection-background-color: rgba(0, 229, 255, 0.35);
+            }
+        """)
+        line_count = len(self._raw_code.splitlines()) or 1
+        h = max(38, min(260, line_count * 18 + 18))
+        self._code_edit.setFixedHeight(h)
+        lay.addWidget(self._code_edit)
+
+    def _copy_code(self):
+        try:
+            QApplication.clipboard().setText(self._raw_code)
+        except Exception:
+            try:
+                import pyperclip
+                pyperclip.copy(self._raw_code)
+            except Exception:
+                pass
+        self._copy_btn.setText("✓ Copied!")
+        self._copy_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(55, 255, 95, 0.25);
+                color: #37ff5f;
+                border: 1px solid #37ff5f;
+                border-radius: 6px;
+                padding: 1px 8px;
+            }
+        """)
+        QTimer.singleShot(2200, self._reset_copy_btn)
+
+    def _reset_copy_btn(self):
+        self._copy_btn.setText("📋 Copy")
+        self._copy_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.06);
+                color: #e2e8f0;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 1px 8px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.20);
+                color: #00e5ff;
+                border: 1px solid #00e5ff;
+            }
+        """)
+
+
 class ChatBubble(QFrame):
     def __init__(self, role: str, name: str, text: str, stamp: str, attachments: list[dict] | None = None, parent=None, animate: bool = False):
         super().__init__(parent)
@@ -2895,16 +3127,15 @@ class ChatBubble(QFrame):
 
         outer.addLayout(head)
 
-        self._browser = QLabel()
-        self._browser.setTextFormat(Qt.TextFormat.RichText)
-        self._browser.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction | Qt.TextInteractionFlag.LinksAccessibleByMouse)
-        self._browser.setOpenExternalLinks(True)
-        self._browser.setWordWrap(True)
-        self._browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        self._browser.setStyleSheet("QLabel { background: transparent; border: none; color: #f4f6f8; padding: 0; margin: 0; }")
-        self._render_text(text or "")
+        # Content container for rich text and code blocks
+        self._content_container = QWidget()
+        self._content_container.setStyleSheet("background: transparent;")
+        self._content_lay = QVBoxLayout(self._content_container)
+        self._content_lay.setContentsMargins(0, 0, 0, 0)
+        self._content_lay.setSpacing(6)
+        outer.addWidget(self._content_container)
 
-        outer.addWidget(self._browser)
+        self._render_text(text or "", final=not animate)
 
         if attachments:
             for attachment in attachments:
@@ -2916,7 +3147,38 @@ class ChatBubble(QFrame):
             self._start_typing_animation()
 
     def _render_text(self, text: str, final: bool = True):
-        self._browser.setText(_markdown_to_html(text or "", self._role))
+        # Clear previous children in _content_lay
+        while self._content_lay.count():
+            item = self._content_lay.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        # If mid-typing and no full code blocks yet, fast-render simple text
+        if not final and "```" not in text:
+            lbl = QLabel(_markdown_to_html(text or "", self._role))
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet("color: #f4f6f8; background: transparent;")
+            self._content_lay.addWidget(lbl)
+            return
+
+        chunks = _split_markdown_code_blocks(text or "")
+        for chunk in chunks:
+            if chunk["type"] == "code":
+                code_widget = CodeBlockWidget(code=chunk["content"], lang=chunk.get("lang", "CODE"))
+                self._content_lay.addWidget(code_widget)
+            else:
+                body_str = chunk["content"].strip()
+                if body_str:
+                    lbl = QLabel(_markdown_to_html(body_str, self._role))
+                    lbl.setTextFormat(Qt.TextFormat.RichText)
+                    lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction | Qt.TextInteractionFlag.LinksAccessibleByMouse)
+                    lbl.setOpenExternalLinks(True)
+                    lbl.setWordWrap(True)
+                    lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+                    lbl.setStyleSheet("QLabel { background: transparent; border: none; color: #f4f6f8; padding: 0; margin: 0; }")
+                    self._content_lay.addWidget(lbl)
 
     def _start_typing_animation(self):
         self._typing_timer = QTimer(self)
@@ -3871,27 +4133,30 @@ class WorkspaceSidebar(QWidget):
         text = (data.get("text") or data.get("content") or "").strip()
         if not role or not text:
             return
+
+        now = time.time()
+        if not hasattr(self, "_last_chat_events"):
+            self._last_chat_events = []
+        for prev_role, prev_text, prev_time in self._last_chat_events[-6:]:
+            if prev_role == role and prev_text == text and (now - prev_time < 2.5):
+                return
+        self._last_chat_events.append((role, text, now))
+        if len(self._last_chat_events) > 20:
+            self._last_chat_events = self._last_chat_events[-10:]
+
         attachments = data.get("attachments") or []
         stamp = data.get("timestamp")
         convo_id = data.get("conversation_id") or self._active_conversation_id
         if role == "user":
-            convo_id = self._store.record_chat("user", text, conversation_id=convo_id, attachments=attachments)
-            self._active_conversation_id = convo_id
             self._feed.add_message("user", "You", text, _fmt_time_stamp(stamp), attachments=attachments)
             memories = self._store.search_memories(text)
             self._show_memory_banner(memories)
         elif role == "assistant":
-            convo_id = self._store.record_chat("assistant", text, conversation_id=convo_id, attachments=attachments)
-            self._active_conversation_id = convo_id
             self._feed.add_message("assistant", "Brahma Evo", text, _fmt_time_stamp(stamp), attachments=attachments, animate=True)
             self._hide_memory_banner()
         elif role == "system":
-            convo_id = self._store.record_chat("system", text, conversation_id=convo_id, attachments=attachments)
-            self._active_conversation_id = convo_id
             self._feed.add_message("system", "System", text, _fmt_time_stamp(stamp), attachments=attachments, event_type=text)
         elif role == "file":
-            convo_id = self._store.record_chat("assistant", text, conversation_id=convo_id, attachments=attachments)
-            self._active_conversation_id = convo_id
             self._feed.add_message("file", "Files", text, _fmt_time_stamp(stamp), attachments=attachments)
         self._refresh_history()
 
@@ -6667,6 +6932,79 @@ class SetupOverlay(QWidget):
 
 
 
+class VoiceWaveformVisualizer(QWidget):
+    """
+    Live Voice-Reactive Waveform Visualizer.
+    Draws dynamic, glowing equalizer bars pulsing with microphone & TTS audio levels.
+    """
+    def __init__(self, bars: int = 14, parent=None):
+        super().__init__(parent)
+        self._bar_count = bars
+        self._audio_level = 0.0
+        self._target_level = 0.0
+        self._phase = 0.0
+        self._muted = False
+        self.setFixedSize(bars * 5 + 8, 22)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(28)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+
+    def set_audio_level(self, level: float):
+        self._target_level = max(0.0, min(1.0, float(level)))
+
+    def set_muted(self, muted: bool):
+        self._muted = bool(muted)
+        self.update()
+
+    def _tick(self):
+        self._phase += 0.14
+        self._audio_level += (self._target_level - self._audio_level) * 0.25
+        self._target_level = max(0.0, self._target_level - 0.03)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+        bar_w = 3.0
+        spacing = 2.0
+        total_w = self._bar_count * (bar_w + spacing) - spacing
+        start_x = (w - total_w) / 2.0
+
+        for i in range(self._bar_count):
+            harmonic = math.sin(self._phase + i * 0.6) * 0.45 + 0.55
+            harmonic2 = math.cos(self._phase * 0.75 + i * 0.35) * 0.3 + 0.7
+
+            idle_h = 3.0 + harmonic * 2.0
+            amp = self._audio_level * (h - 4.0) * harmonic2
+            bar_h = min(float(h - 2), idle_h + amp)
+            if self._muted:
+                bar_h = 2.0
+
+            x = start_x + i * (bar_w + spacing)
+            y = (h - bar_h) / 2.0
+
+            if self._muted:
+                color = QColor("#ff3b30")
+                color.setAlpha(180)
+            else:
+                intensity = min(1.0, 0.45 + self._audio_level * 0.55)
+                color = QColor("#00e5ff" if i % 2 == 0 else "#80ffff")
+                color.setAlpha(int(240 * intensity))
+
+            painter.setBrush(QBrush(color))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(QRectF(x, y, bar_w, bar_h), 1.5, 1.5)
+
+        painter.end()
+
+
 class CommandBar(QWidget):
     submitted = pyqtSignal(str)
     attach_clicked = pyqtSignal()
@@ -6823,6 +7161,10 @@ class CommandBar(QWidget):
                 border: 1px solid #00e5ff;
             }}
         """)
+        # Live voice waveform visualizer
+        self._waveform = VoiceWaveformVisualizer(bars=10, parent=self)
+        lay.addWidget(self._waveform)
+
         send.clicked.connect(self._submit)
         lay.addWidget(send)
 
@@ -6860,10 +7202,393 @@ class CommandBar(QWidget):
         super().keyPressEvent(event)
 
     def set_audio_level(self, level: float):
-        pass
+        if hasattr(self, "_waveform") and self._waveform:
+            self._waveform.set_audio_level(level)
+
+    def set_muted(self, muted: bool):
+        if hasattr(self, "_waveform") and self._waveform:
+            self._waveform.set_muted(muted)
 
     def set_state(self, state: str):
-        pass
+        if hasattr(self, "_waveform") and self._waveform:
+            self._waveform.set_muted(state == "MUTED")
+
+
+DEFAULT_PALETTE_COMMANDS = [
+    {
+        "id": "snapshot_ws",
+        "title": "Snapshot Workspace",
+        "desc": "Capture active browser research tabs, open apps, and windows into a FlowState restore point",
+        "icon": "⚡",
+        "badge": "FlowState",
+        "cmd": "snapshot workspace",
+    },
+    {
+        "id": "switch_ws",
+        "title": "Restore / Switch Workspace",
+        "desc": "Restore a previously saved FlowState workspace restoration point",
+        "icon": "⏱️",
+        "badge": "FlowState",
+        "cmd": "switch workspace",
+    },
+    {
+        "id": "ultron_heal",
+        "title": "Ultron Autonomous Diagnostics",
+        "desc": "Inspect auto-heal sentry, patch history, AST sandbox, and runtime health",
+        "icon": "🛡️",
+        "badge": "Ultron",
+        "cmd": "auto heal status",
+    },
+    {
+        "id": "trigger_test_bug",
+        "title": "Trigger Autonomous Bug Test",
+        "desc": "Simulate a live runtime malfunction and witness Ultron self-repair in real time",
+        "icon": "🧪",
+        "badge": "Ultron",
+        "cmd": "trigger test bug",
+    },
+    {
+        "id": "toggle_globe",
+        "title": "Planetary 3D Globe & Earth",
+        "desc": "Launch holographic 3D Earth and street-level intelligence interface",
+        "icon": "🌐",
+        "badge": "Navigation",
+        "cmd": "__action_toggle_globe__",
+    },
+    {
+        "id": "sys_diag",
+        "title": "System Performance Report",
+        "desc": "Retrieve real-time CPU, RAM, GPU, network, and battery diagnostics",
+        "icon": "📊",
+        "badge": "System",
+        "cmd": "system diagnostics report",
+    },
+    {
+        "id": "screen_ai",
+        "title": "Multimodal Vision Screen Scan",
+        "desc": "Capture desktop screen and process active windows with multimodal vision",
+        "icon": "🖥️",
+        "badge": "Vision",
+        "cmd": "process screen",
+    },
+    {
+        "id": "toggle_mute",
+        "title": "Toggle Microphone / Voice Mute",
+        "desc": "Mute or unmute the continuous microphone audio listener",
+        "icon": "🎙️",
+        "badge": "Audio",
+        "cmd": "__action_toggle_mute__",
+    },
+    {
+        "id": "study_guard",
+        "title": "Study Guard Attention Monitor",
+        "desc": "Monitor study sessions, posture, and detect productivity distractions",
+        "icon": "📚",
+        "badge": "Focus",
+        "cmd": "study guard status",
+    },
+    {
+        "id": "show_rules",
+        "title": "Learned Behavioral Directives",
+        "desc": "List autonomous rules learned through conversational self-improvement",
+        "icon": "🧠",
+        "badge": "Memory",
+        "cmd": "list rules",
+    },
+    {
+        "id": "clear_workspace",
+        "title": "Reset HUD Task Workspace",
+        "desc": "Clear active operation telemetry and reset holographic deliverable wings",
+        "icon": "🧹",
+        "badge": "Workspace",
+        "cmd": "__action_clear_workspace__",
+    },
+]
+
+
+class OmniCommandPalette(QDialog):
+    """
+    Holographic Omni-Command Palette (Spotlight / Raycast Style).
+    Activated with Ctrl+K or Ctrl+Space.
+    Instant fuzzy search across tools, actions, smart home devices, and workspace snapshots.
+    """
+    command_executed = pyqtSignal(str)
+
+    def __init__(self, commands: list[dict] = None, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setModal(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("OmniCommandPalette")
+        self.setFixedWidth(640)
+        self.setFixedHeight(480)
+
+        self._all_commands = commands or DEFAULT_PALETTE_COMMANDS
+        self._filtered_commands = list(self._all_commands)
+        self._selected_index = 0
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._frame = QFrame()
+        self._frame.setObjectName("OmniPaletteFrame")
+        self._frame.setStyleSheet("""
+            QFrame#OmniPaletteFrame {
+                background: rgba(10, 12, 18, 252);
+                border: 1.5px solid rgba(0, 229, 255, 0.45);
+                border-radius: 16px;
+            }
+        """)
+        root.addWidget(self._frame)
+
+        lay = QVBoxLayout(self._frame)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(10)
+
+        # 1. Search Bar Header
+        search_box = QHBoxLayout()
+        search_box.setSpacing(10)
+
+        search_icon = QLabel("🔍")
+        search_icon.setFont(QFont("Segoe UI Emoji", 13))
+        search_icon.setStyleSheet("color: #00e5ff; background: transparent;")
+        search_box.addWidget(search_icon)
+
+        self._search_input = QLineEdit()
+        self._search_input.setPlaceholderText("Type a command, tool, or prompt... (e.g., 'snapshot', 'ultron', 'globe', 'heal')")
+        self._search_input.setFont(QFont("Segoe UI", 11))
+        self._search_input.setFixedHeight(36)
+        self._search_input.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                color: #ffffff;
+                border: none;
+                padding: 0 4px;
+                selection-background-color: rgba(0, 229, 255, 0.35);
+            }
+        """)
+        self._search_input.textChanged.connect(self._on_search_text_changed)
+        self._search_input.returnPressed.connect(self._on_submit_selected)
+        search_box.addWidget(self._search_input, 1)
+
+        esc_badge = QLabel("ESC to exit")
+        esc_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        esc_badge.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.45);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 3px 8px;
+        """)
+        search_box.addWidget(esc_badge)
+        lay.addLayout(search_box)
+
+        # Divider
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet("background: rgba(0, 229, 255, 0.18);")
+        lay.addWidget(divider)
+
+        # 2. Quick Action Chips Row
+        chips_lay = QHBoxLayout()
+        chips_lay.setSpacing(6)
+        chips = [
+            ("⚡ Snapshot", "snapshot workspace"),
+            ("🛡️ Ultron Status", "auto heal status"),
+            ("🌐 3D Globe", "__action_toggle_globe__"),
+            ("🎙️ Toggle Mic", "__action_toggle_mute__"),
+            ("📊 Diagnostics", "system diagnostics report"),
+            ("🧪 Test Bug", "trigger test bug"),
+        ]
+        for chip_title, chip_cmd in chips:
+            btn = QPushButton(chip_title)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(24)
+            btn.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(0, 229, 255, 0.08);
+                    color: #00e5ff;
+                    border: 1px solid rgba(0, 229, 255, 0.22);
+                    border-radius: 12px;
+                    padding: 0 10px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 229, 255, 0.22);
+                    border: 1px solid #00e5ff;
+                    color: #ffffff;
+                }
+            """)
+            btn.clicked.connect(lambda _, c=chip_cmd: self._run_command(c))
+            chips_lay.addWidget(btn)
+        chips_lay.addStretch(1)
+        lay.addLayout(chips_lay)
+
+        # 3. Scrollable Results List
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: rgba(10, 12, 18, 0.6);
+                width: 6px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(0, 229, 255, 0.3);
+                border-radius: 3px;
+            }
+        """)
+        self._list_container = QWidget()
+        self._list_container.setStyleSheet("background: transparent;")
+        self._list_lay = QVBoxLayout(self._list_container)
+        self._list_lay.setContentsMargins(0, 4, 0, 4)
+        self._list_lay.setSpacing(4)
+        self._scroll.setWidget(self._list_container)
+        lay.addWidget(self._scroll, 1)
+
+        # 4. Footer Hint
+        foot = QHBoxLayout()
+        hint = QLabel("↑ ↓ to navigate   •   ENTER to select   •   ESC to dismiss")
+        hint.setFont(QFont("Segoe UI", 8))
+        hint.setStyleSheet("color: rgba(255, 255, 255, 0.35); background: transparent;")
+        foot.addWidget(hint)
+        foot.addStretch(1)
+        brand = QLabel("BRAHMA EVO OMNI-BAR")
+        brand.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        brand.setStyleSheet("color: #00e5ff; background: transparent; letter-spacing: 1px;")
+        foot.addWidget(brand)
+        lay.addLayout(foot)
+
+        self._render_items()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._search_input.clear()
+        self._search_input.setFocus()
+        self._selected_index = 0
+        self._on_search_text_changed("")
+
+    def _on_search_text_changed(self, text: str):
+        query = (text or "").lower().strip()
+        if not query:
+            self._filtered_commands = list(self._all_commands)
+        else:
+            matches = []
+            for item in self._all_commands:
+                title = item.get("title", "").lower()
+                desc = item.get("desc", "").lower()
+                badge = item.get("badge", "").lower()
+                cmd = item.get("cmd", "").lower()
+                if query in title or query in desc or query in badge or query in cmd:
+                    matches.append(item)
+            matches.append({
+                "id": "custom_query",
+                "title": f'Ask Brahma: "{text.strip()}"',
+                "desc": "Submit prompt directly to Brahma AI agent",
+                "icon": "💬",
+                "badge": "Query",
+                "cmd": text.strip(),
+            })
+            self._filtered_commands = matches
+
+        self._selected_index = 0
+        self._render_items()
+
+    def _render_items(self):
+        while self._list_lay.count():
+            item = self._list_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for idx, cmd_item in enumerate(self._filtered_commands):
+            is_selected = (idx == self._selected_index)
+            btn = QFrame()
+            btn.setObjectName("PaletteItem")
+            border = "rgba(0, 229, 255, 0.50)" if is_selected else "rgba(255, 255, 255, 0.05)"
+            bg = "rgba(0, 229, 255, 0.12)" if is_selected else "rgba(18, 22, 30, 160)"
+            btn.setStyleSheet(f"""
+                QFrame#PaletteItem {{
+                    background: {bg};
+                    border: 1px solid {border};
+                    border-radius: 10px;
+                }}
+            """)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            i_lay = QHBoxLayout(btn)
+            i_lay.setContentsMargins(12, 8, 12, 8)
+            i_lay.setSpacing(10)
+
+            icon_lbl = QLabel(cmd_item.get("icon", "⚡"))
+            icon_lbl.setFont(QFont("Segoe UI Emoji", 12))
+            icon_lbl.setStyleSheet("background: transparent;")
+            i_lay.addWidget(icon_lbl)
+
+            text_box = QVBoxLayout()
+            text_box.setSpacing(2)
+            title_lbl = QLabel(cmd_item.get("title", ""))
+            title_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            title_lbl.setStyleSheet(f"color: {'#ffffff' if is_selected else '#e2e8f0'}; background: transparent;")
+            text_box.addWidget(title_lbl)
+
+            desc_lbl = QLabel(cmd_item.get("desc", ""))
+            desc_lbl.setFont(QFont("Segoe UI", 8))
+            desc_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.50); background: transparent;")
+            text_box.addWidget(desc_lbl)
+            i_lay.addLayout(text_box, 1)
+
+            badge_lbl = QLabel(cmd_item.get("badge", "Action"))
+            badge_lbl.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
+            badge_lbl.setStyleSheet("""
+                color: #00e5ff;
+                background: rgba(0, 229, 255, 0.10);
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 4px;
+                padding: 2px 6px;
+            """)
+            i_lay.addWidget(badge_lbl)
+
+            cmd_val = cmd_item.get("cmd", "")
+            btn.mousePressEvent = lambda _, c=cmd_val: self._run_command(c)
+            self._list_lay.addWidget(btn)
+
+    def _run_command(self, cmd: str):
+        if cmd:
+            self.command_executed.emit(cmd)
+        self.close()
+
+    def _on_submit_selected(self):
+        if 0 <= self._selected_index < len(self._filtered_commands):
+            cmd = self._filtered_commands[self._selected_index].get("cmd", "")
+            self._run_command(cmd)
+        elif self._search_input.text().strip():
+            self._run_command(self._search_input.text().strip())
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == Qt.Key.Key_Escape:
+            self.close()
+            return
+        elif key == Qt.Key.Key_Down:
+            if self._filtered_commands:
+                self._selected_index = (self._selected_index + 1) % len(self._filtered_commands)
+                self._render_items()
+            return
+        elif key == Qt.Key.Key_Up:
+            if self._filtered_commands:
+                self._selected_index = (self._selected_index - 1) % len(self._filtered_commands)
+                self._render_items()
+            return
+        super().keyPressEvent(event)
 
 
 class DeveloperModeDialog(QDialog):
@@ -7845,6 +8570,256 @@ class IncomingAlertDialog(QDialog):
         super().keyPressEvent(event)
 
 
+class UltronMalfunctionDialog(QDialog):
+    """
+    Ultron Autonomous Malfunction & Self-Repair HUD Dialog.
+    Pops up on screen immediately when any runtime error occurs in terminal or tool.
+    Displays the problem, root cause, live surgical patch diff, and auto-repair progress.
+    Operates autonomously under Ultron protocol (no user permission asked).
+    """
+
+    def __init__(self, data: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setModal(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("UltronMalfunctionDialog")
+        self.setFixedWidth(540)
+        self.setMinimumHeight(440)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._frame = QFrame()
+        self._frame.setObjectName("UltronPopupFrame")
+        self._frame.setStyleSheet(f"""
+            QFrame#UltronPopupFrame {{
+                background: rgba(10, 12, 16, 252);
+                border: 2px solid {C.RED};
+                border-radius: 16px;
+            }}
+        """)
+        root.addWidget(self._frame)
+
+        self._lay = QVBoxLayout(self._frame)
+        self._lay.setContentsMargins(20, 18, 20, 18)
+        self._lay.setSpacing(10)
+
+        # 1. Header Banner
+        head_layout = QHBoxLayout()
+        head_layout.setSpacing(8)
+
+        self._title_icon = QLabel("🚨")
+        self._title_icon.setFont(QFont("Segoe UI Emoji", 14))
+        self._title_icon.setStyleSheet("background: transparent;")
+        head_layout.addWidget(self._title_icon)
+
+        self._title_lbl = QLabel("ULTRON AUTONOMOUS SELF-REPAIR")
+        self._title_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._title_lbl.setStyleSheet(f"color: {C.RED}; background: transparent; letter-spacing: 1px;")
+        head_layout.addWidget(self._title_lbl, 1)
+
+        self._protocol_badge = QLabel("ULTRON PROTOCOL")
+        self._protocol_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        self._protocol_badge.setStyleSheet(f"""
+            color: #ffffff;
+            background: rgba(255, 59, 48, 0.25);
+            border: 1px solid {C.RED};
+            border-radius: 6px;
+            padding: 3px 7px;
+        """)
+        head_layout.addWidget(self._protocol_badge)
+        self._lay.addLayout(head_layout)
+
+        # Subtitle
+        self._sub_lbl = QLabel("Sir, I detected a malfunction. Stand by, executing autonomous self-repair.")
+        self._sub_lbl.setFont(QFont("Segoe UI", 9))
+        self._sub_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        self._lay.addWidget(self._sub_lbl)
+
+        # 2. Malfunction Target Box
+        self._info_box = QFrame()
+        self._info_box.setStyleSheet("""
+            QFrame {
+                background: rgba(20, 24, 32, 220);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 10px;
+            }
+        """)
+        info_lay = QVBoxLayout(self._info_box)
+        info_lay.setContentsMargins(12, 10, 12, 10)
+        info_lay.setSpacing(4)
+
+        self._target_lbl = QLabel("Component: Scanning...")
+        self._target_lbl.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
+        self._target_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        info_lay.addWidget(self._target_lbl)
+
+        self._exc_lbl = QLabel("Exception: In Progress")
+        self._exc_lbl.setFont(QFont("Consolas", 9))
+        self._exc_lbl.setStyleSheet("color: #ff8580; background: transparent;")
+        self._exc_lbl.setWordWrap(True)
+        info_lay.addWidget(self._exc_lbl)
+        self._lay.addWidget(self._info_box)
+
+        # 3. Problem & Root Cause
+        self._explanation_lbl = QLabel("Root cause analysis running...")
+        self._explanation_lbl.setWordWrap(True)
+        self._explanation_lbl.setFont(QFont("Segoe UI", 9))
+        self._explanation_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        self._lay.addWidget(self._explanation_lbl)
+
+        # 4. Surgical Patch Code Diff Box
+        self._diff_scroll = QScrollArea()
+        self._diff_scroll.setWidgetResizable(True)
+        self._diff_scroll.setFixedHeight(120)
+        self._diff_scroll.setStyleSheet("""
+            QScrollArea {
+                background: #06070a;
+                border: 1px solid rgba(0, 229, 255, 0.20);
+                border-radius: 8px;
+            }
+        """)
+        diff_inner = QWidget()
+        diff_inner.setStyleSheet("background: transparent;")
+        self._diff_lay = QVBoxLayout(diff_inner)
+        self._diff_lay.setContentsMargins(8, 8, 8, 8)
+        self._diff_lay.setSpacing(6)
+
+        self._diff_target = QLabel("")
+        self._diff_target.setFont(QFont("Consolas", 9))
+        self._diff_target.setStyleSheet("color: #ff7070; background: rgba(80, 20, 20, 0.40); padding: 4px; border-radius: 4px;")
+        self._diff_target.setWordWrap(True)
+        self._diff_lay.addWidget(self._diff_target)
+
+        self._diff_rep = QLabel("")
+        self._diff_rep.setFont(QFont("Consolas", 9))
+        self._diff_rep.setStyleSheet("color: #40ff70; background: rgba(20, 80, 30, 0.40); padding: 4px; border-radius: 4px;")
+        self._diff_rep.setWordWrap(True)
+        self._diff_lay.addWidget(self._diff_rep)
+
+        self._diff_scroll.setWidget(diff_inner)
+        self._lay.addWidget(self._diff_scroll)
+
+        # 5. Progress Bar & Status
+        self._pbar = QProgressBar()
+        self._pbar.setFixedHeight(6)
+        self._pbar.setTextVisible(False)
+        self._pbar.setValue(25)
+        self._pbar.setStyleSheet(f"""
+            QProgressBar {{
+                background: #151821;
+                border: none;
+                border-radius: 3px;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {C.RED}, stop:1 {C.ACC});
+                border-radius: 3px;
+            }}
+        """)
+        self._lay.addWidget(self._pbar)
+
+        self._status_lbl = QLabel("Autonomous diagnosis and synthesis in progress...")
+        self._status_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._status_lbl.setStyleSheet(f"color: {C.ACC}; background: transparent;")
+        self._lay.addWidget(self._status_lbl)
+
+        # 6. Action Button (Dismiss / Close - NO asking for user permission!)
+        btn_lay = QHBoxLayout()
+        btn_lay.addStretch(1)
+
+        self._close_btn = QPushButton("Acknowledge & Dismiss")
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.setFixedHeight(32)
+        self._close_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255, 255, 255, 0.08);
+                color: #ffffff;
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.15);
+                border: 1px solid {C.ACC};
+            }}
+        """)
+        self._close_btn.clicked.connect(self.close)
+        btn_lay.addWidget(self._close_btn)
+        self._lay.addLayout(btn_lay)
+
+        self.update_content(data)
+
+    def update_content(self, data: dict):
+        status = data.get("status") or ""
+        percent = data.get("percent", 50)
+        file_name = data.get("file_name") or data.get("target_file") or "System Component"
+        line_num = data.get("line_number")
+        exc_type = data.get("exception_type") or "Error"
+        exc_msg = data.get("exception_message") or ""
+        explanation = data.get("explanation") or ""
+        target_chunk = data.get("target_chunk") or ""
+        replacement_chunk = data.get("replacement_chunk") or ""
+
+        line_str = f" (line {line_num})" if line_num else ""
+        self._target_lbl.setText(f"📁 {file_name}{line_str}")
+        self._exc_lbl.setText(f"💥 {exc_type}: {exc_msg}")
+
+        if explanation:
+            self._explanation_lbl.setText(f"🔍 Analysis: {explanation}")
+
+        if target_chunk:
+            self._diff_target.setText(f"- REMOVING:\n{target_chunk.strip()}")
+            self._diff_target.setVisible(True)
+        else:
+            self._diff_target.setVisible(False)
+
+        if replacement_chunk:
+            self._diff_rep.setText(f"+ APPLYING HOTFIX:\n{replacement_chunk.strip()}")
+            self._diff_rep.setVisible(True)
+        else:
+            self._diff_rep.setVisible(False)
+
+        self._pbar.setValue(percent)
+        if status:
+            self._status_lbl.setText(status)
+
+        # When finished, transition styling to glowing Green
+        if percent >= 100:
+            self._frame.setStyleSheet(f"""
+                QFrame#UltronPopupFrame {{
+                    background: rgba(10, 12, 16, 252);
+                    border: 2px solid {C.GREEN};
+                    border-radius: 16px;
+                }}
+            """)
+            self._title_icon.setText("🛡️")
+            self._title_lbl.setText("ULTRON SELF-REPAIR COMPLETED")
+            self._title_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent; letter-spacing: 1px;")
+            self._protocol_badge.setText("SYSTEM HEALTHY")
+            self._protocol_badge.setStyleSheet(f"""
+                color: #ffffff;
+                background: rgba(55, 255, 95, 0.25);
+                border: 1px solid {C.GREEN};
+                border-radius: 6px;
+                padding: 3px 7px;
+            """)
+            self._status_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
+            self._close_btn.setText("Close")
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
+
+
 class MeetingOverlay(QWidget):
     stop_requested = pyqtSignal()
     minimize_requested = pyqtSignal()
@@ -8516,10 +9491,13 @@ class MainWindow(QMainWindow):
     _hud_operation_sig = pyqtSignal(dict)
     _hud_deliverable_sig = pyqtSignal(dict)
     _circuit_hud_sig = pyqtSignal(object)
+    _radar_hud_sig = pyqtSignal(object)
+    _space_cleaner_sig = pyqtSignal(object)
     _call_screening_sig = pyqtSignal(object)
     _confirm_sig = pyqtSignal(str, str, str)
     _memory_overlay_sig = pyqtSignal(str)
     _audio_level_sig = pyqtSignal(float)
+    _ultron_malfunction_sig = pyqtSignal(dict)
 
     def _make_window_icon(self) -> QIcon:
         return _logo_icon()
@@ -8559,6 +9537,8 @@ class MainWindow(QMainWindow):
         self._incoming_alert: IncomingAlertDialog | None = None
         self._meeting_overlay: MeetingOverlay | None = None
         self._circuit_overlay: QWidget | None = None
+        self._radar_overlay: QWidget | None = None
+        self._space_cleaner_overlay: QWidget | None = None
         self._call_screening_dialog: QDialog | None = None
         self._call_screening_transcript: QLabel | None = None
         self._meeting_overlay_collapsed = False
@@ -8595,13 +9575,48 @@ class MainWindow(QMainWindow):
             f"color: {C.PRI}; background: rgba(12,14,18,220); border: 1px solid {C.BORDER_B}; border-radius: 8px; padding: 5px 12px;"
         )
         taskbar_lay.addWidget(self._status_badge)
+
+        # Voice-reactive dynamic waveform right next to status badge
+        self._taskbar_waveform = VoiceWaveformVisualizer(bars=16, parent=self._taskbar)
+        taskbar_lay.addWidget(self._taskbar_waveform)
+
         taskbar_lay.addStretch()
+
+        # Omni-Command Palette Quick Launcher
+        self._btn_search = QPushButton("🔍 Search / Palette (Ctrl+K)")
+        self._btn_search.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_search.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(0, 229, 255, 0.08);
+                color: {C.ACC};
+                border: 1px solid rgba(0, 229, 255, 0.30);
+                border-radius: 8px;
+                padding: 5px 14px;
+                font-weight: bold;
+                font-family: 'Segoe UI';
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.22);
+                border: 1px solid {C.ACC};
+                color: #ffffff;
+            }}
+        """)
+        self._btn_search.clicked.connect(self._open_command_palette)
+        taskbar_lay.addWidget(self._btn_search)
+
         taskbar_lay.addWidget(self._btn_dashboard)
         taskbar_lay.addWidget(self._btn_chat)
         taskbar_lay.addWidget(self._btn_settings)
         taskbar_lay.addStretch()
-        
+
         root.addWidget(self._taskbar)
+
+        # Global shortcuts for Omni-Command Palette
+        self._shortcut_ctrl_k = QShortcut(QKeySequence("Ctrl+K"), self)
+        self._shortcut_ctrl_k.activated.connect(self._open_command_palette)
+        self._shortcut_ctrl_space = QShortcut(QKeySequence("Ctrl+Space"), self)
+        self._shortcut_ctrl_space.activated.connect(self._open_command_palette)
 
         self._floating_gesture_card = FloatingGestureCard(self.centralWidget())
         self._floating_gesture_card.show()
@@ -8645,10 +9660,14 @@ class MainWindow(QMainWindow):
         self._hud_operation_sig.connect(self._apply_hud_operation)
         self._hud_deliverable_sig.connect(self._apply_hud_deliverable)
         self._circuit_hud_sig.connect(self._apply_circuit_overlay)
+        self._radar_hud_sig.connect(self._apply_radar_overlay)
+        self._space_cleaner_sig.connect(self._apply_space_cleaner_overlay)
         self._call_screening_sig.connect(self._apply_call_screening)
         self._confirm_sig.connect(self._apply_confirm_overlay)
         self._memory_overlay_sig.connect(self._apply_memory_overlay)
         self._audio_level_sig.connect(self._on_audio_level_sig)
+        self._ultron_dialog: UltronMalfunctionDialog | None = None
+        self._ultron_malfunction_sig.connect(self._apply_ultron_malfunction)
         try:
             from core import confirm as confirm_gate
             confirm_gate.bind(self.show_confirm, self.hide_confirm, self._log_sig.emit)
@@ -9221,6 +10240,8 @@ class MainWindow(QMainWindow):
         self._wakeword_listening = self._muted
         self.hud.muted = self._muted
         self._style_mute_btn()
+        if hasattr(self, "_taskbar_waveform") and self._taskbar_waveform:
+            self._taskbar_waveform.set_muted(self._muted)
         if self._muted:
             self._apply_state("MUTED")
             self._log.append_log("SYS: Microphone muted.")
@@ -9238,6 +10259,8 @@ class MainWindow(QMainWindow):
         self.hud.muted = self._muted
         self._wakeword_listening = bool(muted)
         self._style_mute_btn()
+        if hasattr(self, "_taskbar_waveform") and self._taskbar_waveform:
+            self._taskbar_waveform.set_muted(self._muted)
         if self._muted:
             self._apply_state("MUTED")
             self._log.append_log("SYS: Microphone muted.")
@@ -9471,17 +10494,94 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
+    def _apply_ultron_malfunction(self, payload: dict):
+        action = (payload.get("action") or "show").lower()
+        if action in ("close", "hide"):
+            if getattr(self, "_ultron_dialog", None):
+                try:
+                    self._ultron_dialog.close()
+                except Exception:
+                    pass
+                self._ultron_dialog = None
+            return
+
+        if getattr(self, "_ultron_dialog", None) is None or not self._ultron_dialog.isVisible():
+            self._ultron_dialog = UltronMalfunctionDialog(payload, parent=None)
+            screen = QApplication.primaryScreen().availableGeometry()
+            self._ultron_dialog.adjustSize()
+            x = max(24, screen.right() - self._ultron_dialog.width() - 28)
+            y = screen.top() + 36
+            self._ultron_dialog.move(x, y)
+            self._ultron_dialog.show()
+            self._ultron_dialog.raise_()
+            self._ultron_dialog.activateWindow()
+        else:
+            self._ultron_dialog.update_content(payload)
+            self._ultron_dialog.show()
+            self._ultron_dialog.raise_()
+
     def _apply_circuit_overlay(self, circuit_data: dict):
         if self._circuit_overlay:
             self._circuit_overlay.deleteLater()
             self._circuit_overlay = None
 
+        if hasattr(self, "_bg_widget") and self._bg_widget:
+            self._bg_widget.pause_rendering()
+
         from core.circuit_hud import CircuitPopupOverlay
 
         parent = self.centralWidget()
         overlay = CircuitPopupOverlay(circuit_data or {}, parent=parent)
-        overlay.closed.connect(lambda: setattr(self, "_circuit_overlay", None))
+        def _on_circuit_closed():
+            setattr(self, "_circuit_overlay", None)
+            if hasattr(self, "_bg_widget") and self._bg_widget:
+                self._bg_widget.resume_rendering()
+        overlay.closed.connect(_on_circuit_closed)
         self._circuit_overlay = overlay
+        overlay.move(max(8, (parent.width() - overlay.width()) // 2), max(8, (parent.height() - overlay.height()) // 2))
+        overlay.show()
+        overlay.raise_()
+
+    def _apply_radar_overlay(self, radar_data: dict):
+        if self._radar_overlay:
+            self._radar_overlay.deleteLater()
+            self._radar_overlay = None
+
+        if hasattr(self, "_bg_widget") and self._bg_widget:
+            self._bg_widget.pause_rendering()
+
+        from core.radar_hud import RadarPopupOverlay
+
+        parent = self.centralWidget()
+        overlay = RadarPopupOverlay(radar_data or {}, parent=parent)
+        def _on_radar_closed():
+            setattr(self, "_radar_overlay", None)
+            if hasattr(self, "_bg_widget") and self._bg_widget:
+                self._bg_widget.resume_rendering()
+        overlay.closed.connect(_on_radar_closed)
+        self._radar_overlay = overlay
+        overlay.move(max(8, (parent.width() - overlay.width()) // 2), max(8, (parent.height() - overlay.height()) // 2))
+        overlay.show()
+        overlay.raise_()
+
+    def _apply_space_cleaner_overlay(self, data: dict = None):
+        if hasattr(self, "_space_cleaner_overlay") and self._space_cleaner_overlay:
+            self._space_cleaner_overlay.deleteLater()
+            self._space_cleaner_overlay = None
+
+        if hasattr(self, "_bg_widget") and self._bg_widget:
+            self._bg_widget.pause_rendering()
+
+        from core.space_cleaner_hud import SpaceCleanerPopupOverlay
+
+        parent = self.centralWidget()
+        overlay = SpaceCleanerPopupOverlay(parent=parent)
+        def _on_sc_closed():
+            setattr(self, "_space_cleaner_overlay", None)
+            if hasattr(self, "_bg_widget") and self._bg_widget:
+                self._bg_widget.resume_rendering()
+        overlay.closed.connect(_on_sc_closed)
+        self._space_cleaner_overlay = overlay
         overlay.move(max(8, (parent.width() - overlay.width()) // 2), max(8, (parent.height() - overlay.height()) // 2))
         overlay.show()
         overlay.raise_()
@@ -9680,12 +10780,47 @@ class MainWindow(QMainWindow):
             self._chat_workspace.set_audio_level(level)
         if hasattr(self, "_command_bar") and hasattr(self._command_bar, "set_audio_level"):
             self._command_bar.set_audio_level(level)
+        if hasattr(self, "_taskbar_waveform") and self._taskbar_waveform:
+            self._taskbar_waveform.set_audio_level(level)
 
     def set_audio_level(self, level: float):
         try:
             self._audio_level_sig.emit(float(level))
         except Exception:
             pass
+
+    def _open_command_palette(self):
+        """Opens the Holographic Omni-Command Palette."""
+        if not hasattr(self, "_omni_palette") or self._omni_palette is None:
+            self._omni_palette = OmniCommandPalette(commands=DEFAULT_PALETTE_COMMANDS, parent=self)
+            self._omni_palette.command_executed.connect(self._handle_palette_command)
+        screen = QApplication.primaryScreen().availableGeometry()
+        self._omni_palette.move(
+            max(20, (screen.width() - self._omni_palette.width()) // 2),
+            max(40, (screen.height() - self._omni_palette.height()) // 3)
+        )
+        self._omni_palette.show()
+        self._omni_palette.raise_()
+        self._omni_palette.activateWindow()
+
+    def _handle_palette_command(self, cmd: str):
+        """Routes selected command from Omni-Command Palette to the proper system module."""
+        if not cmd:
+            return
+        if cmd == "__action_toggle_globe__":
+            if hasattr(self, "_toggle_globe_window"):
+                self._toggle_globe_window()
+            else:
+                self._on_nav_dashboard()
+        elif cmd == "__action_toggle_mute__":
+            self._toggle_mute()
+        elif cmd == "__action_clear_workspace__":
+            self.clear_task_workspace()
+        else:
+            if hasattr(self, "on_text_command") and self.on_text_command:
+                self.on_text_command(cmd)
+            else:
+                self._log.append_log(f"User: {cmd}")
 
     def _apply_state(self, state: str):
         self._state = state
@@ -10586,6 +11721,7 @@ class SystemConnectivityPage(QWidget):
             }}
             QLabel {{
                 background: transparent;
+                color: #e6edf3;
             }}
             QPushButton {{
                 background: rgba(255, 255, 255, 0.03);
@@ -10609,6 +11745,36 @@ class SystemConnectivityPage(QWidget):
             QLineEdit:focus, QComboBox:focus {{
                 border: 1px solid {C.PRI};
                 background: rgba(0, 229, 255, 0.02);
+            }}
+            QMessageBox, QDialog {{
+                background-color: #0b0f19;
+                color: #ffffff;
+                border: 1.5px solid rgba(0, 229, 255, 0.35);
+                border-radius: 14px;
+            }}
+            QMessageBox QLabel, QDialog QLabel {{
+                color: #ffffff;
+                background-color: transparent;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+                font-size: 13px;
+                padding: 4px;
+            }}
+            QMessageBox QPushButton, QDialog QPushButton {{
+                background-color: #00e5ff;
+                color: #050a12;
+                font-weight: 700;
+                font-size: 12px;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 24px;
+                min-width: 80px;
+                min-height: 30px;
+            }}
+            QMessageBox QPushButton:hover, QDialog QPushButton:hover {{
+                background-color: #33ebff;
+            }}
+            QMessageBox QPushButton:pressed, QDialog QPushButton:pressed {{
+                background-color: #00b3cc;
             }}
         """)
         root = QVBoxLayout(self)
@@ -10927,6 +12093,11 @@ class SystemConnectivityPage(QWidget):
         self._ig_connect_btn = QPushButton("Connect (Password)")
         self._ig_connect_btn.clicked.connect(self._handle_ig_connect)
         ig_btns_row.addWidget(self._ig_connect_btn)
+
+        self._ig_cookie_btn = QPushButton("🍪 Connect via Cookie")
+        self._ig_cookie_btn.setToolTip("Fastest 100% reliable login bypassing all Meta security checks: paste your browser sessionid cookie.")
+        self._ig_cookie_btn.clicked.connect(self._handle_ig_cookie_dialog)
+        ig_btns_row.addWidget(self._ig_cookie_btn)
         
         self._ig_disconnect_btn = QPushButton("Disconnect")
         self._ig_disconnect_btn.clicked.connect(self._handle_ig_disconnect)
@@ -11542,27 +12713,41 @@ class SystemConnectivityPage(QWidget):
                 return
             from pathlib import Path
             import json
-            api_keys = Path("config/api_keys.json")
+            from actions.instagram_mcp import CONFIG_PATH, SESSION_PATH
+
             username = ""
             d = {}
-            if api_keys.exists():
-                with open(api_keys, "r", encoding="utf-8") as f:
-                    d = json.load(f)
-                    username = d.get("instagram_username", "")
+            for api_keys in [CONFIG_PATH, Path("config/api_keys.json")]:
+                if api_keys.exists():
+                    try:
+                        with open(api_keys, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            if data.get("instagram_username") or data.get("instagram_sessionid"):
+                                d = data
+                                username = d.get("instagram_username", "")
+                                break
+                    except Exception:
+                        pass
 
             is_browser_auth = bool(d.get("instagram_browser_authenticated") and d.get("instagram_sessionid"))
             if is_browser_auth:
                 name_str = f" (@{username})" if username else ""
-                self._ig_status_lbl.setText(f"Status: 🟢 Connected via Browser{name_str}")
+                self._ig_status_lbl.setText(f"Status: 🟢 Connected via Browser / Session{name_str}")
                 self._ig_status_lbl.setStyleSheet("color: #00ffcc; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
                 return
 
-            if username and Path("config/ig_session.json").exists():
+            has_session = False
+            for sp in [SESSION_PATH, Path("config/ig_session.json")]:
+                if sp.exists():
+                    has_session = True
+                    break
+
+            if username and has_session:
                 self._ig_status_lbl.setText(f"Status: 🟢 Connected (@{username})")
                 self._ig_status_lbl.setStyleSheet("color: #00ffcc; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
                 return
 
-            self._ig_status_lbl.setText("Status: ⚪ Not Connected — Click 'Connect via Browser' below")
+            self._ig_status_lbl.setText("Status: ⚪ Not Connected — Click 'Connect via Browser' or 'Cookie'")
             self._ig_status_lbl.setStyleSheet(f"color: {C.PRI}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
         except Exception:
             pass
@@ -11572,28 +12757,37 @@ class SystemConnectivityPage(QWidget):
             import json
             import shutil
             from pathlib import Path
-            with open("config/api_keys.json", "r", encoding="utf-8") as f:
-                d = json.load(f)
-            d["instagram_username"] = ""
-            d["instagram_password"] = ""
-            d["instagram_sessionid"] = ""
-            d["instagram_user_id"] = ""
-            d["instagram_browser_authenticated"] = False
-            with open("config/api_keys.json", "w", encoding="utf-8") as f:
-                json.dump(d, f, indent=4)
-                
-            session_path = Path("config/ig_session.json")
-            if session_path.exists():
-                session_path.unlink()
+            from actions.instagram_mcp import CONFIG_PATH, SESSION_PATH, BROWSER_PROFILE_DIR, stop_daemon, kill_browser_processes
 
-            profile_dir = Path("config/ig_browser_profile")
-            if profile_dir.exists():
-                try:
-                    shutil.rmtree(profile_dir)
-                except Exception:
-                    pass
+            for cfg_path in [CONFIG_PATH, Path("config/api_keys.json")]:
+                if cfg_path.exists():
+                    try:
+                        with open(cfg_path, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                        d["instagram_username"] = ""
+                        d["instagram_password"] = ""
+                        d["instagram_sessionid"] = ""
+                        d["instagram_user_id"] = ""
+                        d["instagram_browser_authenticated"] = False
+                        with open(cfg_path, "w", encoding="utf-8") as f:
+                            json.dump(d, f, indent=4)
+                    except Exception:
+                        pass
                 
-            from actions.instagram_mcp import stop_daemon, kill_browser_processes
+            for sp in [SESSION_PATH, Path("config/ig_session.json")]:
+                if sp.exists():
+                    try:
+                        sp.unlink()
+                    except Exception:
+                        pass
+
+            for pdir in [BROWSER_PROFILE_DIR, Path("config/ig_browser_profile")]:
+                if pdir.exists():
+                    try:
+                        shutil.rmtree(pdir)
+                    except Exception:
+                        pass
+                
             stop_daemon()
             kill_browser_processes()
             
@@ -11619,14 +12813,16 @@ class SystemConnectivityPage(QWidget):
                 from pathlib import Path
                 import json
                 import time
+                from actions.instagram_mcp import CONFIG_PATH, BROWSER_PROFILE_DIR, launch_robust_browser_context
 
-                profile_dir = Path("config/ig_browser_profile").resolve()
+                profile_dir = BROWSER_PROFILE_DIR
                 profile_dir.mkdir(parents=True, exist_ok=True)
 
-                self.status_update.emit("Launching browser for Instagram...")
+                self.status_update.emit("Launching browser for Instagram (using Chromium / Edge)...")
                 with sync_playwright() as p:
-                    context = p.chromium.launch_persistent_context(
-                        str(profile_dir),
+                    context = launch_robust_browser_context(
+                        p,
+                        profile_dir,
                         headless=False,
                         args=["--disable-blink-features=AutomationControlled"],
                         viewport={"width": 1080, "height": 800},
@@ -11671,21 +12867,23 @@ class SystemConnectivityPage(QWidget):
                                 except Exception:
                                     pass
 
-                                try:
-                                    cfg_path = Path("config/api_keys.json")
-                                    data = {}
-                                    if cfg_path.exists():
-                                        with open(cfg_path, "r", encoding="utf-8") as f:
-                                            data = json.load(f)
-                                    if detected_username:
-                                        data["instagram_username"] = detected_username
-                                    data["instagram_sessionid"] = sid
-                                    data["instagram_user_id"] = uid
-                                    data["instagram_browser_authenticated"] = True
-                                    with open(cfg_path, "w", encoding="utf-8") as f:
-                                        json.dump(data, f, indent=4)
-                                except Exception:
-                                    pass
+                                cfg_targets = [CONFIG_PATH, Path("config/api_keys.json")]
+                                for target_file in cfg_targets:
+                                    try:
+                                        data = {}
+                                        if target_file.exists():
+                                            with open(target_file, "r", encoding="utf-8") as f:
+                                                data = json.load(f)
+                                        if detected_username:
+                                            data["instagram_username"] = detected_username
+                                        data["instagram_sessionid"] = sid
+                                        data["instagram_user_id"] = uid
+                                        data["instagram_browser_authenticated"] = True
+                                        target_file.parent.mkdir(parents=True, exist_ok=True)
+                                        with open(target_file, "w", encoding="utf-8") as f:
+                                            json.dump(data, f, indent=4)
+                                    except Exception:
+                                        pass
 
                                 break
                         except Exception:
@@ -11732,6 +12930,90 @@ class SystemConnectivityPage(QWidget):
         self._update_ig_status()
         from PyQt6.QtWidgets import QMessageBox
         QMessageBox.warning(self, "Browser Login", f"Browser connection was not completed: {err_msg}")
+
+    def _handle_ig_cookie_dialog(self):
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QDialogButtonBox, QMessageBox
+        import json
+        import re
+        from pathlib import Path
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Connect Instagram via Session Cookie")
+        dlg.setFixedWidth(460)
+        vbox = QVBoxLayout(dlg)
+        vbox.setSpacing(10)
+
+        lbl = QLabel(
+            "<b>Connect directly with your browser session:</b><br>"
+            "1. Open <b>instagram.com</b> in Chrome or Edge (where you're logged in).<br>"
+            "2. Press <b>F12</b> (Inspect) → <b>Application</b> tab → <b>Cookies</b> → <i>https://www.instagram.com</i>.<br>"
+            "3. Copy the value of <b>sessionid</b> and paste it below."
+        )
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(f"color: {C.TEXT_MED}; font-size: 11px; line-height: 1.4;")
+        vbox.addWidget(lbl)
+
+        u_input = QLineEdit()
+        u_input.setPlaceholderText("Instagram Username (e.g. your_handle)")
+        curr_u = self._ig_username.text().strip()
+        if curr_u:
+            u_input.setText(curr_u)
+        vbox.addWidget(u_input)
+
+        s_input = QLineEdit()
+        s_input.setPlaceholderText("Paste 'sessionid' cookie value here...")
+        s_input.setEchoMode(QLineEdit.EchoMode.Password)
+        vbox.addWidget(s_input)
+
+        bbox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bbox.accepted.connect(dlg.accept)
+        bbox.rejected.connect(dlg.reject)
+        vbox.addWidget(bbox)
+
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            sid = s_input.text().strip()
+            username = u_input.text().strip()
+            if not sid:
+                QMessageBox.warning(self, "Missing Cookie", "Please enter a valid sessionid cookie value.")
+                return
+
+            if "sessionid=" in sid:
+                sid = sid.split("sessionid=")[-1].split(";")[0].strip()
+
+            user_match = re.search(r"^\d+", sid)
+            uid = user_match.group() if user_match else ""
+
+            from actions.instagram_mcp import CONFIG_PATH, stop_daemon, start_daemon
+            cfg_targets = [CONFIG_PATH, Path("config/api_keys.json")]
+            for target_file in cfg_targets:
+                cfg = {}
+                if target_file.exists():
+                    try:
+                        with open(target_file, "r", encoding="utf-8") as f:
+                            cfg = json.load(f)
+                    except Exception:
+                        cfg = {}
+                if username:
+                    cfg["instagram_username"] = username
+                cfg["instagram_sessionid"] = sid
+                cfg["instagram_password"] = f"sessionid:{sid}"
+                if uid:
+                    cfg["instagram_user_id"] = uid
+                cfg["instagram_browser_authenticated"] = True
+                try:
+                    target_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(target_file, "w", encoding="utf-8") as f:
+                        json.dump(cfg, f, indent=4)
+                except Exception:
+                    pass
+
+            if username:
+                self._ig_username.setText(username)
+
+            stop_daemon()
+            start_daemon()
+            self._update_ig_status()
+            QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Session Cookie!\n\nBrahma background DM daemon is now active.")
 
     class IGLoginWorker(__import__('PyQt6').QtCore.QThread):
         finished_success = __import__('PyQt6').QtCore.pyqtSignal()
@@ -11803,9 +13085,15 @@ class SystemConnectivityPage(QWidget):
                                 raise Exception("Instagram rejected credentials or security check. Please check your username/password or paste your web browser 'sessionid' cookie.")
                             raise
                 
-                Path("config").mkdir(parents=True, exist_ok=True)
-                cl.dump_settings("config/ig_session.json")
-                from actions.instagram_mcp import stop_daemon, start_daemon
+                from actions.instagram_mcp import SESSION_PATH, CONFIG_PATH, stop_daemon, start_daemon
+                SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
+                cl.dump_settings(str(SESSION_PATH))
+                try:
+                    Path("config").mkdir(parents=True, exist_ok=True)
+                    cl.dump_settings("config/ig_session.json")
+                except Exception:
+                    pass
+
                 stop_daemon()
                 start_daemon()
                 self.finished_success.emit()
@@ -11818,6 +13106,7 @@ class SystemConnectivityPage(QWidget):
         
         from PyQt6.QtWidgets import QMessageBox
         import json
+        from actions.instagram_mcp import CONFIG_PATH
         
         if not username or not password:
             QMessageBox.warning(self, "Error", "Please enter both username and password.")
@@ -11826,18 +13115,20 @@ class SystemConnectivityPage(QWidget):
         self._ig_connect_btn.setEnabled(False)
         self._ig_connect_btn.setText("Connecting...")
         
-        # Save credentials temporarily
-        try:
-            with open("config/api_keys.json", "r", encoding="utf-8") as f:
-                d = json.load(f)
-        except Exception:
-            d = {}
-            
-        d["instagram_username"] = username
-        d["instagram_password"] = password
-        
-        with open("config/api_keys.json", "w", encoding="utf-8") as f:
-            json.dump(d, f, indent=4)
+        # Save credentials to both canonical and local configs
+        for target_file in [CONFIG_PATH, Path("config/api_keys.json")]:
+            try:
+                d = {}
+                if target_file.exists():
+                    with open(target_file, "r", encoding="utf-8") as f:
+                        d = json.load(f)
+                d["instagram_username"] = username
+                d["instagram_password"] = password
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(target_file, "w", encoding="utf-8") as f:
+                    json.dump(d, f, indent=4)
+            except Exception:
+                pass
             
         self._ig_worker = self.IGLoginWorker(username, password)
         self._ig_worker.finished_success.connect(self._ig_login_success)
@@ -12099,7 +13390,8 @@ class SystemConnectivityPage(QWidget):
             "Steps to complete:\n"
             "1. Log in to Spotify in the browser window.\n"
             "2. Click 'Agree' to grant playback permissions.\n"
-            "3. Once redirected to callback, Brahma Evo will automatically detect authorization!"
+            "3. Once redirected to callback, Brahma Evo will automatically detect authorization!\n\n"
+            "⚠️ Important: In developer.spotify.com/dashboard -> Your App -> Settings -> ensure 'http://127.0.0.1:8888/callback' is added to Redirect URIs."
         )
 
     def _poll_spotify_auth_status(self):
@@ -14198,6 +15490,43 @@ class BrahmaUI:
     def __init__(self, face_path: str, size=None, *, show_immediately: bool = True):
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
+        self._app.setStyleSheet("""
+            QMessageBox, QDialog, QInputDialog {
+                background-color: #0b0f19;
+                color: #ffffff;
+                border: 1.5px solid rgba(0, 229, 255, 0.35);
+                border-radius: 14px;
+            }
+            QMessageBox QLabel, QDialog QLabel, QInputDialog QLabel {
+                color: #ffffff;
+                background-color: transparent;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+                font-size: 13px;
+                padding: 4px;
+            }
+            QMessageBox QPushButton, QDialog QPushButton, QInputDialog QPushButton {
+                background-color: #00e5ff;
+                color: #050a12;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+                font-weight: 700;
+                font-size: 12px;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 24px;
+                min-width: 80px;
+                min-height: 30px;
+            }
+            QMessageBox QPushButton:hover, QDialog QPushButton:hover, QInputDialog QPushButton:hover {
+                background-color: #33ebff;
+            }
+            QMessageBox QPushButton:pressed, QDialog QPushButton:pressed, QInputDialog QPushButton:pressed {
+                background-color: #00b3cc;
+            }
+            QMessageBox QPushButton:disabled, QDialog QPushButton:disabled, QInputDialog QPushButton:disabled {
+                background-color: rgba(255, 255, 255, 0.08);
+                color: rgba(255, 255, 255, 0.3);
+            }
+        """)
         self._app.setQuitOnLastWindowClosed(False)
         self._app.setApplicationDisplayName("Brahma Evo")
         self._app.setWindowIcon(self._make_app_icon())
@@ -14885,6 +16214,12 @@ class BrahmaUI:
     def show_circuit_hud(self, circuit_data: dict):
         self._win._circuit_hud_sig.emit(circuit_data or {})
 
+    def show_radar_hud(self, radar_data: dict):
+        self._win._radar_hud_sig.emit(radar_data or {})
+
+    def show_space_cleaner_hud(self, data: dict = None):
+        self._win._space_cleaner_sig.emit(data or {})
+
     def show_call_screening(self, event: dict):
         self._win._call_screening_sig.emit(event or {})
 
@@ -14989,6 +16324,11 @@ class BrahmaUI:
             }
             payload.update(kwargs)
             self._win._hud_deliverable_sig.emit(payload)
+
+    def show_ultron_malfunction(self, payload: dict):
+        """Pops up or updates the dedicated Ultron Malfunction & Self-Repair HUD dialog window."""
+        if hasattr(self, "_win") and hasattr(self._win, "_ultron_malfunction_sig"):
+            self._win._ultron_malfunction_sig.emit(payload or {})
 
     def show_content(self, title: str, body: str):
         """Universal rich content presenter. Automatically routes to the Brahma Holographic Left Deliverable Wing."""
