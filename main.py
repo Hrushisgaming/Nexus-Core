@@ -87,7 +87,7 @@ from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
 from actions.attention_monitor import AttentionMonitor, speak_native, stop_native_speech, handle_call_action, read_event_preview, set_speech_sink
 # from actions.daily_briefing import compile_daily_briefing
-from llm_client import client as openrouter_client
+from or_client import client as openrouter_client
 from workspace_store import store as workspace_store
 from smart_home.service import SmartHomeService
 from plugin_manager import PluginManager
@@ -358,7 +358,7 @@ def _ig_gemini_reply(username: str, text: str) -> str:
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or _is_gemini_limit_error(e):
             print("[InstagramChat] Gemini Rate Limit hit, falling back to OpenRouter...")
             try:
-                from llm_client import client as openrouter_client
+                from or_client import client as openrouter_client
                 return openrouter_client.chat(prompt, system=system_prompt)
             except Exception as or_e:
                 print(f"[InstagramChat] OpenRouter fallback failed: {or_e}")
@@ -389,7 +389,7 @@ def _clipboard_gemini_reply(text: str) -> str:
     except Exception as e:
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or _is_gemini_limit_error(e):
             try:
-                from llm_client import client as openrouter_client
+                from or_client import client as openrouter_client
                 return openrouter_client.chat(prompt, system=system_prompt)
             except Exception:
                 pass
@@ -4072,19 +4072,14 @@ class BrahmaLive:
 
             threading.Thread(target=_run_screen_process, daemon=True).start()
             return
-        # Route directly to Local Brain if preferred by user in settings or in air-gapped offline mode
+        # Route to preferred provider: Google Gemini, OpenRouter, or Local Brain
         app_settings = config_manager.load_settings()
         configured_provider = app_settings.get("default_ai_provider", "Gemini")
         is_offline_mode = bool(app_settings.get("offline_mode_enabled", False))
+        is_cloud_gemini = configured_provider in ("Gemini", "Google Gemini")
 
-        # If offline mode or Local provider selected, route directly to Local Brain
-        if is_offline_mode or configured_provider == "Local":
-            is_local_preferred = True
-        else:
-            is_local_preferred = False
-
-        # If Gemini Live session is connected and online, route text directly through Live duplex for sub-second reply
-        if self.session and self._loop and not is_offline_mode:
+        # If Gemini Live session is connected and user selected Gemini, route text directly through Live duplex
+        if is_cloud_gemini and self.session and self._loop and not is_offline_mode:
             import asyncio
             async def _send_live_text():
                 try:
@@ -4096,7 +4091,7 @@ class BrahmaLive:
             asyncio.run_coroutine_threadsafe(_send_live_text(), self._loop)
             return
 
-        # Fallback cascade (Local Brain / REST) when Gemini Live is not connected or in offline mode
+        # Cascade (OpenRouter / Local Brain / REST) when Gemini Live is not preferred, disconnected, or in offline mode
         threading.Thread(target=self._fallback_reply, args=(text, memory_ctx), daemon=True).start()
         return
 
@@ -5045,8 +5040,16 @@ class BrahmaLive:
                         ),
                     )
                     print("[BRAHMA EVO] 🌐 OpenRouter answered successfully!")
+                except PermissionError as e_key:
+                    print(f"[BRAHMA EVO] ⚠️ OpenRouter key error: {e_key}")
+                    reply = "Sir, your OpenRouter API key is missing or invalid. Please configure your key in Settings."
                 except Exception as e_or:
                     print(f"[BRAHMA EVO] ⚠️ OpenRouter failed: {e_or}")
+                    err_s = str(e_or)
+                    if "API key is missing" in err_s or "401" in err_s:
+                        reply = "Sir, please add your OpenRouter API key in Settings to use OpenRouter."
+                    else:
+                        reply = ""
 
             # 3. If user explicitly configured Local AI, is in Offline Mode, or cloud provider failed: run Local Brain
             if not reply and (configured_provider == "Local" or is_offline_mode or not (is_cloud_gemini or is_cloud_openrouter)) and local_brain.is_available():
@@ -5175,7 +5178,12 @@ class BrahmaLive:
                     print(f"[BRAHMA EVO] ⚠️ Offline Local Brain fallback failed: {e_net}")
             reply = (reply or "").strip()
             if not reply:
-                reply = "I’m ready, sir."
+                if is_cloud_openrouter:
+                    reply = "Sir, I couldn't reach OpenRouter right now. Please check your OpenRouter API key and internet connection."
+                elif is_offline_mode or configured_provider == "Local":
+                    reply = "I'm unable to reach the local AI engine. Please ensure Ollama is running."
+                else:
+                    reply = "I’m ready, sir."
             self.ui.write_log(f"Brahma Evo: {reply}")
             if not getattr(self.ui, "muted", False):
                 self.speak(reply, proactive=True)

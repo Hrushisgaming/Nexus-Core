@@ -122,7 +122,7 @@ class UnifiedAIClient:
                 return openrouter_client.chat(prompt, system, history, model, max_tokens, temperature)
             except Exception:
                 pass
-            return self._local_chat_completion(messages, temperature) or "I'm ready, sir."
+            return self._local_chat_completion(messages, temperature) or ""
         elif self._provider == "Local":
             messages = [{"role": "system", "content": system}]
             if history:
