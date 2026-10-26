@@ -304,7 +304,7 @@ class _LiveSession:
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=CHANNELS,
             dtype="int16",
-            blocksize=CHUNK_SIZE,
+            blocksize=0,
         )
         stream.start()
         try:

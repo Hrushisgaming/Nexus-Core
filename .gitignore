@@ -23,6 +23,9 @@ installer/dist/
 installer/build/
 
 # Android build outputs & IDE
+tools/
+brahma-mobile-android/
+actions/android/
 brahma-connect-android/.gradle/
 brahma-connect-android/**/build/
 brahma-connect-android/local.properties

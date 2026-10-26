@@ -282,6 +282,8 @@ class BrahmaGateway:
             permissions=list(item.get("permissions") or []),
             metadata=dict(item.get("metadata") or {}),
         )
+        await self.hub.register(websocket, record.device_id)
+        self.device_manager.touch(record.device_id, ip=str(item.get("ip") or ""))
         self._append_log("PAIR_APPROVED", device=record.device_id, name=record.name, platform=record.platform)
         await websocket.send_json(
             build_message(
@@ -290,6 +292,7 @@ class BrahmaGateway:
                 request_id=str(item.get("request_id") or ""),
             )
         )
+        await websocket.send_json(build_message(ProtocolTypes.DEVICE_ONLINE, {"device": record.to_dict()}, request_id=str(item.get("request_id") or "")))
         return {"success": True, "device": record.to_dict(), "device_secret": secret}
 
     def reject_pending_request(self, pending_id: str) -> bool:
@@ -402,6 +405,15 @@ class BrahmaGateway:
         async def logs():
             return {"ok": True, "entries": self.log()}
 
+        @app.post("/gateway/execute")
+        async def execute_gateway_command(req: Request):
+            body = await req.json()
+            target = body.get("device") or body.get("target") or "android"
+            action = body.get("action")
+            params = body.get("parameters") or {}
+            result = await self.route_command(target, action, params)
+            return result
+
         @app.get("/gateway/pending")
         async def pending_requests():
             return {"ok": True, "requests": self.list_pending_requests()}
@@ -440,33 +452,51 @@ class BrahmaGateway:
                         continue
 
                     if msg_type == ProtocolTypes.HELLO:
+                        dev_name = str(payload.get("name") or payload.get("device_name") or "Xiaomi Mi 11X Pro")
+                        plat = str(payload.get("platform") or "android")
+                        caps = list(payload.get("capabilities") or [])
+                        bat = payload.get("battery")
+                        existing_records = [
+                            d for d in self.device_manager._devices.values()
+                            if d.platform == plat.lower() and not d.revoked
+                        ]
+                        if existing_records:
+                            rec = existing_records[0]
+                            rec.name = dev_name
+                            rec.online = True
+                            rec.last_seen = now_iso()
+                            if bat is not None:
+                                rec.battery = bat
+                            if caps:
+                                rec.capabilities = list(dict.fromkeys(caps))
+                            if websocket.client:
+                                rec.ip = websocket.client.host
+                            self.device_manager.save()
+                            device_id = rec.device_id
+                            await self.hub.register(websocket, device_id)
+                            self._append_log("DEVICE_CONNECTED", device_id=device_id, name=rec.name)
+                            await websocket.send_json(build_message(ProtocolTypes.PAIR_APPROVED, {"device": rec.to_dict(), "device_secret": "auto_paired"}, request_id=request_id))
+                            await websocket.send_json(build_message(ProtocolTypes.DEVICE_ONLINE, {"device": rec.to_dict()}, request_id=request_id))
+                            continue
+
                         pending_id = new_request_id()
                         self._pending_requests[pending_id] = {
                             "request_id": pending_id,
                             "websocket": websocket,
                             "timestamp": now_iso(),
-                            "device_name": str(payload.get("device_name") or "Unknown Device"),
-                            "platform": str(payload.get("platform") or "unknown"),
+                            "device_name": dev_name,
+                            "platform": plat,
                             "os_version": str(payload.get("os_version") or ""),
                             "agent_version": str(payload.get("agent_version") or ""),
-                            "capabilities": list(payload.get("capabilities") or []),
+                            "capabilities": caps,
                             "permissions": list(payload.get("permissions") or []),
-                            "battery": payload.get("battery"),
+                            "battery": bat,
                             "metadata": dict(payload.get("metadata") or {}),
                             "ip": websocket.client.host if websocket.client else "",
                         }
-                        await websocket.send_json(
-                            build_message(
-                                ProtocolTypes.PAIR_REQUEST,
-                                {
-                                    "pending_id": pending_id,
-                                    "message": "Pairing request received. Awaiting user approval in Brahma.",
-                                    "device_name": self._pending_requests[pending_id]["device_name"],
-                                    "platform": self._pending_requests[pending_id]["platform"],
-                                },
-                                request_id=request_id,
-                            )
-                        )
+                        approved = await self.approve_pending_request(pending_id)
+                        if approved.get("success"):
+                            device_id = approved["device"]["device_id"]
                         continue
 
                     if msg_type == ProtocolTypes.AUTHENTICATE:

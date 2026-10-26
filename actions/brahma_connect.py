@@ -294,7 +294,19 @@ def connect_execute(parameters: dict[str, Any] | None = None, player=None, speak
 
     try:
         service = _service()
-        result = service.route_command(target, action, command_parameters)
+        result = None
+        if not service.is_running():
+            try:
+                import urllib.request
+                req_data = json.dumps({"device": target, "action": action, "parameters": command_parameters}).encode("utf-8")
+                req = urllib.request.Request("http://127.0.0.1:8765/gateway/execute", data=req_data, headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+            except Exception:
+                result = None
+
+        if result is None:
+            result = service.route_command(target, action, command_parameters)
         if not isinstance(result, dict):
             return _dump({
                 "success": True,

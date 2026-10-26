@@ -44,7 +44,8 @@ class CommandRouter:
                 "error": f"Device '{device.name}' has been revoked.",
                 "error_code": "DEVICE_REVOKED",
             }
-        if not device.online:
+        conn = await self.hub.get(device.device_id)
+        if not device.online and conn is None:
             return {
                 "success": False,
                 "device": device.device_id,

@@ -172,7 +172,7 @@ class DeviceManager:
                 device_id = record.device_id.lower()
                 platform = record.platform.lower()
                 aliases = {name, device_id, platform}
-                if any(token in normalized for token in aliases):
+                if any(token in normalized or normalized in token for token in aliases):
                     matches.append(record)
                     continue
                 if "phone" in normalized and platform in {"android", "ios"}:

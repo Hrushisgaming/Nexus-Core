@@ -10,6 +10,8 @@ Install deps:  pip install fastapi "uvicorn[standard]" cryptography
 """
 
 import asyncio
+from typing import Any, Optional
+import json
 import base64
 import hashlib
 import re
@@ -516,7 +518,108 @@ class DashboardServer:
         self._uploads_dir                 = UPLOADS_DIR
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
+        self._voice_html                  = _read("voice.html")
         self.app                          = self._build_app()
+
+    async def _handle_live_speech_command(self, text_cmd: str, websocket: Any):
+        """Processes recognized live speech, executes fast desktop actions, and returns live speech feedback."""
+        text_cmd = (text_cmd or "").strip()
+        if not text_cmd:
+            return
+
+        from core.live_voice_engine import LiveVoiceEngine
+        engine = LiveVoiceEngine.get_instance()
+
+        # 1. Immediately send final user subtitle directly to caller & broadcast
+        user_msg = {
+            "type": "transcript",
+            "role": "user",
+            "text": text_cmd,
+            "interim": False,
+        }
+        try:
+            await websocket.send_text(json.dumps(user_msg))
+        except Exception:
+            pass
+        engine.broadcast_control_json(user_msg)
+
+        # 2. Instant conversational reflex for greetings
+        norm_speech = text_cmd.lower().strip().rstrip(".?!")
+        if norm_speech in ("hello", "hey", "hi", "hey brahma", "hello brahma", "hi brahma", "yo"):
+            greeting = "Hello there! How can I help you today, sir?"
+            try:
+                await websocket.send_text(json.dumps({
+                    "type": "transcript",
+                    "role": "model",
+                    "text": greeting,
+                    "interim": False,
+                }))
+            except Exception:
+                pass
+            await engine.speak_live_text(greeting)
+            return
+
+        # 3. Check for fast desktop intents
+        try:
+            from core.intent_dispatcher import get_intent_dispatcher
+            disp = get_intent_dispatcher()
+            intent_res = disp.resolve(text_cmd, enable_ai_tier=False)
+
+            if intent_res.intent == "open_app":
+                app_name = intent_res.parameters.get("app_name", "")
+                ack = intent_res.voice_ack or f"Opening {app_name}, sir."
+                print(f"[Dashboard LiveVoice] [EXEC] Executing open_app: {app_name}")
+                from actions.open_app import open_app
+                try:
+                    open_app({"app_name": app_name})
+                except Exception as _e_app:
+                    print(f"[Dashboard LiveVoice] Error launching app: {_e_app}")
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "transcript",
+                        "role": "model",
+                        "text": ack,
+                        "interim": False,
+                    }))
+                except Exception:
+                    pass
+                await engine.speak_live_text(ack)
+                return
+
+            if intent_res.intent == "media_control":
+                try:
+                    from actions import media_keys
+                    if intent_res.action == "volume_up": media_keys.volume_up()
+                    elif intent_res.action == "volume_down": media_keys.volume_down()
+                    elif intent_res.action == "volume_mute": media_keys.volume_mute()
+                    elif intent_res.action in ("media_pause", "media_play"): media_keys.media_play_pause()
+                    elif intent_res.action == "media_next": media_keys.media_next()
+                except Exception:
+                    pass
+                ack = intent_res.voice_ack or "Done, sir."
+                await engine.speak_live_text(ack)
+                return
+
+            if intent_res.intent == "general_conversation" and intent_res.voice_ack:
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "transcript",
+                        "role": "model",
+                        "text": intent_res.voice_ack,
+                        "interim": False,
+                    }))
+                except Exception:
+                    pass
+                await engine.speak_live_text(intent_res.voice_ack)
+                return
+        except Exception as _e_disp:
+            print(f"[Dashboard LiveVoice] Intent dispatch error: {_e_disp}")
+
+        # 3. For all other speech/questions, deliver turn to Gemini Live session
+        try:
+            await engine.send_text_turn(text_cmd)
+        except Exception as _e_turn:
+            print(f"[Dashboard LiveVoice] send_text_turn error: {_e_turn}")
 
     # ── one-time key management ───────────────────────────────────────────
 
@@ -609,6 +712,10 @@ class DashboardServer:
                     .replace("__IP__", self._ip)
                     .replace("__PORT__", str(PORT)))
             return HTMLResponse(html)
+
+        @app.get("/voice", response_class=HTMLResponse)
+        async def live_voice_page():
+            return HTMLResponse(self._voice_html)
 
         @app.post("/login")
         async def login(req: Request):
@@ -814,6 +921,55 @@ class DashboardServer:
                 asyncio.create_task(self.broadcast(
                     {"type": "sys", "text": "Phone microphone stopped."}
                 ))
+
+        # ── Ultra-Low-Latency Bidirectional Live Voice WebSocket ─────────────
+        @app.websocket("/ws/live-voice")
+        async def live_voice_ws(websocket: WebSocket):
+            await websocket.accept()
+            from core.live_voice_engine import LiveVoiceEngine
+            engine = LiveVoiceEngine.get_instance()
+            engine.register_ws_client(websocket)
+
+            # Ensure engine background runner is spawned if loop is running
+            if getattr(self, "_live_voice_task", None) is None or self._live_voice_task.done():
+                try:
+                    self._live_voice_task = asyncio.create_task(engine.run(enable_local_hardware=False))
+                except Exception as _e:
+                    print(f"[Dashboard] Could not start live voice engine: {_e}")
+
+            # Send current engine state immediately
+            await websocket.send_text(json.dumps({
+                "type": "state",
+                "state": engine.state.lower(),
+                "timestamp": time.time(),
+            }))
+
+            try:
+                while True:
+                    msg = await websocket.receive()
+                    if "bytes" in msg and msg["bytes"]:
+                        engine.feed_pcm_audio(msg["bytes"], source="browser_ws")
+                    elif "text" in msg and msg["text"]:
+                        try:
+                            payload = json.loads(msg["text"])
+                            msg_type = payload.get("type")
+                            if msg_type == "interrupt":
+                                engine.trigger_interruption(source="browser_ws")
+                            elif msg_type == "user_speech":
+                                text_cmd = (payload.get("text") or "").strip()
+                                if text_cmd:
+                                    print(f"[Dashboard LiveVoice] [SPEECH] Received user speech: '{text_cmd}'")
+                                    asyncio.create_task(self._handle_live_speech_command(text_cmd, websocket))
+                            elif msg_type == "ping":
+                                await websocket.send_text(json.dumps({"type": "pong", "time": time.time()}))
+                        except Exception as _e_payload:
+                            print(f"[Dashboard LiveVoice] Payload error: {_e_payload}")
+            except WebSocketDisconnect:
+                pass
+            except Exception as e:
+                print(f"[Dashboard] Live Voice WS error: {e}")
+            finally:
+                engine.unregister_ws_client(websocket)
 
         # ── File sharing ──────────────────────────────────────────────────────
 

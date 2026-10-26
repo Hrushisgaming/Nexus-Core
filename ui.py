@@ -9497,6 +9497,7 @@ class MainWindow(QMainWindow):
     _confirm_sig = pyqtSignal(str, str, str)
     _memory_overlay_sig = pyqtSignal(str)
     _audio_level_sig = pyqtSignal(float)
+    _subtitle_sig = pyqtSignal(str, str, bool)
     _ultron_malfunction_sig = pyqtSignal(dict)
 
     def _make_window_icon(self) -> QIcon:
@@ -9543,6 +9544,7 @@ class MainWindow(QMainWindow):
         self._call_screening_transcript: QLabel | None = None
         self._meeting_overlay_collapsed = False
         self._chat_source_queue: deque[str] = deque()
+        self._subtitle_sig.connect(self._do_set_live_subtitles)
 
         central = BackgroundWidget(BACKGROUND_IMAGE_FILE if BACKGROUND_IMAGE_FILE.exists() else None)
         central.setStyleSheet("background: transparent;")
@@ -9579,6 +9581,33 @@ class MainWindow(QMainWindow):
         # Voice-reactive dynamic waveform right next to status badge
         self._taskbar_waveform = VoiceWaveformVisualizer(bars=16, parent=self._taskbar)
         taskbar_lay.addWidget(self._taskbar_waveform)
+
+        # Real-time Live Subtitles Banner directly alongside the waveform
+        self._live_subtitle_pill = QFrame(self._taskbar)
+        self._live_subtitle_pill.setObjectName("LiveSubtitlePill")
+        self._live_subtitle_pill.setStyleSheet("""
+            QFrame#LiveSubtitlePill {
+                background: rgba(14, 18, 27, 230);
+                border: 1px solid rgba(0, 229, 255, 0.32);
+                border-radius: 8px;
+                padding: 2px 10px;
+            }
+        """)
+        sub_lay = QHBoxLayout(self._live_subtitle_pill)
+        sub_lay.setContentsMargins(6, 2, 6, 2)
+        sub_lay.setSpacing(8)
+
+        self._live_sub_speaker = QLabel("● LISTENING")
+        self._live_sub_speaker.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        self._live_sub_speaker.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
+
+        self._live_sub_text = QLabel("Listening for voice...")
+        self._live_sub_text.setFont(QFont("Segoe UI", 9))
+        self._live_sub_text.setStyleSheet("color: #ffffff; background: transparent; border: none;")
+
+        sub_lay.addWidget(self._live_sub_speaker)
+        sub_lay.addWidget(self._live_sub_text)
+        taskbar_lay.addWidget(self._live_subtitle_pill)
 
         taskbar_lay.addStretch()
 
@@ -10773,6 +10802,96 @@ class MainWindow(QMainWindow):
             else:
                 self.restored.emit()
 
+    def _do_set_live_subtitles(self, speaker: str, text: str, is_interim: bool):
+        speaker_upper = speaker.upper()
+        clean_text = text.strip()
+        if not clean_text:
+            return
+
+        # Check if speaker changed to avoid heavy stylesheet recompilation on every audio streaming token
+        last_spk = getattr(self, "_last_sub_speaker", None)
+        if last_spk != speaker_upper:
+            self._last_sub_speaker = speaker_upper
+            if hasattr(self, "_live_sub_speaker") and self._live_sub_speaker:
+                self._live_sub_speaker.setText(f"● {speaker_upper}")
+                if speaker_upper in ("YOU", "USER"):
+                    self._live_sub_speaker.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
+                elif speaker_upper in ("BRAHMA", "AI", "MODEL"):
+                    self._live_sub_speaker.setStyleSheet("color: #10b981; background: transparent; border: none;")
+                else:
+                    self._live_sub_speaker.setStyleSheet("color: #f59e0b; background: transparent; border: none;")
+
+            if hasattr(self, "_desktop_sub_badge") and self._desktop_sub_badge:
+                self._desktop_sub_badge.setText(f"● {speaker_upper}")
+                if speaker_upper in ("YOU", "USER"):
+                    self._desktop_sub_badge.setStyleSheet("""
+                        color: #00e5ff;
+                        background: rgba(0, 229, 255, 0.22);
+                        border: 1px solid rgba(0, 229, 255, 0.60);
+                        border-radius: 13px;
+                        padding: 4px 12px;
+                    """)
+                elif speaker_upper in ("BRAHMA", "AI", "MODEL"):
+                    self._desktop_sub_badge.setStyleSheet("""
+                        color: #10b981;
+                        background: rgba(16, 185, 129, 0.22);
+                        border: 1px solid rgba(16, 185, 129, 0.60);
+                        border-radius: 13px;
+                        padding: 4px 12px;
+                    """)
+                else:
+                    self._desktop_sub_badge.setStyleSheet("""
+                        color: #f59e0b;
+                        background: rgba(245, 158, 11, 0.22);
+                        border: 1px solid rgba(245, 158, 11, 0.60);
+                        border-radius: 13px;
+                        padding: 4px 12px;
+                    """)
+
+        # Fast flicker-free text update (< 0.1ms)
+        if hasattr(self, "_live_sub_text") and self._live_sub_text:
+            disp_short = clean_text if len(clean_text) <= 85 else clean_text[:82] + "..."
+            self._live_sub_text.setText(disp_short)
+
+        if hasattr(self, "_desktop_sub_text") and self._desktop_sub_text:
+            disp_text = clean_text if len(clean_text) <= 125 else clean_text[:122] + "..."
+            self._desktop_sub_text.setText(disp_text)
+
+        if hasattr(self, "_desktop_subtitle_bar") and self._desktop_subtitle_bar and not self._desktop_subtitle_bar.isVisible():
+            self._desktop_subtitle_bar.show()
+
+        # Update input placeholder cleanly on completion
+        if not is_interim and hasattr(self, "_input") and self._input and not self._input.hasFocus():
+            if speaker_upper in ("YOU", "USER"):
+                self._input.setPlaceholderText(f"🎤 Heard: \"{clean_text}\"")
+
+        # Idle auto-reset timer (reset back to friendly prompt after 7 seconds of inactivity)
+        if not is_interim:
+            if not hasattr(self, "_sub_reset_timer") or self._sub_reset_timer is None:
+                self._sub_reset_timer = QTimer(self)
+                self._sub_reset_timer.setSingleShot(True)
+                self._sub_reset_timer.timeout.connect(self._reset_desktop_subtitles)
+            self._sub_reset_timer.start(7000)
+
+    def _reset_desktop_subtitles(self):
+        try:
+            self._last_sub_speaker = None
+            if hasattr(self, "_desktop_sub_badge") and self._desktop_sub_badge:
+                self._desktop_sub_badge.setText("● LIVE VOICE")
+                self._desktop_sub_badge.setStyleSheet("""
+                    color: #00e5ff;
+                    background: rgba(0, 229, 255, 0.18);
+                    border: 1px solid rgba(0, 229, 255, 0.40);
+                    border-radius: 13px;
+                    padding: 4px 12px;
+                """)
+            if hasattr(self, "_desktop_sub_text") and self._desktop_sub_text:
+                self._desktop_sub_text.setText("Listening for voice commands... (say 'Open Chrome' or ask anything)")
+            if hasattr(self, "_input") and self._input and not self._input.hasFocus() and not self._input.text():
+                self._input.setPlaceholderText("Ask Brahma Evo anything... (or say \"Open Chrome\")")
+        except Exception:
+            pass
+
     def _on_audio_level_sig(self, level: float):
         if hasattr(self, "_bg_widget") and hasattr(self._bg_widget, "set_audio_level"):
             self._bg_widget.set_audio_level(level)
@@ -10823,6 +10942,8 @@ class MainWindow(QMainWindow):
                 self._log.append_log(f"User: {cmd}")
 
     def _apply_state(self, state: str):
+        if getattr(self, "_state", None) == state:
+            return
         self._state = state
         if hasattr(self, "_bg_widget") and hasattr(self._bg_widget, "set_ai_state"):
             self._bg_widget.set_ai_state(state)
@@ -11242,6 +11363,50 @@ class MainWindow(QMainWindow):
         cmd_lay = QVBoxLayout(self._command_panel)
         cmd_lay.setContentsMargins(0, 0, 0, 16)
         cmd_lay.setSpacing(10)
+        # Central Live Subtitle Banner (Directly below central 3D neural orb / waveform)
+        self._desktop_subtitle_bar = QFrame()
+        self._desktop_subtitle_bar.setObjectName("DesktopSubtitleBar")
+        self._desktop_subtitle_bar.setMinimumWidth(320)
+        self._desktop_subtitle_bar.setMaximumWidth(840)
+        self._desktop_subtitle_bar.setFixedHeight(50)
+        self._desktop_subtitle_bar.setStyleSheet("""
+            QFrame#DesktopSubtitleBar {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(8, 14, 26, 0.92),
+                    stop:0.5 rgba(14, 24, 42, 0.95),
+                    stop:1 rgba(8, 14, 26, 0.92));
+                border: 1.5px solid rgba(0, 229, 255, 0.65);
+                border-radius: 25px;
+            }
+        """)
+        sub_layout = QHBoxLayout(self._desktop_subtitle_bar)
+        sub_layout.setContentsMargins(18, 4, 18, 4)
+        sub_layout.setSpacing(12)
+
+        self._desktop_sub_badge = QLabel("● LIVE VOICE")
+        self._desktop_sub_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._desktop_sub_badge.setStyleSheet("""
+            color: #00e5ff;
+            background: rgba(0, 229, 255, 0.18);
+            border: 1px solid rgba(0, 229, 255, 0.50);
+            border-radius: 13px;
+            padding: 4px 12px;
+        """)
+        sub_layout.addWidget(self._desktop_sub_badge, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self._desktop_sub_text = QLabel("Listening for voice commands... (say 'Open Chrome' or ask anything)")
+        self._desktop_sub_text.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
+        self._desktop_sub_text.setStyleSheet("color: #ffffff; background: transparent; border: none;")
+        self._desktop_sub_text.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        sub_layout.addWidget(self._desktop_sub_text, 1, Qt.AlignmentFlag.AlignVCenter)
+
+        sub_wrapper = QHBoxLayout()
+        sub_wrapper.setContentsMargins(0, 0, 0, 4)
+        sub_wrapper.addStretch(1)
+        sub_wrapper.addWidget(self._desktop_subtitle_bar, 0)
+        sub_wrapper.addStretch(1)
+        cmd_lay.addLayout(sub_wrapper)
+
         cmd_lay.addLayout(self._build_command_row())
         stage.addWidget(self._command_panel)
 
@@ -16177,6 +16342,12 @@ class BrahmaUI:
 
     def set_audio_level(self, level: float):
         self._win.set_audio_level(level)
+
+    def set_live_subtitles(self, speaker: str, text: str, interim: bool = False):
+        try:
+            self._win._subtitle_sig.emit(speaker, text, interim)
+        except Exception:
+            pass
 
     def write_log(self, text: str):
         self._win._log_sig.emit(text)

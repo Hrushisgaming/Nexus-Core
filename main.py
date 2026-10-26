@@ -122,7 +122,7 @@ BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Brahma Evo" / "startup.log"
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -2143,6 +2143,217 @@ TOOL_DECLARATIONS = [
             "required": ["prompt"]
         }
     },
+    # =========================================================================
+    # UNIVERSAL CLAUDE-CODE & OPENAI CODEX TOOL SUITE (PROJECT OMNIPOTENCE)
+    # =========================================================================
+    {
+        "name": "bash",
+        "description": "Execute a shell or PowerShell command on the local machine with captured output, timeouts, and smart truncation. Essential for compilers, package managers (npm, pip, cargo), git, and running scripts.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {"type": "STRING", "description": "The exact shell or PowerShell command to execute"},
+                "timeout": {"type": "INTEGER", "description": "Timeout in seconds (default 120)"},
+                "cwd": {"type": "STRING", "description": "Optional working directory path"}
+            },
+            "required": ["command"]
+        }
+    },
+    {
+        "name": "file_read",
+        "description": "Read file contents with line numbers starting at offset up to limit lines. Line numbers help target surgical file_edit updates.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "file_path": {"type": "STRING", "description": "Relative or absolute path to the file"},
+                "offset": {"type": "INTEGER", "description": "Line number to start reading from (1-based, default 1)"},
+                "limit": {"type": "INTEGER", "description": "Maximum number of lines to read (default 2000)"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            },
+            "required": ["file_path"]
+        }
+    },
+    {
+        "name": "file_edit",
+        "description": "Surgically edit an existing file by replacing old_string with new_string. Whitespace, indentation, and newlines must match exactly. Fails safely if old_string is not found or ambiguous.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "file_path": {"type": "STRING", "description": "Path to the file to edit"},
+                "old_string": {"type": "STRING", "description": "Exact text block to replace, including exact indentation"},
+                "new_string": {"type": "STRING", "description": "Replacement text block"},
+                "replace_all": {"type": "BOOLEAN", "description": "Whether to replace every occurrence (default false)"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            },
+            "required": ["file_path", "old_string", "new_string"]
+        }
+    },
+    {
+        "name": "file_write",
+        "description": "Write or overwrite a file with full content. Automatically creates any missing parent directories.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "file_path": {"type": "STRING", "description": "Path to the file to write"},
+                "content": {"type": "STRING", "description": "Complete text content of the file"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            },
+            "required": ["file_path", "content"]
+        }
+    },
+    {
+        "name": "glob",
+        "description": "Fast recursive file search by pattern (e.g. '**/*.py', 'src/**/*.tsx', '*.json'). Automatically skips .git, node_modules, .venv, dist.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pattern": {"type": "STRING", "description": "Glob pattern to match"},
+                "path": {"type": "STRING", "description": "Subdirectory to search inside (default '.')"},
+                "max_results": {"type": "INTEGER", "description": "Maximum number of files to return (default 100)"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            },
+            "required": ["pattern"]
+        }
+    },
+    {
+        "name": "grep",
+        "description": "Fast regex and keyword search across file contents with line numbers and file paths. Essential for finding symbols, functions, and errors.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pattern": {"type": "STRING", "description": "Regex pattern or literal text to search for"},
+                "path": {"type": "STRING", "description": "Subdirectory to search inside (default '.')"},
+                "case_sensitive": {"type": "BOOLEAN", "description": "Case sensitive matching (default true)"},
+                "max_results": {"type": "INTEGER", "description": "Maximum number of matches (default 50)"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            },
+            "required": ["pattern"]
+        }
+    },
+    {
+        "name": "python_repl",
+        "description": "Execute Python code in an isolated computational sandbox (Codex / Advanced Data Analysis). Use for math calculations, data analysis with pandas/numpy, and generating charts/plots with matplotlib.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "code": {"type": "STRING", "description": "Valid Python code to execute"},
+                "timeout": {"type": "INTEGER", "description": "Execution timeout in seconds (default 60)"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            },
+            "required": ["code"]
+        }
+    },
+    {
+        "name": "git_manager",
+        "description": "Autonomous Git version control operations: status, diff, log, commit, branch, checkout, add, push, pull.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "Git action: 'status', 'diff', 'diff_staged', 'log', 'commit', 'branch', 'checkout', 'new_branch', 'push', 'pull'"},
+                "message": {"type": "STRING", "description": "Commit message (required for 'commit')"},
+                "branch": {"type": "STRING", "description": "Branch name (for 'branch', 'checkout', 'new_branch')"},
+                "cwd": {"type": "STRING", "description": "Optional repository path"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "test_and_heal",
+        "description": "Run automated test suites (pytest, npm test, cargo test) and analyze failure stack traces to verify code functionality.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {"type": "STRING", "description": "Test command to execute (default 'pytest')"},
+                "cwd": {"type": "STRING", "description": "Optional working directory"}
+            }
+        }
+    },
+    {
+        "name": "subagent_task",
+        "description": "Spawn an autonomous child subagent (researcher, coder, tester) to perform parallel background tasks without cluttering the primary conversation.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "role": {"type": "STRING", "description": "Role: 'researcher' (code survey/read-only), 'coder' (build/execution), 'tester' (test verification)"},
+                "prompt": {"type": "STRING", "description": "Specific task instructions for the subagent"},
+                "workspace": {"type": "STRING", "description": "Optional workspace directory path"},
+                "wait": {"type": "BOOLEAN", "description": "Whether to wait for completion (default true)"}
+            },
+            "required": ["role", "prompt"]
+        }
+    },
+    {
+        "name": "mcp_status",
+        "description": "Check the connection status and discovered tools of all configured MCP servers (Model Context Protocol).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "skill_execute",
+        "description": "Execute or consult an installed community or markdown skill (e.g. 'code-review', 'test-driven-development', 'git-workflow', 'database-architect', 'docker-devops', 'web-scraper-stealth'). Returns the comprehensive guidelines, directives, and protocols for the skill.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "skill_name": {"type": "STRING", "description": "Name of the skill to execute/consult"},
+                "task": {"type": "STRING", "description": "Specific user task or question to apply the skill to"}
+            },
+            "required": ["skill_name"]
+        }
+    },
+    {
+        "name": "skill_install",
+        "description": "Install a new markdown skill into Brahma's skills/ library, allowing Brahma to perpetually learn new procedures and protocols from the internet or user.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "skill_name": {"type": "STRING", "description": "Short slug name for the skill (e.g. 'pdf-analyzer')"},
+                "content": {"type": "STRING", "description": "Full Markdown/YAML SKILL.md definition"}
+            },
+            "required": ["skill_name", "content"]
+        }
+    },
+    {
+        "name": "skill_list",
+        "description": "List all installed community and markdown skills available in Brahma.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "todo_write",
+        "description": "Claude Code style task list tracker. Update the active multi-step plan checklist with status for each task (pending, in_progress, completed).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "todos": {
+                    "type": "ARRAY",
+                    "description": "List of task objects: [{'id': '1', 'task': '...', 'status': 'pending'|'in_progress'|'completed'}]",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "id": {"type": "STRING"},
+                            "task": {"type": "STRING"},
+                            "status": {"type": "STRING"}
+                        },
+                        "required": ["id", "task", "status"]
+                    }
+                }
+            },
+            "required": ["todos"]
+        }
+    },
+    {
+        "name": "todo_read",
+        "description": "Read the active task checklist and current step progress.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+
 ]
 
 
@@ -2157,6 +2368,10 @@ class BrahmaLive:
         self._startup_briefing_started = False
         self._loop          = None
         self._is_speaking   = False
+        self._server_turn_active = False
+        self._discard_server_audio = False
+        self._spoke_start_time = 0.0
+        self._last_spoke_time = 0.0
         self._speaking_lock = threading.Lock()
         self._use_openrouter_first = False
         self._pending_attention: dict | None = None
@@ -2211,6 +2426,14 @@ class BrahmaLive:
             "Need anything?",
             "I'm here if you want me.",
         ]
+        try:
+            from core.live_voice_engine import LiveVoiceEngine
+            _lve = LiveVoiceEngine.get_instance()
+            _lve.on_user_transcript = lambda txt, interim: self.ui.set_live_subtitles("YOU", txt, interim)
+            _lve.on_ai_transcript = lambda txt, interim: self.ui.set_live_subtitles("BRAHMA", txt, interim)
+        except Exception:
+            pass
+
         self._idle_speech_thread = threading.Thread(target=self._idle_speech_loop, daemon=True)
         self._idle_speech_thread.start()
 
@@ -3893,28 +4116,42 @@ class BrahmaLive:
         if any(w in normalized for w in ("screen", "monitor", "display", "laptop", "pc")) and "brightness" in normalized:
             return False
 
-        smart_home_words = (
-            "fan", "fans", "light", "lights", "lamp", "plug", "socket", "outlet", "bulb",
-            "kasa", "atomberg", "bedroom", "living room", "kitchen", "office room",
-            "balcony", "bathroom", "hall", "dining", "smart home", "smart-home",
-            "ac", "air conditioner", "thermostat"
-        )
-        has_smart_word = any(word in normalized for word in smart_home_words)
-        if not has_smart_word:
-            try:
-                for d in self._smart_home.list_devices():
-                    d_name = str(d.get("name", "")).lower()
-                    d_room = str(d.get("room", "")).lower()
-                    if (d_name and d_name in normalized) or (d_room and d_room in normalized):
-                        has_smart_word = True
-                        break
-            except Exception:
-                pass
+        # Check for registered smart home devices
+        devices = []
+        try:
+            devices = self._smart_home.list_devices() or []
+        except Exception:
+            devices = []
 
-        if not has_smart_word:
+        is_explicit_brand = bool(re.search(r"\b(smart\s*home|kasa|atomberg|tplink|tp-link)\b", normalized))
+        matched_device = False
+        for d in devices:
+            d_name = str(d.get("name", "")).lower()
+            d_room = str(d.get("room", "")).lower()
+            if d_name and re.search(rf"\b{re.escape(d_name)}\b", normalized):
+                matched_device = True
+                break
+            if d_room and re.search(rf"\b{re.escape(d_room)}\b", normalized):
+                matched_device = True
+                break
+
+        has_appliance = bool(re.search(r"\b(fan|fans|light|lights|lamp|plug|socket|outlet|bulb|air\s*conditioner|thermostat|ac)\b", normalized))
+        has_control_action = bool(re.search(r"\b(turn\s+(?:on|off)|switch\s+(?:on|off)|power\s+(?:on|off)|toggle|dim|brighten|speed\s+up|slow\s+down|set\s+(?:temperature|speed|brightness))\b", normalized))
+
+        # Only intercept if:
+        # 1. Explicit brand mentioned, OR
+        # 2. Known device name matched, OR
+        # 3. Known appliance word matched WITH an explicit control action
+        if not (is_explicit_brand or (has_appliance and has_control_action) or (matched_device and has_control_action)):
             return False
+
+        if not devices and not is_explicit_brand:
+            return False
+
         try:
             result = self._smart_home.execute_command(text)
+            if not result or not result.get("success", True):
+                return False
             detail = str(result.get("detail") or "Smart-home command completed.")
             title = f"Smart Home: {result.get('action', 'control')}"
             plan = [
@@ -3938,25 +4175,8 @@ class BrahmaLive:
                 self.ui.set_state("LISTENING")
             return True
         except Exception as exc:
-            message = f"I couldn't control the smart home device: {exc}"
-            self.ui.write_log(f"ERR: {message}")
-            self.ui.update_task_workspace(
-                title="Smart Home Control",
-                command=text,
-                plan=[
-                    "Identify the target device or room",
-                    "Send the command to the smart-home provider",
-                    "Verify the new state",
-                ],
-                status="Smart-home command failed",
-                output=message,
-                percent=100,
-                source=source,
-            )
-            self.speak(message)
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return True
+            self.ui.write_log(f"WARN: Smart-home execution bypassed: {exc}")
+            return False
 
     def _extract_launch_app_name(self, text: str) -> str:
         normalized = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s%]", " ", text.lower())).strip()
@@ -4978,7 +5198,14 @@ class BrahmaLive:
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
+            if self._is_speaking == value:
+                return
             self._is_speaking = value
+            now = time.monotonic()
+            if value:
+                self._spoke_start_time = now
+            else:
+                self._last_spoke_time = now
         if value:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
@@ -4987,9 +5214,12 @@ class BrahmaLive:
     def trigger_barge_in(self):
         """Immediately interrupts AI speech playback and switches state to LISTENING."""
         with self._speaking_lock:
-            if not self._is_speaking:
+            if not self._is_speaking and not getattr(self, "_server_turn_active", False):
                 return
             self._is_speaking = False
+            self._server_turn_active = False
+            self._discard_server_audio = True
+            self._last_spoke_time = time.monotonic()
 
         try:
             from actions.attention_monitor import stop_native_speech
@@ -5008,6 +5238,12 @@ class BrahmaLive:
             pass
 
         try:
+            from core.live_voice_engine import LiveVoiceEngine
+            LiveVoiceEngine.get_instance().trigger_interruption(source="pc_barge_in")
+        except Exception:
+            pass
+
+        try:
             from sound_manager import SoundManager
             SoundManager.instance().play_listening_start()
         except Exception:
@@ -5020,6 +5256,9 @@ class BrahmaLive:
         text = (text or "").strip()
         if not text:
             return
+
+        if hasattr(self.ui, "set_live_subtitles"):
+            self.ui.set_live_subtitles("BRAHMA", text, interim=False)
 
         if getattr(self, "_in_live_tool", False):
             # Gemini Live duplex tool execution will vocalize completion via send_tool_response
@@ -5218,6 +5457,18 @@ class BrahmaLive:
         except Exception as exc:
             print(f"[SkillRegistry] Dynamic tools unavailable: {exc}")
 
+        # Universal MCP Tool Dynamic Exposure
+        try:
+            from core.mcp_manager import UniversalMCPManager
+            UniversalMCPManager.get_instance().load_servers()
+            for mcp_tool in UniversalMCPManager.get_instance().get_all_tool_declarations():
+                if mcp_tool.get("name") not in declared_names:
+                    tool_declarations.append(mcp_tool)
+                    declared_names.add(mcp_tool.get("name"))
+        except Exception as exc:
+            print(f"[MCPRegistry] MCP tools unavailable: {exc}")
+
+
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
@@ -5294,13 +5545,11 @@ class BrahmaLive:
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(None, undo_stack.undo_last)
             self.speak("Undone.")
-            self.ui.set_state("LISTENING")
             return types.FunctionResponse(name=name, id=fc.id, response={"result": result})
 
         elif name == "recall_memory":
             query = args.get("query", "")
             result = search_memory(query, limit=8)
-            self.ui.set_state("LISTENING")
             return types.FunctionResponse(name=name, id=fc.id, response={"result": result})
 
         elif name == "execute_protocol":
@@ -5308,12 +5557,10 @@ class BrahmaLive:
             res = protocols.execute(protocol_name)
             msg = res.get("result", res.get("error", "Protocol completed."))
             self.speak(msg)
-            self.ui.set_state("LISTENING")
             return types.FunctionResponse(name=name, id=fc.id, response={"result": res})
 
         elif name == "get_sensorium_telemetry":
             snapshot = sensorium.get_snapshot()
-            self.ui.set_state("LISTENING")
             return types.FunctionResponse(name=name, id=fc.id, response={"result": snapshot})
 
         elif name == "manage_local_model":
@@ -5628,6 +5875,181 @@ class BrahmaLive:
                 command_text = str(args.get("command") or "").strip()
                 r = await loop.run_in_executor(None, lambda: self._smart_home.execute_command(command_text))
                 result = str((r or {}).get("detail") or "Smart-home command completed.")
+
+
+            # =================================================================
+            # UNIVERSAL CLAUDE-CODE & OPENAI CODEX EXECUTION (PROJECT OMNIPOTENCE)
+            # =================================================================
+            elif name == "bash":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.bash(
+                        command=args.get("command", ""),
+                        timeout=int(args.get("timeout", 120)),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("output", str(r))
+
+            elif name == "file_read":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.file_read(
+                        file_path=args.get("file_path", ""),
+                        offset=int(args.get("offset", 1)),
+                        limit=int(args.get("limit", 2000)),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("content") or r.get("error", str(r))
+
+            elif name == "file_edit":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.file_edit(
+                        file_path=args.get("file_path", ""),
+                        old_string=args.get("old_string", ""),
+                        new_string=args.get("new_string", ""),
+                        replace_all=bool(args.get("replace_all", False)),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("message") or r.get("error", str(r))
+
+            elif name == "file_write":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.file_write(
+                        file_path=args.get("file_path", ""),
+                        content=args.get("content", ""),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("message") or r.get("error", str(r))
+
+            elif name == "glob":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.glob(
+                        pattern=args.get("pattern", "*"),
+                        path=args.get("path", "."),
+                        max_results=int(args.get("max_results", 100)),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("output", str(r))
+
+            elif name == "grep":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.grep(
+                        pattern=args.get("pattern", ""),
+                        path=args.get("path", "."),
+                        case_sensitive=bool(args.get("case_sensitive", True)),
+                        max_results=int(args.get("max_results", 50)),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("output", str(r))
+
+            elif name == "python_repl":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.python_repl(
+                        code=args.get("code", ""),
+                        timeout=int(args.get("timeout", 60)),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("output", str(r))
+
+            elif name == "git_manager":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.git_manager(
+                        action=args.get("action", "status"),
+                        message=args.get("message"),
+                        branch=args.get("branch"),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("output", str(r))
+
+            elif name == "test_and_heal":
+                from core.claude_tools import ClaudeCodeTools
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: ClaudeCodeTools.test_runner(
+                        command=args.get("command", "pytest"),
+                        cwd=args.get("cwd")
+                    )
+                )
+                result = r.get("full_output", str(r))
+
+            elif name == "subagent_task":
+                from core.subagent_orchestrator import SubagentOrchestrator
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: SubagentOrchestrator.get_instance().spawn_subagent(
+                        role=args.get("role", "general"),
+                        prompt=args.get("prompt", ""),
+                        workspace=args.get("workspace"),
+                        wait=bool(args.get("wait", True))
+                    )
+                )
+                result = f"Subagent [{r.role} - {r.status}]:\n{r.result or r.error or 'Task initiated.'}"
+
+            elif name == "mcp_status":
+                from core.mcp_manager import UniversalMCPManager
+                result = UniversalMCPManager.get_instance().get_status_summary()
+
+            elif name.startswith("mcp_"):
+                from core.mcp_manager import UniversalMCPManager
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: UniversalMCPManager.get_instance().execute_mcp_tool(name, args)
+                )
+
+            elif name == "skill_execute":
+                from core.skills_engine import UniversalSkillsEngine
+                r = UniversalSkillsEngine.get_instance().execute_skill(
+                    args.get("skill_name", ""),
+                    args.get("task", "")
+                )
+                result = r.get("context_prompt") or r.get("error") or str(r)
+
+            elif name == "skill_install":
+                from core.skills_engine import UniversalSkillsEngine
+                r = UniversalSkillsEngine.get_instance().install_skill(
+                    args.get("skill_name", ""),
+                    args.get("content", "")
+                )
+                result = f"Installed skill '{args.get('skill_name')}': {r}"
+
+            elif name == "skill_list":
+                from core.skills_engine import UniversalSkillsEngine
+                skills = UniversalSkillsEngine.get_instance().list_skills()
+                lines = [f"• {s['name']}: {s['description']}" for s in skills]
+                result = "Installed Brahma Skills:\n" + ("\n".join(lines) if lines else "None")
+
+            elif name == "todo_write":
+                from core.claude_tools import ClaudeCodeTools
+                r = ClaudeCodeTools.todo_write(args.get("todos", []))
+                result = r.get("summary", str(r))
+
+            elif name == "todo_read":
+                from core.claude_tools import ClaudeCodeTools
+                r = ClaudeCodeTools.todo_read()
+                result = str(r)
+
 
             elif name in ("smart_organizer", "desktop_organizer"):
                 from actions.desktop_organizer_mcp import smart_organizer
@@ -6005,7 +6427,10 @@ class BrahmaLive:
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
-            await self.session.send_realtime_input(media=msg)
+            try:
+                await self.session.send_realtime_input(media=msg)
+            except Exception:
+                pass
 
     async def _listen_audio(self):
         print("[BRAHMA EVO] 🎤 Mic started")
@@ -6028,6 +6453,8 @@ class BrahmaLive:
 
         speech_buffer = bytearray()
         silence_chunks = 0
+        _last_ui_lvl = 0.0
+        _last_lvl_time = 0.0
 
         def callback(indata, frames, time_info, status):
             nonlocal silence_chunks
@@ -6047,58 +6474,57 @@ class BrahmaLive:
             if not self.ui.muted or getattr(self.ui, "_wakeword_listening", False):
                 lvl = float(np.sqrt(np.mean(np.square(indata, dtype=np.float32))))
                 
-                # Handle Local AI voice input when in Local or Offline mode
-                app_cfg = config_manager.load_settings()
-                if app_cfg.get("default_ai_provider") == "Local" or app_cfg.get("offline_mode_enabled", False):
-                    if not brahma_speaking and not self.ui.muted:
-                        if lvl > 22.0:
-                            speech_buffer.extend(indata.tobytes())
-                            silence_chunks = 0
-                        elif len(speech_buffer) > 0:
-                            silence_chunks += 1
-                            # ~0.7s of silence (each chunk is ~30ms -> 20 chunks)
-                            if silence_chunks > 18:
-                                captured = bytes(speech_buffer)
-                                speech_buffer.clear()
-                                silence_chunks = 0
-                                if len(captured) > (SEND_SAMPLE_RATE * 2 * 0.5):
-                                    def _process_local_speech(pcm_bytes):
-                                        try:
-                                            import speech_recognition as sr
-                                            r = sr.Recognizer()
-                                            audio_data = sr.AudioData(pcm_bytes, SEND_SAMPLE_RATE, 2)
-                                            text_cmd = r.recognize_google(audio_data)
-                                            if text_cmd and len(text_cmd.strip()) > 1:
-                                                print(f"[Local AI Voice] 🎙️ Heard: {text_cmd}")
-                                                self._on_text_command(text_cmd, source="mic")
-                                        except Exception:
-                                            pass
-                                    threading.Thread(target=_process_local_speech, args=(captured,), daemon=True).start()
+                now = time.monotonic()
+                last_spoke = getattr(self, "_last_spoke_time", 0.0)
+                in_echo_tail = (now - last_spoke) < 0.35  # 350ms echo tail post-speech
 
+                # 1. Update UI visualizer at smooth throttled rate (< 30fps)
+                if not self.ui.muted:
+                    nonlocal _last_ui_lvl, _last_lvl_time
+                    if (now - _last_lvl_time) > 0.033:
+                        _last_lvl_time = now
+                        norm_v = min(1.0, lvl / 1200.0)
+                        if abs(norm_v - _last_ui_lvl) > 0.01:
+                            _last_ui_lvl = norm_v
+                            try:
+                                self.ui.set_audio_level(norm_v)
+                            except Exception:
+                                pass
+
+                # 2. If Brahma is actively speaking: check ONLY for deliberate user barge-in!
                 if brahma_speaking:
-                    if self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, lvl) and lvl > 28.0:
-                        loop.call_soon_threadsafe(self.trigger_barge_in)
-                        data = indata.tobytes()
-                    else:
-                        data = np.zeros_like(indata).tobytes()
-                else:
-                    if not self.ui.muted:
+                    norm_lvl = lvl / 32767.0
+                    user_speaking = False
+                    # Allow a 250ms onset grace period so initial speaker transients do not false-trigger
+                    speech_duration = now - getattr(self, "_spoke_start_time", 0.0)
+                    if speech_duration > 0.25:
                         try:
-                            self.ui.set_audio_level(min(1.0, lvl / 1200.0))
+                            user_speaking = self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, norm_lvl)
                         except Exception:
                             pass
-                    # If EchoGuard detects residual acoustic echo from recent output, drop it
-                    if self._echo._hist and not self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, lvl):
-                        data = np.zeros_like(indata).tobytes()
-                    elif lvl > 10.0:
-                        data = indata.tobytes()
-                    else:
-                        data = np.zeros_like(indata).tobytes()
-                    
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+                    # Interrupt only if EchoGuard positively identifies sustained user speech formants
+                    if user_speaking and lvl > 350.0:
+                        loop.call_soon_threadsafe(self.trigger_barge_in)
+                    # Never stream speaker audio back to Gemini Live
+                    return
+
+                # 3. If in post-speech echo tail (room reverberation): discard frame
+                if in_echo_tail:
+                    return
+
+                # 4. Feed PCM to LiveVoiceEngine for Web/Mobile clients
+                try:
+                    from core.live_voice_engine import LiveVoiceEngine
+                    LiveVoiceEngine.get_instance().feed_pcm_audio(indata.tobytes(), source="pc_mic")
+                except Exception:
+                    pass
+
+                # 5. When silent and unmuted: stream clean microphone audio to Gemini Live duplex
+                if not self.ui.muted:
+                    loop.call_soon_threadsafe(
+                        self.out_queue.put_nowait,
+                        {"data": indata.tobytes(), "mime_type": "audio/pcm"}
+                    )
 
         try:
             with sd.InputStream(
@@ -6129,23 +6555,31 @@ class BrahmaLive:
                             self._resume_handle = _sru.new_handle
 
                     if response.data:
-                        self.set_speaking(True)
+                        if getattr(self, "_discard_server_audio", False):
+                            # Turn was interrupted; discard residual audio chunks
+                            continue
+                        self._server_turn_active = True
+                        if not self._is_speaking:
+                            self.set_speaking(True)
                         self.audio_in_queue.put_nowait(response.data)
 
                     if response.server_content:
                         sc = response.server_content
 
                         if sc.output_transcription and sc.output_transcription.text:
-                            txt = sc.output_transcription.text.strip()
+                            txt = sc.output_transcription.text
                             if txt:
                                 out_buf.append(txt)
-
-                        if getattr(sc, "model_turn", None):
+                                if hasattr(self.ui, "set_live_subtitles"):
+                                    self.ui.set_live_subtitles("BRAHMA", "".join(out_buf).strip(), interim=True)
+                        elif getattr(sc, "model_turn", None):
                             for part in sc.model_turn.parts:
                                 if getattr(part, "text", None) and not getattr(part, "thought", False):
-                                    txt = part.text.strip()
+                                    txt = part.text
                                     if txt and txt not in out_buf:
                                         out_buf.append(txt)
+                                        if hasattr(self.ui, "set_live_subtitles"):
+                                            self.ui.set_live_subtitles("BRAHMA", "".join(out_buf).strip(), interim=True)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = sc.input_transcription.text.strip()
@@ -6156,6 +6590,8 @@ class BrahmaLive:
                                 except Exception:
                                     pass
                                 in_buf.append(txt)
+                                if hasattr(self.ui, "set_live_subtitles"):
+                                    self.ui.set_live_subtitles("YOU", " ".join(in_buf), interim=True)
                                 if self.ui.muted and _wakeword_detected(txt):
                                     try:
                                         self.ui.set_muted_state(False, wakeword=True)
@@ -6164,15 +6600,20 @@ class BrahmaLive:
                                         pass
 
                         if sc.turn_complete:
-                            # Note: self.set_speaking(False) is managed by _play_audio once speaker output finishes draining
-                            full_in = " ".join(in_buf).strip()
+                            self._server_turn_active = False
+                            self._discard_server_audio = False
+                            full_in = "".join(in_buf).strip()
                             if full_in:
                                 self.ui.write_log(f"You: {full_in}")
+                                if hasattr(self.ui, "set_live_subtitles"):
+                                    self.ui.set_live_subtitles("YOU", full_in, interim=False)
                             in_buf = []
 
-                            full_out = " ".join(out_buf).strip()
+                            full_out = "".join(out_buf).strip()
                             if full_out:
                                 self.ui.write_log(f"Brahma Evo: {full_out}")
+                                if hasattr(self.ui, "set_live_subtitles"):
+                                    self.ui.set_live_subtitles("BRAHMA", full_out, interim=False)
                                 try:
                                     self.ui.finish_task_workspace(full_out, "Reply delivered.", 100)
                                 except Exception:
@@ -6215,7 +6656,7 @@ class BrahmaLive:
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=CHANNELS,
             dtype="int16",
-            blocksize=CHUNK_SIZE,
+            blocksize=0,
             device=_spk_dev,
         )
         stream.start()
@@ -6223,13 +6664,16 @@ class BrahmaLive:
             while True:
                 try:
                     if self._is_speaking:
-                        # Wait up to 350ms for next chunk before declaring playback finished
-                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.35)
+                        # Wait up to 0.45s between audio chunks before concluding speech
+                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.45)
                     else:
                         chunk = await self.audio_in_queue.get()
                 except asyncio.TimeoutError:
-                    if self._is_speaking:
+                    if self._is_speaking and self.audio_in_queue.empty():
                         self.set_speaking(False)
+                    continue
+
+                if getattr(self, "_discard_server_audio", False):
                     continue
 
                 if not self._is_speaking:
@@ -6240,6 +6684,9 @@ class BrahmaLive:
                     lvl = float(np.sqrt(np.mean(np.square(pcm, dtype=np.float32))))
                     self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE, lvl)
                     self.ui.set_audio_level(min(1.0, lvl / 2500.0))
+                    # Relay output audio chunk to any connected browser/mobile live voice clients
+                    from core.live_voice_engine import LiveVoiceEngine
+                    LiveVoiceEngine.get_instance().broadcast_audio_chunk(chunk)
                 except Exception:
                     pass
                 await asyncio.to_thread(stream.write, chunk)
