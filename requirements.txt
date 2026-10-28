@@ -19,7 +19,7 @@ psutil
 comtypes
 pycaw               
 instagrapi
-win10toast          
+win10toast; sys_platform == "win32"          
 send2trash
 youtube-transcript-api
 pywinauto
