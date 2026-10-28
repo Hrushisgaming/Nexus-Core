@@ -1,3 +1,4 @@
+
 name: Build Multi-Platform Installers
 
 on:
@@ -38,10 +39,11 @@ jobs:
         with:
           name: BrahmaEvo-Windows-Setup
           path: dist/BrahmaEvo_Setup.exe
+          if-no-files-found: error
 
   build-macos:
     name: Build macOS Application (.dmg)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +52,12 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
+
+      - name: Verify Runner
+        run: |
+          uname -m
+          python --version
+          python -c "import platform; print('Architecture:', platform.machine())"
 
       - name: Install Dependencies
         run: |
@@ -72,20 +80,31 @@ jobs:
             --add-data "workspace_store.py:." \
             main.py
 
-      - name: Create DMG
-        run: |
-          npm install --global create-dmg || true
-          mkdir -p dmg_out
-          if command -v create-dmg &>/dev/null; then
-            create-dmg "dist/BrahmaEvo.app" dmg_out/ || true
-          fi
-          cd dist && zip -r "BrahmaEvo-macOS.zip" "BrahmaEvo.app"
+          test -d "dist/BrahmaEvo.app"
 
-      - name: Upload macOS Artifact
+      - name: Create macOS DMG
+        run: |
+          mkdir -p dmg_staging
+
+          ditto "dist/BrahmaEvo.app" "dmg_staging/BrahmaEvo.app"
+          ln -s /Applications "dmg_staging/Applications"
+
+          hdiutil create \
+            -volname "BrahmaEvo" \
+            -srcfolder "dmg_staging" \
+            -ov \
+            -format UDZO \
+            "dist/BrahmaEvo-macOS.dmg"
+
+          test -s "dist/BrahmaEvo-macOS.dmg"
+          ls -lh "dist/BrahmaEvo-macOS.dmg"
+
+      - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
-          name: BrahmaEvo-macOS
-          path: dist/BrahmaEvo-macOS.zip
+          name: BrahmaEvo-macOS-DMG
+          path: dist/BrahmaEvo-macOS.dmg
+          if-no-files-found: error
 
   build-linux:
     name: Build Linux Portable Binary
@@ -124,10 +143,14 @@ jobs:
             --add-data "dashboard/static:dashboard/static" \
             --add-data "workspace_store.py:." \
             main.py
-          cd dist && tar -czvf "BrahmaEvo-Linux.tar.gz" "BrahmaEvo"
+
+          test -d "dist/BrahmaEvo"
+          cd dist
+          tar -czvf "BrahmaEvo-Linux.tar.gz" "BrahmaEvo"
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BrahmaEvo-Linux
           path: dist/BrahmaEvo-Linux.tar.gz
+          if-no-files-found: error
