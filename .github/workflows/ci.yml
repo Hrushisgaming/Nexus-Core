@@ -38,10 +38,10 @@ jobs:
           pip install pyinstaller pytest
 
       # ── Compile / import checks ─────────────────────────────────
-      - name: Verify all Python modules compile
+      - name: Verify Python modules compile and import
         run: |
-          python -m py_compile main.py ui.py
-          python -c "
+          python -m py_compile main.py ui.py core/platform_api.py core/window_context.py core/sensorium.py core/protocols.py core/user_paths.py core/updater_ota.py actions/game_updater.py
+          python - <<'PY'
 import core.platform_api
 import core.window_context
 import core.sensorium
@@ -50,7 +50,7 @@ import core.user_paths
 import core.updater_ota
 import actions.game_updater
 print('All modules import OK')
-"
+PY
 
       # ── Run tests ───────────────────────────────────────────────
       - name: Run test suite
