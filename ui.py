@@ -1561,7 +1561,7 @@ def _default_app_settings() -> dict:
         "search_engine": "tavily",
         # Image Generation Settings
         "image_engine": "pollinations",
-        "image_model": "flux",
+        "image_model": "community/scriptsnsenses-sys/flux-2-dev-free",
         # Advanced AI Settings
         "advanced_ai_enabled": False,
     }
@@ -12757,8 +12757,8 @@ class SystemConnectivityPage(QWidget):
         image_model_row = QHBoxLayout()
         image_model_row.addWidget(QLabel("Pollinations Model"))
         self._image_model_combo = QComboBox()
-        self._image_model_combo.addItems(["flux", "flux-pro", "flux-dev", "turbo"])
-        current_image_model = self._load_app_settings().get("image_model", "flux")
+        self._image_model_combo.addItems(["flux", "flux-pro", "flux-dev", "turbo", "community/scriptsnsenses-sys/flux-2-dev-free"])
+        current_image_model = self._load_app_settings().get("image_model", "community/scriptsnsenses-sys/flux-2-dev-free")
         idx = self._image_model_combo.findText(current_image_model)
         if idx >= 0:
             self._image_model_combo.setCurrentIndex(idx)

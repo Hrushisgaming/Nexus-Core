@@ -115,12 +115,13 @@ class PollinationsImageProvider(ImageProvider):
     name = "pollinations"
 
     def __init__(self, model: Optional[str] = None):
-        self.default_model = model or "flux"
+        self.default_model = model or "community/scriptsnsenses-sys/flux-2-dev-free"
         self.models = [
             "flux",
             "flux-pro",
             "flux-dev",
             "turbo",
+            "community/scriptsnsenses-sys/flux-2-dev-free",
         ]
         self._available = True
         self._init_error: Optional[str] = None
