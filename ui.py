@@ -12406,18 +12406,27 @@ class SystemConnectivityPage(QWidget):
             "auto",
             "openrouter",
         )
+        self._nvidia_row, self._nvidia_status, self._nvidia_key = self._provider_row(
+            "NVIDIA",
+            self._api_defaults.get("nvidia_api_key", ""),
+            "nvidia/nemotron-3-super-120b-a12b",
+            "nvidia",
+        )
         lay1.addWidget(self._gemini_row)
         lay1.addWidget(self._or_row)
+        lay1.addWidget(self._nvidia_row)
         controls = QHBoxLayout()
         controls.setSpacing(12)
         self._default_provider = QComboBox()
-        self._default_provider.addItems(["Google Gemini", "OpenRouter", "Local"])
+        self._default_provider.addItems(["Google Gemini", "OpenRouter", "NVIDIA", "Local"])
         
         current_provider = self._load_app_settings().get("default_ai_provider", "Gemini")
         if current_provider in {"Gemini", "Google Gemini"}:
             self._default_provider.setCurrentText("Google Gemini")
         elif current_provider == "Local":
             self._default_provider.setCurrentText("Local")
+        elif current_provider == "NVIDIA":
+            self._default_provider.setCurrentText("NVIDIA")
         else:
             self._default_provider.setCurrentText("OpenRouter")
             
@@ -13997,6 +14006,16 @@ class SystemConnectivityPage(QWidget):
             if hasattr(self, "_local_ai_widget"):
                 self._local_ai_widget.setVisible(True)
             msg = "SYS: Default AI provider set to Local AI (Ollama). Offline Mode active."
+        elif raw == "nvidia":
+            provider = "NVIDIA"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to NVIDIA NIM. Cloud connectivity active."
         else:
             provider = "OpenRouter"
             self._set_setting("offline_mode_enabled", False)
@@ -14164,6 +14183,8 @@ class SystemConnectivityPage(QWidget):
             self._or_status.setText("Connected" if api.get("openrouter_api_key") else "Not connected")
             self._gemini_key.setText(self._provider_key_preview(api.get("gemini_api_key", "")))
             self._or_key.setText(self._provider_key_preview(api.get("openrouter_api_key", "")))
+            self._nvidia_status.setText("Connected" if api.get("nvidia_api_key") else "Not connected")
+            self._nvidia_key.setText(self._provider_key_preview(api.get("nvidia_api_key", "")))
             
             prov = app.get("default_ai_provider", "Gemini")
             is_offline = bool(app.get("offline_mode_enabled", False))
@@ -14171,6 +14192,8 @@ class SystemConnectivityPage(QWidget):
                 disp_prov = "Local"
             elif prov == "OpenRouter":
                 disp_prov = "OpenRouter"
+            elif prov == "NVIDIA":
+                disp_prov = "NVIDIA"
             else:
                 disp_prov = "Google Gemini"
             if hasattr(self, "_default_provider"):

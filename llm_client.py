@@ -77,6 +77,95 @@ class UnifiedAIClient:
             logger.error(f"[LLM Client] Failed to init Gemini client: {e}")
             return None
 
+    def _load_nvidia_key(self) -> str:
+        """Load NVIDIA API key from env or api_keys.json."""
+        import os
+        env_key = os.environ.get("NVIDIA_API_KEY", "").strip()
+        if env_key:
+            return env_key
+        try:
+            api_keys_path = get_user_data_dir() / "config" / "api_keys.json"
+            if api_keys_path.exists():
+                with open(api_keys_path, "r", encoding="utf-8") as f:
+                    key = json.load(f).get("nvidia_api_key", "").strip()
+                if key:
+                    return key
+        except Exception as e:
+            logger.error(f"[LLM Client] Failed reading NVIDIA key: {e}")
+        return ""
+
+    def _nvidia_chat_completion(self, messages: list[dict], temperature: float = 0.7, model: str = "nvidia/nemotron-3-super-120b-a12b", max_tokens: int = 4096) -> Optional[str]:
+        """Chat completion via NVIDIA NIM API (OpenAI-compatible)."""
+        api_key = self._load_nvidia_key()
+        if not api_key:
+            return None
+        try:
+            import requests
+            resp = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": False,
+                },
+                timeout=120,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+            logger.error(f"[LLM Client] NVIDIA API error {resp.status_code}: {resp.text[:200]}")
+            return None
+        except Exception as e:
+            logger.error(f"[LLM Client] NVIDIA request failed: {e}")
+            return None
+
+    def _nvidia_vision(self, prompt: str, image_b64: str, mime: str = "image/png", system: str = "Analyze the image.", model: str = "nvidia/nemotron-3-super-120b-a12b", max_tokens: int = 1024) -> Optional[str]:
+        """Vision via NVIDIA NIM API."""
+        api_key = self._load_nvidia_key()
+        if not api_key:
+            return None
+        try:
+            import requests
+            resp = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
+                            ],
+                        },
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": max_tokens,
+                    "stream": False,
+                },
+                timeout=120,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+            logger.error(f"[LLM Client] NVIDIA vision error {resp.status_code}: {resp.text[:200]}")
+            return None
+        except Exception as e:
+            logger.error(f"[LLM Client] NVIDIA vision failed: {e}")
+            return None
+
     def _gemini_chat_completion(self, messages: list[dict], temperature: float = 0.7, json_mode: bool = False) -> Optional[str]:
         client = self._get_gemini_client()
         if not client:
@@ -110,12 +199,28 @@ class UnifiedAIClient:
 
     def chat(self, prompt: str, system: str = "You are a helpful assistant.", history: Optional[list[dict]] = None, model: Optional[str] = None, max_tokens: int = 4096, temperature: float = 0.7) -> str:
         self.reload_settings()
-        if self._provider in ("Gemini", "Google Gemini"):
+        provider = self._provider
+        nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+
+        if provider in ("Gemini", "Google Gemini"):
             messages = [{"role": "system", "content": system}]
             if history:
                 messages.extend(history)
             messages.append({"role": "user", "content": prompt})
             result = self._gemini_chat_completion(messages, temperature)
+            if result:
+                return result
+            try:
+                return openrouter_client.chat(prompt, system, history, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
+        elif provider == "NVIDIA":
+            messages = [{"role": "system", "content": system}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": prompt})
+            result = self._nvidia_chat_completion(messages, temperature, nvidia_model, max_tokens)
             if result:
                 return result
             try:
@@ -138,7 +243,10 @@ class UnifiedAIClient:
 
     def chat_json(self, prompt: str, system: str = "Return ONLY valid JSON.", model: Optional[str] = None, max_tokens: int = 4096) -> dict:
         self.reload_settings()
-        if self._provider in ("Gemini", "Google Gemini"):
+        provider = self._provider
+        nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+
+        if provider in ("Gemini", "Google Gemini"):
             messages = [
                 {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
                 {"role": "user", "content": prompt}
@@ -164,6 +272,32 @@ class UnifiedAIClient:
                 return json.loads(clean)
             except json.JSONDecodeError as e:
                 raise ValueError(f"Gemini model returned unparseable JSON: {e}\nRaw output: {raw[:200]}")
+        elif provider == "NVIDIA":
+            messages = [
+                {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
+                {"role": "user", "content": prompt}
+            ]
+            raw = self._nvidia_chat_completion(messages, temperature=0.2, model=nvidia_model, max_tokens=max_tokens)
+            if not raw:
+                try:
+                    return openrouter_client.chat_json(prompt, system, model, max_tokens)
+                except Exception:
+                    pass
+                raw = self._local_chat_completion(messages, temperature=0.2, response_format={"type": "json_object"})
+            if not raw:
+                raise RuntimeError("NVIDIA request failed for JSON generation.")
+            
+            clean = raw.strip()
+            if clean.startswith("```"):
+                parts = clean.split("```")
+                clean = parts[1] if len(parts) > 1 else clean
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip().rstrip("`").strip()
+            try:
+                return json.loads(clean)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"NVIDIA model returned unparseable JSON: {e}\nRaw output: {raw[:200]}")
         elif self._provider == "Local":
             messages = [
                 {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
@@ -190,7 +324,19 @@ class UnifiedAIClient:
 
     def vision(self, prompt: str, image_b64: str, mime: str = "image/png", system: str = "Analyze the image.", model: Optional[str] = None, max_tokens: int = 1024) -> str:
         self.reload_settings()
-        if self._provider in ("Gemini", "Google Gemini"):
+        provider = self._provider
+        nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+
+        if provider == "NVIDIA":
+            result = self._nvidia_vision(prompt, image_b64, mime, system, nvidia_model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.vision(prompt, image_b64, mime, system, model, max_tokens)
+            except Exception:
+                pass
+            raise RuntimeError("NVIDIA vision request failed.")
+        if provider in ("Gemini", "Google Gemini"):
             client = self._get_gemini_client()
             if client:
                 try:
@@ -237,7 +383,16 @@ class UnifiedAIClient:
 
     def vision_from_file(self, prompt: str, image_path: str, system: str = "Analyze the image.", model: Optional[str] = None, max_tokens: int = 1024) -> str:
         self.reload_settings()
-        if self._provider in ("Local", "Gemini", "Google Gemini"):
+        provider = self._provider
+        if provider == "NVIDIA":
+            import base64
+            path = Path(image_path)
+            mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif"}
+            mime = mime_map.get(path.suffix.lower(), "image/png")
+            with open(path, "rb") as f:
+                image_b64 = base64.b64encode(f.read()).decode("utf-8")
+            return self.vision(prompt, image_b64, mime, system, model, max_tokens)
+        if provider in ("Local", "Gemini", "Google Gemini"):
             import base64
             path = Path(image_path)
             mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif"}
@@ -250,7 +405,19 @@ class UnifiedAIClient:
 
     def multi_turn(self, messages: list[dict], model: Optional[str] = None, max_tokens: int = 4096, temperature: float = 0.7) -> str:
         self.reload_settings()
-        if self._provider in ("Gemini", "Google Gemini"):
+        provider = self._provider
+        nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+
+        if provider == "NVIDIA":
+            result = self._nvidia_chat_completion(messages, temperature, nvidia_model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.multi_turn(messages, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
+        if provider in ("Gemini", "Google Gemini"):
             result = self._gemini_chat_completion(messages, temperature)
             if result:
                 return result
