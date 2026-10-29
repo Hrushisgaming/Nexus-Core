@@ -14,7 +14,7 @@ def execute(**kwargs):
     try:
         # Define the path for the image file
         image_filename = "headphones_image.png"
-        output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'BrahmaAI', 'deliverables')
+        output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'NexusCore', 'deliverables')
         os.makedirs(output_dir, exist_ok=True)
         image_path = os.path.join(output_dir, image_filename)
 

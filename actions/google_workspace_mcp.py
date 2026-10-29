@@ -271,8 +271,8 @@ class GoogleDriveEngine:
     @classmethod
     def search_files(cls, query: str) -> str:
         """Searches Google Drive or local Brahma AI generated files."""
-        # Search Desktop/BrahmaAI folder
-        desktop_ai = Path.home() / "Desktop" / "BrahmaAI"
+        # Search Desktop/NexusCore folder
+        desktop_ai = Path.home() / "Desktop" / "NexusCore"
         if not desktop_ai.exists():
             return f"No Drive or local files found for query '{query}'."
 
@@ -288,7 +288,7 @@ class GoogleDriveEngine:
 
     @classmethod
     def read_file(cls, filename: str) -> str:
-        desktop_ai = Path.home() / "Desktop" / "BrahmaAI"
+        desktop_ai = Path.home() / "Desktop" / "NexusCore"
         target = desktop_ai / filename
         if not target.exists():
             for f in desktop_ai.glob("*.*"):
@@ -312,8 +312,8 @@ class GoogleDriveEngine:
         p = Path(local_path)
         if not p.exists():
             return f"Local file '{local_path}' does not exist."
-        # Store in BrahmaAI cloud staging
-        dest = Path.home() / "Desktop" / "BrahmaAI" / p.name
+        # Store in NexusCore cloud staging
+        dest = Path.home() / "Desktop" / "NexusCore" / p.name
         try:
             import shutil
             shutil.copy2(p, dest)

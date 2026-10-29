@@ -261,7 +261,7 @@ Skill Architecture Guidelines:
 5. Visual Deliverables, Images, GIFs, & UI Cards:
    - If the user asks for images, drawings, graphics, headphones, cars, animals, cartoons, plots, scorecards, charts, or GIFs:
      a) ALWAYS produce an actual deliverable image file (.png or .gif) saved to:
-        `output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'BrahmaAI', 'deliverables')`
+        `output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'NexusCore', 'deliverables')`
         `os.makedirs(output_dir, exist_ok=True)`
         `image_path = os.path.join(output_dir, f'{actual_name}_output.png')`
      b) For diagrams, illustrations, charts, or tech visuals: Generate the visual NATIVELY using `PIL` (`from PIL import Image, ImageDraw, ImageFont`) or `matplotlib` (`import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt`).
@@ -370,7 +370,7 @@ Critical Repair Instructions:
 1. Ensure `def execute(**kwargs)` handles empty or missing kwargs with safe defaults.
 2. If using `matplotlib`, ensure `import matplotlib; matplotlib.use('Agg')` is placed before `pyplot`.
 3. If making HTTP requests, use `requests` with `timeout=8, verify=False` or `urllib` with `ssl._create_unverified_context()`. NEVER assume custom library exceptions or unset API keys (like GIPHY_API_KEY).
-4. If downloading an image or media fails or has SSL errors, NEVER just return an error dictionary. Generate the image natively using PIL (Pillow) or matplotlib and save to `BrahmaAI/deliverables/<name>.png`.
+4. If downloading an image or media fails or has SSL errors, NEVER just return an error dictionary. Generate the image natively using PIL (Pillow) or matplotlib and save to `NexusCore/deliverables/<name>.png`.
 5. Return a clean deliverable dictionary with `'image_path'`, `'title'`, `'summary'` if visual, or clean structured output.
 6. The test runner checks that the returned value does NOT contain an `'error'` key. Do not return `{{'error': '...'}}`. If an error occurs, provide a graceful fallback result.
 7. Return ONLY a JSON object:

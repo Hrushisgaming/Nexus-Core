@@ -18,7 +18,7 @@ def _get_app_data_dir() -> Path:
     if platform.system() == "Windows":
         base = os.environ.get("LOCALAPPDATA")
         if base:
-            p = Path(base) / "BrahmaAI" / "PlaywrightProfile"
+            p = Path(base) / "NexusCore" / "PlaywrightProfile"
             p.mkdir(parents=True, exist_ok=True)
             return p
     home = Path.home() / ".brahma_ai" / "playwright_profile"

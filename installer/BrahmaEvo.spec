@@ -69,7 +69,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='BrahmaEvo',
+    name='NexusCore',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -80,7 +80,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(cwd, 'assets/Brahma_Lite_Logo.ico') if os.path.exists(os.path.join(cwd, 'assets/Brahma_Lite_Logo.ico')) else None,
+    icon=os.path.join(cwd, 'assets/nexus_lite_logo.ico') if os.path.exists(os.path.join(cwd, 'assets/nexus_lite_logo.ico')) else None,
     version=os.path.join(cwd, 'version.txt') if os.path.exists(os.path.join(cwd, 'version.txt')) else None
 )
 
@@ -91,5 +91,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='BrahmaEvo'
+    name='NexusCore'
 )

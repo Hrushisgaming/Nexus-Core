@@ -78,9 +78,9 @@ CONFIG_DIR = get_user_data_dir() / "config"
 API_FILE   = CONFIG_DIR / "api_keys.json"
 APP_SETTINGS_FILE = CONFIG_DIR / "app_settings.json"
 DISCORD_SETTINGS_FILE = CONFIG_DIR / "discord_bot.json"
-LOGO_FILE  = BASE_DIR / "assets" / "Brahma_Lite_Logo.png"
-LOGO_ICO   = BASE_DIR / "assets" / "Brahma_Lite_Logo.ico"
-BACKGROUND_IMAGE_FILE = BASE_DIR / "assets" / "background.png"
+LOGO_FILE  = BASE_DIR / "assets" / "nexus_core_logo.png"
+LOGO_ICO   = BASE_DIR / "assets" / "nexus_lite_logo.ico"
+BACKGROUND_IMAGE_FILE = BASE_DIR / "assets" / "nexus_background.png"
 MODEL_DOWNLOAD_URL = "https://storage.googleapis.com/mediapipe-assets/hand_landmarker.task"
 
 _DEFAULT_W, _DEFAULT_H = 980, 700
@@ -92,30 +92,47 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    BG        = "#020305"
-    PANEL     = "#07080b"
-    PANEL2    = "#0d0f14"
-    BORDER    = "rgba(0, 229, 255, 0.16)"
-    BORDER_B  = "rgba(0, 229, 255, 0.35)"
-    BORDER_A  = "rgba(255, 255, 255, 0.20)"
-    PRI       = "#ffffff"
-    PRI_DIM   = "#e2e8f0"
-    PRI_GHO   = "rgba(255, 255, 255, 0.12)"
-    ACC       = "#00e5ff"
-    ACC2      = "#80ffff"
-    GREEN     = "#37ff5f"
-    GREEN_D   = "#1dcc43"
-    RED       = "#ff3b30"
-    MUTED_C   = "#00e5ff"
-    TEXT      = "#f4f6f8"
-    TEXT_DIM  = "#8e949d"
-    TEXT_MED  = "#c5cad2"
-    WHITE     = "#ffffff"
-    DARK      = "#000000"
-    BAR_BG    = "#222222"
-    ICE       = "#00e5ff"
-    ICE_DIM   = "#0099cc"
-    ICE_GHO   = "rgba(0, 229, 255, 0.15)"
+    # Nexus Core theme palette
+    # Background: near-black with slight purple tint (deep space)
+    BG        = "#0B0A14"
+    # Surface: sidebar, cards, input bar
+    PANEL     = "#141224"
+    # Surface raised: hover states, popovers
+    PANEL2    = "#1C1A33"
+    # Slate purple: gradient start, selected items
+    SLATE     = "#2B2347"
+    # Teal: gradient end, secondary accent
+    TEAL      = "#0E5560"
+    # Bright teal: primary accent, links, active states
+    ACC       = "#2FD1D9"
+    # Secondary accent (dimmed bright teal)
+    ACC2      = "#1FA3A8"
+    # Ice blue: glow, core, key icons
+    ICE       = "#D9F3FB"
+    ICE_DIM   = "#A8CBD9"
+    ICE_GHO   = "rgba(217, 243, 251, 0.15)"
+    # Borders: faint blue-gray thin borders
+    BORDER    = "rgba(43, 35, 71, 0.5)"
+    BORDER_B  = "rgba(43, 35, 71, 0.8)"
+    BORDER_A  = "rgba(217, 243, 251, 0.3)"
+    # Text
+    PRI       = "#E8EEF5"
+    PRI_DIM   = "#8A93A6"
+    PRI_GHO   = "rgba(232, 238, 245, 0.12)"
+    TEXT      = "#E8EEF5"
+    TEXT_DIM  = "#8A93A6"
+    TEXT_MED  = "#B8C4D0"
+    # Status colors
+    GREEN     = "#2FD1D9"
+    GREEN_D   = "#1FA3A8"
+    RED       = "#D97A4B"
+    MUTED_C   = "#2FD1D9"
+    WHITE     = "#E8EEF5"
+    DARK      = "#0B0A14"
+    BAR_BG    = "#141224"
+    # Gradient string for brand moments
+    GRADIENT  = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2B2347, stop:1 #0E5560)"
+    GRADIENT_BRIGHT = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2FD1D9, stop:1 #0E5560)"
     _listeners: list = []
 
     @classmethod
@@ -184,21 +201,57 @@ try:
 except Exception:
     pass
 
-# Patch setStyleSheet to dynamically replace hardcoded gold colors with active white and ice theme
+# Patch setStyleSheet to dynamically replace legacy colors with Nexus Core theme
 _old_setStyleSheet = QWidget.setStyleSheet
 def _new_setStyleSheet(self, style):
     if style:
-        style = style.replace("#00e5ff", getattr(C, "ACC", "#00e5ff"))
-        style = style.replace("#00e5ff", getattr(C, "ACC", "#00e5ff"))
-        style = style.replace("#00e5ff", getattr(C, "ACC", "#00e5ff"))
-        style = style.replace("#ffd700", getattr(C, "ACC", "#00e5ff"))
-        style = style.replace("#d4af37", getattr(C, "ACC", "#00e5ff"))
-        style = style.replace("#80ffff", getattr(C, "ACC2", "#80ffff"))
-        style = style.replace("#00b4d8", getattr(C, "ACC", "#00e5ff"))
-        style = style.replace("255, 179, 0", "0, 229, 255")
-        style = style.replace("255,179,0", "0,229,255")
-        style = style.replace("255, 190, 26", "0, 229, 255")
-        style = style.replace("244, 180, 0", "0, 229, 255")
+        # Legacy cyan/gold -> Nexus bright teal
+        style = style.replace("#00e5ff", getattr(C, "ACC", "#2FD1D9"))
+        style = style.replace("#80ffff", getattr(C, "ACC2", "#1FA3A8"))
+        style = style.replace("#ffd700", getattr(C, "ACC", "#2FD1D9"))
+        style = style.replace("#d4af37", getattr(C, "ACC", "#2FD1D9"))
+        style = style.replace("#00b4d8", getattr(C, "ACC", "#2FD1D9"))
+        style = style.replace("#0099cc", getattr(C, "ICE_DIM", "#A8CBD9"))
+        # Legacy rgb gold -> bright teal
+        style = style.replace("255, 179, 0", "47, 209, 217")
+        style = style.replace("255,179,0", "47,209,217")
+        style = style.replace("255, 190, 26", "47, 209, 217")
+        style = style.replace("244, 180, 0", "47, 209, 217")
+        # Legacy dark backgrounds -> Nexus deep space
+        style = style.replace("#020305", getattr(C, "BG", "#0B0A14"))
+        style = style.replace("#07080b", getattr(C, "PANEL", "#141224"))
+        style = style.replace("#0d0f14", getattr(C, "PANEL2", "#1C1A33"))
+        style = style.replace("#222222", getattr(C, "BAR_BG", "#141224"))
+        # Legacy white text -> Nexus primary text
+        style = style.replace("#ffffff", getattr(C, "PRI", "#E8EEF5"))
+        style = style.replace("#f4f6f8", getattr(C, "PRI", "#E8EEF5"))
+        style = style.replace("#e2e8f0", getattr(C, "PRI_DIM", "#8A93A6"))
+        style = style.replace("#8e949d", getattr(C, "TEXT_DIM", "#8A93A6"))
+        style = style.replace("#c5cad2", getattr(C, "TEXT_MED", "#B8C4D0"))
+        # Legacy red -> Nexus warm amber (error)
+        style = style.replace("#ff3b30", getattr(C, "RED", "#D97A4B"))
+        style = style.replace("#ff5555", getattr(C, "RED", "#D97A4B"))
+        style = style.replace("#ff6b6b", getattr(C, "RED", "#D97A4B"))
+        # Legacy green -> Nexus bright teal
+        style = style.replace("#37ff5f", getattr(C, "GREEN", "#2FD1D9"))
+        style = style.replace("#1dcc43", getattr(C, "GREEN_D", "#1FA3A8"))
+        # Legacy borders -> Nexus slate/ice
+        style = style.replace("rgba(0, 229, 255, 0.16)", getattr(C, "BORDER", "rgba(43, 35, 71, 0.5)"))
+        style = style.replace("rgba(0, 229, 255, 0.35)", getattr(C, "BORDER_B", "rgba(43, 35, 71, 0.8)"))
+        style = style.replace("rgba(255, 255, 255, 0.20)", getattr(C, "BORDER_A", "rgba(217, 243, 251, 0.3)"))
+        style = style.replace("rgba(0, 229, 255, 0.15)", getattr(C, "ICE_GHO", "rgba(217, 243, 251, 0.15)"))
+        style = style.replace("rgba(0, 229, 255, 0.05)", "rgba(47, 209, 217, 0.05)")
+        style = style.replace("rgba(0, 229, 255, 0.08)", "rgba(47, 209, 217, 0.08)")
+        style = style.replace("rgba(255, 255, 255, 0.03)", "rgba(28, 26, 51, 0.7)")
+        style = style.replace("rgba(255, 255, 255, 0.06)", "rgba(43, 35, 71, 0.4)")
+        style = style.replace("rgba(255, 255, 255, 0.05)", "rgba(43, 35, 71, 0.5)")
+        style = style.replace("rgba(255, 60, 60, 0.08)", "rgba(217, 122, 75, 0.08)")
+        style = style.replace("rgba(255, 60, 60, 0.2)", "rgba(217, 122, 75, 0.2)")
+        style = style.replace("rgba(55,255,95,20)", "rgba(47, 209, 217, 0.2)")
+        style = style.replace("rgba(0, 229, 255,28)", "rgba(47, 209, 217, 0.28)")
+        style = style.replace("rgba(10, 12, 18, 250)", "rgba(11, 10, 20, 250)")
+        style = style.replace("rgba(0, 0, 0, 0.45)", "rgba(11, 10, 20, 0.45)")
+        style = style.replace("rgba(0, 0, 0, 0.4)", "rgba(11, 10, 20, 0.4)")
     _old_setStyleSheet(self, style)
 QWidget.setStyleSheet = _new_setStyleSheet
 
@@ -469,7 +522,7 @@ class RemoteKeyOverlay(QWidget):
         title.setStyleSheet("color: #ffffff; background: transparent; border: none;")
         lay.addWidget(title)
 
-        subtitle = QLabel("Scan the QR code with your phone to remotely control Brahma Evo.")
+        subtitle = QLabel("Scan the QR code with your phone to remotely control Nexus Core.")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setWordWrap(True)
         subtitle.setFont(QFont("Segoe UI", 9))
@@ -625,7 +678,7 @@ class RemoteKeyOverlay(QWidget):
         self._qr_label.setText("OK")
         self._qr_label.setFont(QFont("Segoe UI", 34, QFont.Weight.Black))
         self._qr_label.setStyleSheet("color: #37ff5f; background: #041006; border-radius: 12px;")
-        self._timer_lbl.setText("Phone connected. Brahma Evo remote is ready.")
+        self._timer_lbl.setText("Phone connected. Nexus Core remote is ready.")
 
     def _refresh_key(self):
         if not self._on_new_key:
@@ -2042,7 +2095,7 @@ class GestureCameraPreview(QFrame):
             model_path.parent.mkdir(parents=True, exist_ok=True)
             req = urllib.request.Request(
                 MODEL_DOWNLOAD_URL,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BrahmaAI/1.0"}
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NexusCore/1.0"}
             )
             with urllib.request.urlopen(req, timeout=60) as response:
                 with open(temp_path, "wb") as out_file:
@@ -2580,7 +2633,7 @@ class TaskCard(QFrame):
         self._command_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         lay.addWidget(self._command_lbl)
 
-        self._plan_lbl = QLabel("Plan: Brahma Evo will generate a task plan after you send a command.")
+        self._plan_lbl = QLabel("Plan: Nexus Core will generate a task plan after you send a command.")
         self._plan_lbl.setWordWrap(True)
         self._plan_lbl.setFont(QFont("Segoe UI", 9))
         self._plan_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
@@ -2632,7 +2685,7 @@ class TaskCard(QFrame):
         self._title.setText(title)
         self._status_lbl.setText(desc)
         self._output_lbl.setText(desc)
-        self._plan_lbl.setText("Plan: Brahma Evo will generate a task plan after you send a command.")
+        self._plan_lbl.setText("Plan: Nexus Core will generate a task plan after you send a command.")
         self._command_lbl.setText("Command: waiting for input")
         self._pct.setText(f"{percent}%")
         self._bar.setValue(max(0, min(100, percent)))
@@ -2701,7 +2754,7 @@ class TaskCard(QFrame):
         self._workspace_locked = False
         self._title.setText("Ready")
         self._command_lbl.setText("Command: waiting for input")
-        self._plan_lbl.setText("Plan: Brahma Evo will generate a task plan after you send a command.")
+        self._plan_lbl.setText("Plan: Nexus Core will generate a task plan after you send a command.")
         self._status_lbl.setText("Status: Idle")
         self._output_lbl.setText("Output: Ready to work.")
         self._pct.setText("0%")
@@ -3102,7 +3155,7 @@ class ChatBubble(QFrame):
         if role == "assistant":
             avatar = _framed_logo(24, 24, bg="rgba(12,14,20,245)", border="rgba(0, 229, 255,0.50)", radius=12, inset=4)
             head.addWidget(avatar)
-            name_lbl = QLabel(name or "Brahma Evo")
+            name_lbl = QLabel(name or "Nexus Core")
             name_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             name_lbl.setStyleSheet("color: #ffffff; background: transparent;")
             head.addWidget(name_lbl)
@@ -3320,7 +3373,7 @@ class ConversationFeed(QScrollArea):
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(14, 12, 14, 12)
         lay.setSpacing(10)
-        title = QLabel("Try asking Brahma Evo")
+        title = QLabel("Try asking Nexus Core")
         title.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         title.setStyleSheet("color: #ffffff; background: transparent;")
         subtitle = QLabel("Create a presentation, analyze a screen, build a website, organize files, or run browser automation.")
@@ -3433,10 +3486,10 @@ class ConversationFeed(QScrollArea):
             attachments = msg.get("attachments") or []
             name = {
                 "user": "You",
-                "assistant": "Brahma Evo",
+                "assistant": "Nexus Core",
                 "system": "System",
                 "file": "Files",
-            }.get(role, "Brahma Evo")
+            }.get(role, "Nexus Core")
             self.add_message(role, name, content, stamp, attachments=attachments, animate=False)
         self._sync_empty_state()
         QTimer.singleShot(0, self.scroll_to_bottom)
@@ -3792,7 +3845,7 @@ class WorkspaceSidebar(QWidget):
         input_row.addWidget(self._attach_btn)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Message Brahma Evo...")
+        self._input.setPlaceholderText("Message Nexus Core...")
         self._input.setFont(QFont("Segoe UI", 10))
         self._input.setStyleSheet(
             f"QLineEdit {{ background: transparent; color: {C.WHITE}; border: none; padding: 2px 4px; selection-background-color: rgba(0, 229, 255, 0.25); }}"
@@ -4155,7 +4208,7 @@ class WorkspaceSidebar(QWidget):
             memories = self._store.search_memories(text)
             self._show_memory_banner(memories)
         elif role == "assistant":
-            self._feed.add_message("assistant", "Brahma Evo", text, _fmt_time_stamp(stamp), attachments=attachments, animate=True)
+            self._feed.add_message("assistant", "Nexus Core", text, _fmt_time_stamp(stamp), attachments=attachments, animate=True)
             self._hide_memory_banner()
         elif role == "system":
             self._feed.add_message("system", "System", text, _fmt_time_stamp(stamp), attachments=attachments, event_type=text)
@@ -4381,7 +4434,7 @@ class InlineChatWorkspace(QFrame):
         input_row.addWidget(self._attach_btn)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Message Brahma Evo...")
+        self._input.setPlaceholderText("Message Nexus Core...")
         self._input.setFont(QFont("Segoe UI", 10))
         self._input.setStyleSheet(
             f"QLineEdit {{ background: transparent; color: {C.WHITE}; border: none; padding: 0 4px; selection-background-color: rgba(0, 229, 255, 0.25); }}"
@@ -4415,7 +4468,7 @@ class InlineChatWorkspace(QFrame):
 
         footer = QHBoxLayout()
         footer.setContentsMargins(4, 2, 4, 2)
-        self._footer_status = QLabel("Brahma Evo is ready")
+        self._footer_status = QLabel("Nexus Core is ready")
         self._footer_status.setFont(QFont("Segoe UI", 8))
         self._footer_status.setStyleSheet("color: rgba(255, 255, 255, 0.55); background: transparent;")
         footer.addWidget(self._footer_status)
@@ -4432,12 +4485,12 @@ class InlineChatWorkspace(QFrame):
         if hasattr(self, "_footer_status") and self._footer_status:
             status_text = {
                 "listening": "Listening to your voice...",
-                "speaking": "Brahma Evo is speaking...",
+                "speaking": "Nexus Core is speaking...",
                 "thinking": "Synthesizing response...",
                 "executing": "Executing task...",
                 "working": "Processing request...",
                 "muted": "Microphone muted",
-            }.get((state or "").lower(), "Brahma Evo is ready")
+            }.get((state or "").lower(), "Nexus Core is ready")
             self._footer_status.setText(status_text)
 
     def _build_history_tab(self) -> QWidget:
@@ -4562,7 +4615,7 @@ class InlineChatWorkspace(QFrame):
             self._show_memories(self._store.search_memories(text))
         elif role == "assistant":
             self._store.record_chat("assistant", text, conversation_id=convo_id, attachments=attachments)
-            self._feed.add_message("assistant", "Brahma Evo", text, stamp, attachments=attachments)
+            self._feed.add_message("assistant", "Nexus Core", text, stamp, attachments=attachments)
             self._hide_memories()
         elif role == "system":
             self._store.record_chat("system", text, conversation_id=convo_id, attachments=attachments)
@@ -4732,8 +4785,8 @@ class LauncherControlPanel(QDialog):
         self._startup_btn = mk_btn("Show Workspace On Startup", checkable=True, checked=bool(startup_workspace))
         self._show_icon_btn = mk_btn("Show Floating Icon")
         self._hide_icon_btn = mk_btn("Hide Floating Icon")
-        self._restart_btn = mk_btn("Restart Brahma Evo")
-        self._quit_btn = mk_btn("Quit Brahma Evo")
+        self._restart_btn = mk_btn("Restart Nexus Core")
+        self._quit_btn = mk_btn("Quit Nexus Core")
         self._open_app_btn = mk_btn("Open App")
         self._open_dev_btn = mk_btn("Open Developer Mode")
 
@@ -4776,7 +4829,7 @@ class LauncherControlPanel(QDialog):
         flay = QVBoxLayout(frame)
         flay.setContentsMargins(18, 16, 18, 16)
         flay.setSpacing(10)
-        lbl = QLabel("Hide Brahma Evo icon?")
+        lbl = QLabel("Hide Nexus Core icon?")
         lbl.setStyleSheet("color: #FFFFFF; background: transparent; font: 700 11pt 'Segoe UI';")
         sub = QLabel("You can restore it from the system tray.")
         sub.setStyleSheet("color: rgba(255,255,255,0.65); background: transparent;")
@@ -5656,9 +5709,9 @@ class LogWidget(QScrollArea):
         if tl.startswith("you:"):
             return "user", "You", raw[4:].strip()
         if tl.startswith("brahma evo:"):
-            return "assistant", "Brahma Evo", raw[len("Brahma Evo:"):].strip()
+            return "assistant", "Nexus Core", raw[len("Nexus Core:"):].strip()
         if tl.startswith("brahma evo:"):
-            return "assistant", "Brahma Evo", raw[len("Brahma Evo:"):].strip()
+            return "assistant", "Nexus Core", raw[len("Nexus Core:"):].strip()
         if tl.startswith("file:"):
             return "file", "File", raw[5:].strip()
         if tl.startswith("err:"):
@@ -5763,7 +5816,7 @@ class FileDropZone(QWidget):
 
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select a file for Brahma Evo", str(Path.home()),
+            self, "Select a file for Nexus Core", str(Path.home()),
             "All Files (*.*);;"
             "Images (*.jpg *.jpeg *.png *.gif *.webp *.bmp *.svg);;"
             "Documents (*.pdf *.docx *.txt *.md *.pptx);;"
@@ -6080,7 +6133,7 @@ class SetupOverlay(QWidget):
 
     def _save_identity_and_next(self):
         identity.set_assistant_name(self._inp_ast.text().strip() or "Brahma")
-        identity.set_application_name(self._inp_app.text().strip() or "Brahma Evo")
+        identity.set_application_name(self._inp_app.text().strip() or "Nexus Core")
         self._stack.setCurrentIndex(2)
 
     # ── STAGE 1.2: Owner Profile ────────────────────────────────
@@ -6453,10 +6506,10 @@ class SetupOverlay(QWidget):
         intro_lay.setSpacing(12)
 
         self._intro_lines = []
-        for txt in ["Identity confirmed.", "Hello.", "I'm Brahma Evo.", "Ready whenever you are."]:
+        for txt in ["Identity confirmed.", "Hello.", "I'm Nexus Core.", "Ready whenever you are."]:
             lbl = QLabel(txt)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            if txt == "I'm Brahma Evo.":
+            if txt == "I'm Nexus Core.":
                 lbl.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
                 lbl.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
             else:
@@ -6468,7 +6521,7 @@ class SetupOverlay(QWidget):
 
         intro_lay.addSpacing(20)
 
-        self._launch_btn = QPushButton("Launch Brahma Evo →")
+        self._launch_btn = QPushButton("Launch Nexus Core →")
         self._launch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._launch_btn.setFixedSize(220, 48)
         self._launch_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
@@ -6815,7 +6868,7 @@ class SetupOverlay(QWidget):
         self._show_intro_final()
 
     def _show_intro_final(self):
-        """Show the Brahma Evo intro sequence."""
+        """Show the Nexus Core intro sequence."""
         page = self._stack.widget(6)
         lay = page.layout()
         self._intro_widget.setParent(None)
@@ -7052,7 +7105,7 @@ class CommandBar(QWidget):
         lay.setContentsMargins(6, 4, 6, 4)
         lay.setSpacing(6)
 
-        # Brahma Evo mini logo
+        # Nexus Core mini logo
         logo_frame = QFrame()
         logo_frame.setFixedSize(32, 32)
         logo_frame.setStyleSheet("""
@@ -7073,7 +7126,7 @@ class CommandBar(QWidget):
 
         # Input field
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Tell Brahma Evo what to do...")
+        self._input.setPlaceholderText("Tell Nexus Core what to do...")
         self._input.setFont(QFont("Segoe UI", 9))
         self._input.setFixedHeight(32)
         self._input.setStyleSheet(f"""
@@ -7640,7 +7693,7 @@ class DeveloperModeDialog(QDialog):
         title.setStyleSheet(f"color: {C.PRI};")
         root.addWidget(title)
 
-        desc = QLabel("Pick a workspace folder Brahma Evo should use when building websites or other workspace-based tasks.")
+        desc = QLabel("Pick a workspace folder Nexus Core should use when building websites or other workspace-based tasks.")
         desc.setWordWrap(True)
         desc.setStyleSheet(f"color: {C.TEXT_DIM};")
         root.addWidget(desc)
@@ -8957,7 +9010,7 @@ class MeetingOverlay(QWidget):
         self._speech.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         lay.addWidget(self._speech)
 
-        self._answer = QLabel("Brahma Evo will show the live answer here.")
+        self._answer = QLabel("Nexus Core will show the live answer here.")
         self._answer.setWordWrap(True)
         self._answer.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self._answer.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
@@ -9287,7 +9340,7 @@ class FloatingLauncher(QWidget):
 
     def _apply_state_style(self):
         self.setToolTip(
-            f"Brahma Evo ({self._status_line})\n"
+            f"Nexus Core ({self._status_line})\n"
             "• Single-click: Chat Workspace\n"
             "• Double-click: Open Full App\n"
             "• Drag: Move (Spring Snap)"
@@ -9321,7 +9374,7 @@ class FloatingLauncher(QWidget):
             }}
         """)
 
-        open_full = QAction("Open Brahma Evo (Full App)", self)
+        open_full = QAction("Open Nexus Core (Full App)", self)
         open_full.triggered.connect(lambda: self.action_requested.emit("open_app"))
         menu.addAction(open_full)
 
@@ -9940,14 +9993,14 @@ class MainWindow(QMainWindow):
 
     def _startup_enabled(self) -> bool:
         from core.platform_api import platform_api
-        return platform_api.is_startup_enabled("Brahma Evo")
+        return platform_api.is_startup_enabled("Nexus Core")
 
     def _set_startup_enabled(self, enabled: bool) -> bool:
         from core.platform_api import platform_api
         try:
             return platform_api.set_startup(
                 enabled,
-                app_name="Brahma Evo",
+                app_name="Nexus Core",
                 target_path=_startup_run_value().strip('"').split(" ")[0] if _startup_run_value() else None,
             )
         except Exception as e:
@@ -10236,7 +10289,7 @@ class MainWindow(QMainWindow):
 
     def _browse_attachment(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Attach a file to Brahma Evo", str(Path.home()),
+            self, "Attach a file to Nexus Core", str(Path.home()),
             "All Files (*.*);;"
             "Images (*.jpg *.jpeg *.png *.gif *.webp *.bmp *.svg);;"
             "Documents (*.pdf *.docx *.txt *.md *.pptx);;"
@@ -10623,7 +10676,7 @@ class MainWindow(QMainWindow):
             self._call_screening_dialog.close()
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("Brahma Evo Call Screening")
+        dialog.setWindowTitle("Nexus Core Call Screening")
         dialog.setModal(False)
         dialog.setMinimumWidth(380)
         layout = QVBoxLayout(dialog)
@@ -10767,7 +10820,7 @@ class MainWindow(QMainWindow):
     def notify_phone_connected(self):
         if self._remote_overlay is not None:
             self._remote_overlay.mark_connected()
-        self._log_sig.emit("SYS: Phone connected to Brahma Evo remote.")
+        self._log_sig.emit("SYS: Phone connected to Nexus Core remote.")
 
     def mouseMoveEvent(self, event):
         super().mouseMoveEvent(event)
@@ -10873,7 +10926,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, "_desktop_sub_text") and self._desktop_sub_text:
                 self._desktop_sub_text.setText("Listening for voice commands... (say 'Open Chrome' or ask anything)")
             if hasattr(self, "_input") and self._input and not self._input.hasFocus() and not self._input.text():
-                self._input.setPlaceholderText("Ask Brahma Evo anything... (or say \"Open Chrome\")")
+                self._input.setPlaceholderText("Ask Nexus Core anything... (or say \"Open Chrome\")")
         except Exception:
             pass
 
@@ -10961,7 +11014,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_input"):
             ph_map = {
                 "LISTENING": "Listening... (or type your command)",
-                "SPEAKING": "Brahma Evo is responding...",
+                "SPEAKING": "Nexus Core is responding...",
                 "THINKING": "Brahma is thinking...",
                 "PROCESSING": "Processing request...",
                 "EXECUTING": "Executing action...",
@@ -10969,7 +11022,7 @@ class MainWindow(QMainWindow):
                 "MUTED": "Microphone muted — type command here...",
                 "SCANNING": "Scanning display...",
             }
-            self._input.setPlaceholderText(ph_map.get(state, "Ask Brahma Evo anything..."))
+            self._input.setPlaceholderText(ph_map.get(state, "Ask Nexus Core anything..."))
 
         # Update chat workspace footer status
         if hasattr(self, "_inline_workspace") and hasattr(self._inline_workspace, "_footer_status"):
@@ -10983,7 +11036,7 @@ class MainWindow(QMainWindow):
                 "MUTED": "● Voice input muted",
                 "SCANNING": "● Vision system active",
             }
-            self._inline_workspace._footer_status.setText(foot_map.get(state, "Brahma Evo is online"))
+            self._inline_workspace._footer_status.setText(foot_map.get(state, "Nexus Core is online"))
 
         if hasattr(self, "_status_chip"):
             chip_text = {
@@ -11009,13 +11062,13 @@ class MainWindow(QMainWindow):
             )
         if hasattr(self, "_task_card"):
             if state in ("THINKING", "PROCESSING", "EXECUTING", "WORKING"):
-                self._task_card.set_task("Working on it...", "Brahma Evo is processing your request.", 72)
+                self._task_card.set_task("Working on it...", "Nexus Core is processing your request.", 72)
             elif state == "SPEAKING":
-                self._task_card.set_task("Responding...", "Brahma Evo is speaking now.", 100)
+                self._task_card.set_task("Responding...", "Nexus Core is speaking now.", 100)
             elif state == "MUTED":
                 self._task_card.set_task("Microphone muted", "Voice input is paused.", 0)
             else:
-                self._task_card.set_task("Ready", "Brahma Evo is idle and ready.", 0)
+                self._task_card.set_task("Ready", "Nexus Core is idle and ready.", 0)
         if hasattr(self, "_result_card"):
             if state in ("THINKING", "PROCESSING", "EXECUTING", "WORKING"):
                 self._result_card.set_body("Action pending")
@@ -11267,7 +11320,7 @@ class MainWindow(QMainWindow):
                 self._floating_gesture_card.show()
             self.showNormal()
             self._apply_state("LISTENING")
-            self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. Brahma Evo online.")
+            self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. Nexus Core online.")
         except Exception as e:
             self._log.append_log(f"ERR: setup failed: {e}")
             traceback.print_exc()
@@ -11526,7 +11579,7 @@ class MainWindow(QMainWindow):
         row.setSpacing(12)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Ask Brahma Evo anything...")
+        self._input.setPlaceholderText("Ask Nexus Core anything...")
         self._input.setFont(QFont("Segoe UI", 10))
         self._input.setFixedHeight(50)
         self._input.setStyleSheet(f"""
@@ -11690,7 +11743,7 @@ class SystemConnectivitySidebar(QFrame):
         self._quick_actions = QVBoxLayout()
         self._quick_actions.setSpacing(10)
         lay.addLayout(self._quick_actions)
-        self._mk_quick_action("Γå╗ Restart Brahma Evo", QStyle.StandardPixmap.SP_BrowserReload, self._restart)
+        self._mk_quick_action("Γå╗ Restart Nexus Core", QStyle.StandardPixmap.SP_BrowserReload, self._restart)
         self._mk_quick_action("Γƒ│ Reload Configuration", QStyle.StandardPixmap.SP_BrowserReload, self._reload)
         self._mk_quick_action("≡ƒôü Open Data Folder", QStyle.StandardPixmap.SP_DirOpenIcon, self._open_data_folder)
         self._mk_quick_action("≡ƒôä View Logs", QStyle.StandardPixmap.SP_FileDialogDetailedView, self._view_logs)
@@ -11801,7 +11854,7 @@ class SettingsHubPage(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
 
-        subtitle = QLabel("Select a section below to configure your Brahma Evo environment.")
+        subtitle = QLabel("Select a section below to configure your Nexus Core environment.")
         subtitle.setFont(QFont("Segoe UI", 12))
         subtitle.setStyleSheet(f"color: {C.TEXT_DIM};")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -11812,7 +11865,7 @@ class SettingsHubPage(QWidget):
         cards_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         cards_data = [
-            ("Brahma Evo Home", "Configure smart home integrations", "🏠", 1),
+            ("Nexus Core Home", "Configure smart home integrations", "🏠", 1),
             ("Devices", "Manage and control connected hardware", "🔌", 2),
             ("System & Connect", "Configure providers and api preferences", "⚙️", 3)
         ]
@@ -12207,7 +12260,7 @@ class SystemConnectivityPage(QWidget):
 
 
         # Instagram Connect
-        ig_card = self._card("Instagram Connect", "Connect your personal Instagram account to allow Brahma Evo to manage your DMs.")
+        ig_card = self._card("Instagram Connect", "Connect your personal Instagram account to allow Nexus Core to manage your DMs.")
         ig_lay = ig_card.layout()
 
         self._ig_status_lbl = QLabel("Status: Checking...")
@@ -12359,7 +12412,7 @@ class SystemConnectivityPage(QWidget):
         app_row = QHBoxLayout()
         app_row.addWidget(QLabel("Application Name"))
         self._set_app_name = QLineEdit(identity.get_application_name())
-        self._set_app_name.textChanged.connect(lambda t: identity.set_application_name(t.strip() or "Brahma Evo"))
+        self._set_app_name.textChanged.connect(lambda t: identity.set_application_name(t.strip() or "Nexus Core"))
         app_row.addWidget(self._set_app_name)
         ilay.addLayout(app_row)
 
@@ -12538,7 +12591,7 @@ class SystemConnectivityPage(QWidget):
         lay.addWidget(card)
 
         # Mobile connect
-        mobile = self._card("Mobile Connect", "Connect your phone and control Brahma Evo remotely.")
+        mobile = self._card("Mobile Connect", "Connect your phone and control Nexus Core remotely.")
         ml = mobile.layout()
         self._mobile_status = QLabel("Connection Status: Ready")
         self._mobile_phone = QLabel("Phone Name: Not connected")
@@ -12577,9 +12630,9 @@ class SystemConnectivityPage(QWidget):
         lay.addWidget(attention)
 
         # Startup
-        startup = self._card("Startup", "Use Brahma Evo with Windows startup preferences.")
+        startup = self._card("Startup", "Use Nexus Core with Windows startup preferences.")
         sl = startup.layout()
-        self._startup_launch_btn = self._mk_toggle("Launch Brahma Evo when Windows starts", bool(self._load_app_settings().get("show_workspace_on_startup", False)), self._toggle_startup_from_page)
+        self._startup_launch_btn = self._mk_toggle("Launch Nexus Core when Windows starts", bool(self._load_app_settings().get("show_workspace_on_startup", False)), self._toggle_startup_from_page)
         self._startup_minimized_btn = self._mk_toggle("Launch Minimized", bool(self._load_app_settings().get("launch_minimized", False)), self._toggle_launch_minimized)
         self._startup_updates_btn = self._mk_toggle("Check for updates on startup", bool(self._load_app_settings().get("check_updates_on_startup", True)), self._toggle_update_check)
         sl.addWidget(self._startup_launch_btn)
@@ -12588,7 +12641,7 @@ class SystemConnectivityPage(QWidget):
         lay.addWidget(startup)
 
         # Shortcuts & Pinning
-        shortcuts = self._card("Shortcuts & Pinning", "Create shortcuts and pin Brahma Evo to your Windows system.")
+        shortcuts = self._card("Shortcuts & Pinning", "Create shortcuts and pin Nexus Core to your Windows system.")
         shl = shortcuts.layout()
         
         btn_row = QHBoxLayout()
@@ -12605,7 +12658,7 @@ class SystemConnectivityPage(QWidget):
         lay.addWidget(shortcuts)
 
         # App Theme
-        theme_card = self._card("App Theme", "Select the primary color theme for Brahma Evo.")
+        theme_card = self._card("App Theme", "Select the primary color theme for Nexus Core.")
         tl = theme_card.layout()
         theme_row = QHBoxLayout()
         theme_row.addWidget(QLabel("Primary Color:"))
@@ -12653,7 +12706,7 @@ class SystemConnectivityPage(QWidget):
         al.addWidget(self._preview_progress)
         lay.addWidget(anim)
         # Discord bot
-        discord = self._card("Discord Bot", "Mirror Brahma Evo between the app and your server.")
+        discord = self._card("Discord Bot", "Mirror Nexus Core between the app and your server.")
         dl = discord.layout()
         self._discord_defaults = self._load_discord_settings()
         self._discord_status = QLabel("Bot Status: Offline")
@@ -12688,7 +12741,7 @@ class SystemConnectivityPage(QWidget):
         dl.addWidget(self._discord_msg)
         lay.addWidget(discord)
 
-        about = self._card("About Brahma Evo", "Brahma Evo information only.")
+        about = self._card("About Nexus Core", "Nexus Core information only.")
         ab = about.layout()
         about_grid = QGridLayout()
         about_grid.setHorizontalSpacing(22)
@@ -13579,7 +13632,7 @@ class SystemConnectivityPage(QWidget):
             "Steps to complete:\n"
             "1. Log in to Spotify in the browser window.\n"
             "2. Click 'Agree' to grant playback permissions.\n"
-            "3. Once redirected to callback, Brahma Evo will automatically detect authorization!\n\n"
+            "3. Once redirected to callback, Nexus Core will automatically detect authorization!\n\n"
             "⚠️ Important: In developer.spotify.com/dashboard -> Your App -> Settings -> ensure 'http://127.0.0.1:8888/callback' is added to Redirect URIs."
         )
 
@@ -13858,7 +13911,7 @@ class SystemConnectivityPage(QWidget):
         box = self._card("Quick Actions", "")
         lay = box.layout()
         actions = [
-            ("Restart Brahma Evo", QStyle.StandardPixmap.SP_BrowserReload, self._restart_app),
+            ("Restart Nexus Core", QStyle.StandardPixmap.SP_BrowserReload, self._restart_app),
             ("Reload Configuration", QStyle.StandardPixmap.SP_BrowserReload, self._reload_config),
             ("Open Data Folder", QStyle.StandardPixmap.SP_DirOpenIcon, self._open_data_folder),
             ("View Logs", QStyle.StandardPixmap.SP_FileDialogDetailedView, self._view_logs),
@@ -14148,7 +14201,7 @@ class SystemConnectivityPage(QWidget):
             self._ctrl()._win._start_discord_bot()
             self._ctrl()._win._stop_discord_bot()
             self._discord_status.setText("Bot Status: Test sent")
-            self._discord_msg.setText("Connected as Brahma Evo#9649" if self._discord_token.text().strip() else "Bot Offline")
+            self._discord_msg.setText("Connected as Nexus Core#9649" if self._discord_token.text().strip() else "Bot Offline")
 
     def _restart_discord_from_page(self):
         if self._ctrl() and hasattr(self._ctrl(), "_win"):
@@ -14279,7 +14332,7 @@ class SystemConnectivityPage(QWidget):
         token = (discord.get("bot_token") or "").strip()
         if enabled and token:
             self._discord_status.setText("Bot Status: Online")
-            self._discord_msg.setText("Connected as Brahma Evo#9649")
+            self._discord_msg.setText("Connected as Nexus Core#9649")
         elif token:
             self._discord_status.setText("Bot Status: Offline")
             self._discord_msg.setText("Bot Offline")
@@ -14338,7 +14391,7 @@ class SystemConnectivityPage(QWidget):
                 desktop_dir = Path(os.path.expanduser("~")) / "Desktop"
                 
             desktop_dir.mkdir(parents=True, exist_ok=True)
-            shortcut_path = desktop_dir / "Brahma Evo - Premium.lnk"
+            shortcut_path = desktop_dir / "Nexus Core - Premium.lnk"
             
             # Base variables
             base_dir = Path(os.path.abspath("."))
@@ -14368,7 +14421,7 @@ class SystemConnectivityPage(QWidget):
                 f"$Shortcut.Arguments = '{_ps_escape(shortcut_args)}'",
                 f"$Shortcut.WorkingDirectory = '{_ps_escape(str(base_dir))}'",
                 "$Shortcut.WindowStyle = 7",
-                "$Shortcut.Description = 'Launch Brahma Evo - Premium'",
+                "$Shortcut.Description = 'Launch Nexus Core - Premium'",
                 f"if ('{_ps_escape(icon_value)}') {{ $Shortcut.IconLocation = '{_ps_escape(icon_value)},0' }}",
                 "$Shortcut.Save()",
             ])
@@ -14428,7 +14481,7 @@ class SystemConnectivityPage(QWidget):
             )
             
             if res.returncode == 0:
-                return True, "Brahma Evo has been pinned to your Taskbar!"
+                return True, "Nexus Core has been pinned to your Taskbar!"
             else:
                 return False, "Windows restricts programmatic taskbar pinning. Please right-click the 'Nexus Core - Premium.lnk' shortcut on your Desktop and select 'Pin to taskbar', or drag it directly onto your taskbar."
         except Exception as e:
@@ -14532,7 +14585,7 @@ class SmartDevicesSection(QFrame):
         empty_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_desc.setFont(QFont("Segoe UI", 8))
         empty_desc.setStyleSheet(f"color: {C.TEXT_DIM};")
-        empty_btn = QPushButton("Open Brahma Evo Home")
+        empty_btn = QPushButton("Open Nexus Core Home")
         empty_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         empty_btn.setFixedWidth(160)
         empty_btn.setStyleSheet(f"""
@@ -15773,7 +15826,7 @@ class BrahmaUI:
             }
         """)
         self._app.setQuitOnLastWindowClosed(False)
-        self._app.setApplicationDisplayName("Brahma Evo")
+        self._app.setApplicationDisplayName("Nexus Core")
         self._app.setWindowIcon(self._make_app_icon())
         try:
             current_store = workspace_store()
@@ -15830,7 +15883,7 @@ class BrahmaUI:
         except Exception:
             pass
         self._tray = QSystemTrayIcon(self._make_app_icon(), self._app)
-        self._tray.setToolTip("Brahma Evo")
+        self._tray.setToolTip("Nexus Core")
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.setContextMenu(self._build_tray_menu())
         self._tray.show()

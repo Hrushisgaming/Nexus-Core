@@ -1,6 +1,6 @@
 $WshShell = New-Object -ComObject WScript.Shell
 $DesktopPath = [Environment]::GetFolderPath('Desktop')
-$Shortcut = $WshShell.CreateShortcut((Join-Path $DesktopPath "Brahma Evo.lnk"))
+$Shortcut = $WshShell.CreateShortcut((Join-Path $DesktopPath "Nexus Core.lnk"))
 
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $PythonExe = Join-Path $RootDir ".venv\Scripts\pythonw.exe"
@@ -12,7 +12,7 @@ $Shortcut.TargetPath = $PythonExe
 $Shortcut.Arguments = ('"{0}"' -f (Join-Path $RootDir "main.py"))
 $Shortcut.WorkingDirectory = $RootDir
 $Shortcut.WindowStyle = 7
-$Shortcut.Description = 'Launch Brahma Evo'
+$Shortcut.Description = 'Launch Nexus Core'
 
 $IconPath = Join-Path $RootDir "assets\Brahma_Lite_Logo.ico"
 if (Test-Path $IconPath) {

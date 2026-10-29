@@ -18,7 +18,7 @@ def execute(**kwargs):
     on the Brahma Evo HUD screen.
     """
     try:
-        output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'BrahmaAI', 'deliverables')
+        output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'NexusCore', 'deliverables')
         os.makedirs(output_dir, exist_ok=True)
         image_path = os.path.join(output_dir, 'headphones_image.png')
 

@@ -98,7 +98,7 @@ def execute(**kwargs) -> Dict[str, Any]:
     ax.set_axisbelow(True)
 
     # Output directory
-    output_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BrahmaAI", "deliverables")
+    output_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "NexusCore", "deliverables")
     os.makedirs(output_dir, exist_ok=True)
     image_path = os.path.join(output_dir, "internet_speed_test.png")
     fig.tight_layout()

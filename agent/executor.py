@@ -60,10 +60,10 @@ def _run_skill_forge(
 
     name = str(result.get("name") or skill_name or "new_feature")
     description = str(result.get("description") or "")
-    announcement = f"⚡ [Brahma Evo] Synthesized and activated feature '{name}'. {description}".strip()
+    announcement = f"⚡ [Nexus Core] Synthesized and activated feature '{name}'. {description}".strip()
 
     if player and hasattr(player, "write_log"):
-        player.write_log(f"Brahma Evo: {announcement}")
+        player.write_log(f"Nexus Core: {announcement}")
 
     # Immediately execute the newly forged skill to satisfy the user's initial goal
     execution_output = ""
@@ -416,7 +416,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None, player: Any 
         event = {"title": p.get("caller") or "Incoming call", "app": p.get("app") or "Phone / Call"}
         return request(
             "start-call-screening",
-            "Answer this call as Brahma Evo",
+            "Answer this call as Nexus Core",
             f"Brahma will answer {event['title']} in {event['app']} and prepare a transcript and summary.",
             lambda: (start_call_proxy(event, ui=player, speak_fn=speak) and "Call screening started."),
         )
@@ -451,7 +451,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None, player: Any 
         else:
             out_str = str(run_res).strip()
         if player and hasattr(player, "write_log"):
-            player.write_log(f"Brahma Evo [{name}]:\n{out_str}")
+            player.write_log(f"Nexus Core [{name}]:\n{out_str}")
         return out_str
 
     else:
@@ -464,7 +464,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None, player: Any 
                 else:
                     out_str = str(run_res).strip()
                 if player and hasattr(player, "write_log"):
-                    player.write_log(f"Brahma Evo [{tool}]:\n{out_str}")
+                    player.write_log(f"Nexus Core [{tool}]:\n{out_str}")
                 return out_str
         except Exception as exc:
             return f"Feature '{tool}' failed: {exc}"

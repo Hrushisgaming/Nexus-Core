@@ -29,7 +29,7 @@ def test_markdown_code_block_splitting():
         "Here is a Python function:\n"
         "```python\n"
         "def hello_brahma():\n"
-        "    return 'Brahma Evo'\n"
+        "    return 'Nexus Core'\n"
         "```\n"
         "And here is PowerShell:\n"
         "```powershell\n"

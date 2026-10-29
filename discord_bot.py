@@ -181,7 +181,7 @@ class DiscordBotService:
             except Exception as exc:
                 logger.warning("Discord channel resolve failed: %s", exc)
                 return
-        prefix = "Brahma Evo" if role == "assistant" else "You" if role == "user" else "System"
+        prefix = "Nexus Core" if role == "assistant" else "You" if role == "user" else "System"
         payload = f"**{prefix}**: {text}"
         try:
             if len(payload) <= 1900:
@@ -264,7 +264,7 @@ class DiscordBotService:
                             status=discord.Status.online,
                             activity=discord.Activity(
                                 type=discord.ActivityType.listening,
-                                name="Brahma Evo commands",
+                                name="Nexus Core commands",
                             ),
                         )
                     except Exception:
@@ -304,7 +304,7 @@ class DiscordBotService:
                         if self._pending_channels:
                             self._pending_channels.pop()
                         await message.reply(
-                            "I couldn’t hand that command to Brahma Evo.",
+                            "I couldn’t hand that command to Nexus Core.",
                             mention_author=False,
                             allowed_mentions=discord.AllowedMentions.none(),
                         )
@@ -401,7 +401,7 @@ class DiscordBotService:
         gemini_key = (keys.get("gemini_api_key") or "").strip()
         openrouter_key = (keys.get("openrouter_api_key") or "").strip()
         system_prompt = (
-            "You are Brahma Evo inside Discord. You are a self-evolving AI assistant. "
+            "You are Nexus Core inside Discord. You are a self-evolving AI assistant. "
             "Be concise, accurate, and helpful. "
             "Keep replies friendly and under 250 words unless the user asks for detail."
         )

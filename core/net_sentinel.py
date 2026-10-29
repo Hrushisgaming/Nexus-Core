@@ -269,7 +269,7 @@ class NetSentinel:
             t0 = time.perf_counter()
             req = urllib.request.Request(
                 "https://speed.cloudflare.com/__down?bytes=2500000",
-                headers={"User-Agent": "BrahmaAI/NetSentinel"}
+                headers={"User-Agent": "NexusCore/NetSentinel"}
             )
             with urllib.request.urlopen(req, timeout=3.0) as resp:
                 content = resp.read()
@@ -1007,7 +1007,7 @@ class NetSentinel:
                 'MAN: "ssdp:discover"\r\n'
                 "MX: 1\r\n"
                 "ST: urn:brahma-ai:device:sentinel:1\r\n"
-                f"USER-AGENT: BrahmaAI/{hostname}\r\n\r\n"
+                f"USER-AGENT: NexusCore/{hostname}\r\n\r\n"
             ).encode("utf-8")
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as s:
                 s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
@@ -1061,7 +1061,7 @@ class NetSentinel:
                 f"http://{target_ip}:8060/keypress/Info",
                 data=b"",
                 method="POST",
-                headers={"User-Agent": "BrahmaAI"}
+                headers={"User-Agent": "NexusCore"}
             )
             with urllib.request.urlopen(req, timeout=0.8) as r:
                 if r.status in (200, 204):

@@ -103,7 +103,7 @@ class UninstallThread(QThread):
                 self.progress.emit(75)
                 localappdata = os.environ.get('LOCALAPPDATA', '')
                 if localappdata:
-                    config_dir = os.path.join(localappdata, "BrahmaAI")
+                    config_dir = os.path.join(localappdata, "NexusCore")
                     if os.path.exists(config_dir):
                         try:
                             shutil.rmtree(config_dir, ignore_errors=True)
@@ -306,7 +306,7 @@ class UninstallWizard(QWidget):
         lbl_loc.setWordWrap(True)
         ic_lay.addWidget(lbl_loc)
 
-        self.chk_remove_data = QCheckBox("Also remove user data, API keys, and cached AI models (%LOCALAPPDATA%\\BrahmaAI)")
+        self.chk_remove_data = QCheckBox("Also remove user data, API keys, and cached AI models (%LOCALAPPDATA%\\NexusCore)")
         self.chk_remove_data.setChecked(True)
         ic_lay.addWidget(self.chk_remove_data)
         lay.addWidget(info_card)

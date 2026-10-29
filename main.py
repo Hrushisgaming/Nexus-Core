@@ -239,7 +239,7 @@ def _load_system_prompt() -> str:
         base_prompt = PROMPT_PATH.read_text(encoding="utf-8")
     except Exception:
         base_prompt = (
-            "You are Brahma Evo, a calm, direct, and professional AI assistant. "
+            "You are Nexus Core, a calm, direct, and professional AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool. "
             "If the user asks to create, build, launch, or open a website, always use the selected workspace folder."
@@ -247,7 +247,7 @@ def _load_system_prompt() -> str:
         
     try:
         from core.identity import identity
-        ast_name = identity.get_assistant_name() or "Brahma Evo"
+        ast_name = identity.get_assistant_name() or "Nexus Core"
         own_name = identity.get_owner_name() or "the user"
         role = identity.get_owner_role()
         mode = identity.get_behavior_mode()
@@ -301,7 +301,7 @@ def _speak_daily_briefing(ui=None, speak=None) -> None:
         data, narrative = compile_unified_briefing()
         if ui:
             ui.show_daily_briefing(data)
-            ui.write_log(f"Brahma Evo: {narrative}")
+            ui.write_log(f"Nexus Core: {narrative}")
         (speak or speak_native)(narrative)
     except Exception as e:
         print(f"[DailyBriefing] Error: {e}")
@@ -336,7 +336,7 @@ def _gemini_text_reply(prompt: str) -> str:
         http_options={"api_version": "v1beta"},
     )
     system_prompt = (
-        "You are Brahma Evo, a concise, helpful desktop assistant. "
+        "You are Nexus Core, a concise, helpful desktop assistant. "
         "Reply naturally and briefly. Do not mention internal implementation details."
     )
     response = client.models.generate_content(
@@ -349,7 +349,7 @@ def _gemini_text_reply(prompt: str) -> str:
 
 def _ig_gemini_reply(username: str, text: str) -> str:
     system_prompt = (
-        "You are Brahma Evo, an AI personal assistant acting on behalf of your user. "
+        "You are Nexus Core, an AI personal assistant acting on behalf of your user. "
         "You have taken over their Instagram chat with the user's permission. "
         "Reply naturally, briefly, and conversationally to the incoming message. "
         "Do not sound like a bot. Keep your replies under 2 sentences."
@@ -382,7 +382,7 @@ def _ig_gemini_reply(username: str, text: str) -> str:
 
 def _clipboard_gemini_reply(text: str) -> str:
     system_prompt = (
-        "You are Brahma Evo, a witty and helpful AI assistant. "
+        "You are Nexus Core, a witty and helpful AI assistant. "
         "The user just copied the following text to their clipboard. "
         "Make a very short, interesting, or helpful 1-sentence comment or question about it. "
         "Do not offer to 'help' or ask 'how can I help'. Just make a standalone witty observation or summary."
@@ -1514,7 +1514,7 @@ TOOL_DECLARATIONS = [
         "name": "presentation_builder",
         "description": (
             "Creates editable PowerPoint presentations (.pptx) from a structured slide outline. "
-            "Brahma Evo automatically infers the best visual style from the topic, searches for a matching online template when available, "
+            "Nexus Core automatically infers the best visual style from the topic, searches for a matching online template when available, "
             "reuses cached templates, and falls back to the built-in designer if no suitable template is found. "
             "Use when the user asks for a deck, slideshow, presentation, pitch deck, or report slides."
         ),
@@ -1525,7 +1525,7 @@ TOOL_DECLARATIONS = [
                 "subtitle": {"type": "STRING", "description": "Optional subtitle or audience line"},
                 "theme": {
                     "type": "STRING",
-                    "description": "Optional presentation theme or visual direction such as neon, corporate, luxury, academic, sunset, or creative. If omitted, Brahma Evo infers the best style automatically."
+                    "description": "Optional presentation theme or visual direction such as neon, corporate, luxury, academic, sunset, or creative. If omitted, Nexus Core infers the best style automatically."
                 },
                 "outline": {
                     "type": "STRING",
@@ -1685,7 +1685,7 @@ TOOL_DECLARATIONS = [
         "description": (
             "Shuts down the assistant completely. "
         "Call this when the user expresses intent to end the conversation, "
-        "close the assistant, say goodbye, or stop Brahma Evo. "
+        "close the assistant, say goodbye, or stop Nexus Core. "
         "The user can say this in ANY language."
     ),
     "parameters": {
@@ -2637,7 +2637,7 @@ class BrahmaLive:
         if skill_goal is not None:
             if not skill_goal:
                 prompt = "What should the new skill or feature do?"
-                self.ui.write_log(f"Brahma Evo: {prompt}")
+                self.ui.write_log(f"Nexus Core: {prompt}")
                 self.speak(prompt)
                 return
 
@@ -2692,7 +2692,7 @@ class BrahmaLive:
             if not recipient:
                 self._email_step = 0
                 prompt = "Who would you like to send the email to?"
-                self.ui.write_log(f"Brahma Evo: {prompt}")
+                self.ui.write_log(f"Nexus Core: {prompt}")
                 self.speak(prompt)
                 try:
                     self.ui.update_task_workspace(
@@ -2705,7 +2705,7 @@ class BrahmaLive:
             else:
                 self._email_step = 1
                 prompt = "Which email app would you like to use? (Gmail, default mail app, etc.)"
-                self.ui.write_log(f"Brahma Evo: {prompt}")
+                self.ui.write_log(f"Nexus Core: {prompt}")
                 self.speak(prompt)
                 try:
                     self.ui.update_task_workspace(
@@ -2843,7 +2843,7 @@ class BrahmaLive:
                 vision_angle = intent_res.parameters.get("angle", "camera" if "cam" in intent_res.action else "screen")
                 workspace_title = "Webcam Inspection" if vision_angle == "camera" else "Screen Analysis"
                 status_text = "Checking camera..." if vision_angle == "camera" else "Scanning screen..."
-                output_text = "Brahma Evo is inspecting your camera..." if vision_angle == "camera" else "Brahma Evo is inspecting your screen..."
+                output_text = "Nexus Core is inspecting your camera..." if vision_angle == "camera" else "Nexus Core is inspecting your screen..."
                 
                 try:
                     self.ui.update_task_workspace(
@@ -3627,7 +3627,7 @@ class BrahmaLive:
                             out_text = str(res.get("summary") or res.get("output") or res.get("text") or res).strip()
                         else:
                             out_text = str(res).strip()
-                        self.ui.write_log(f"Brahma Evo [{skill_name}]:\n{out_text}")
+                        self.ui.write_log(f"Nexus Core [{skill_name}]:\n{out_text}")
                         if hasattr(self.ui, "finish_task_workspace"):
                             self.ui.finish_task_workspace(out_text, f"{skill_name} completed.", 100)
                         if hasattr(self.ui, "show_hud_deliverable"):
@@ -4043,7 +4043,7 @@ class BrahmaLive:
             vision_angle = "camera" if is_cam_req else "screen"
             title_text = "Webcam Inspection" if is_cam_req else "Screen Analysis"
             status_text = "Checking camera..." if is_cam_req else "Scanning screen..."
-            output_text = "Brahma Evo is inspecting your camera..." if is_cam_req else "Brahma Evo is inspecting the screen for what you asked about."
+            output_text = "Nexus Core is inspecting your camera..." if is_cam_req else "Nexus Core is inspecting the screen for what you asked about."
             try:
                 self.ui.update_task_workspace(
                     title=title_text,
@@ -4177,7 +4177,7 @@ class BrahmaLive:
                 percent=100,
                 source=source,
             )
-            self.ui.write_log(f"Brahma Evo: {detail}")
+            self.ui.write_log(f"Nexus Core: {detail}")
             self.speak(detail)
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
@@ -4385,7 +4385,7 @@ class BrahmaLive:
                     percent=100,
                     source=source,
                 )
-                self.ui.write_log(f"Brahma Evo: {detail}")
+                self.ui.write_log(f"Nexus Core: {detail}")
                 self.speak(detail)
                 if not self.ui.muted:
                     self.ui.set_state("LISTENING")
@@ -4472,7 +4472,7 @@ class BrahmaLive:
 
     def _announce_attention(self, event: dict):
         msg = self._attention_message(event)
-        self.ui.write_log(f"Brahma Evo: {msg}")
+        self.ui.write_log(f"Nexus Core: {msg}")
         if self.session and self._loop:
             self.speak(msg)
         else:
@@ -4547,7 +4547,7 @@ class BrahmaLive:
         if summary:
             self.ui.write_log(f"[Meeting] {summary}")
         if answer:
-            self.ui.write_log(f"Brahma Evo: {answer}")
+            self.ui.write_log(f"Nexus Core: {answer}")
 
     def _on_meeting_state(self, state: str):
         if state == "LISTENING":
@@ -4568,7 +4568,7 @@ class BrahmaLive:
             self._reply_mode = True
 
         message = "What would you like to say in reply?"
-        self.ui.write_log(f"Brahma Evo: {message}")
+        self.ui.write_log(f"Nexus Core: {message}")
         if self.session and self._loop:
             self.speak(message)
         else:
@@ -4729,7 +4729,7 @@ class BrahmaLive:
             if intent == "CANCEL":
                 self._ig_reply_mode = False
                 msg = "Instagram reply cancelled."
-                self.ui.write_log(f"Brahma Evo: {msg}")
+                self.ui.write_log(f"Nexus Core: {msg}")
                 self.speak(msg)
                 self._ig_pending_thread = None
                 return True
@@ -4773,7 +4773,7 @@ class BrahmaLive:
             self._email_step = 0
             self._email_profiles = {}
             msg = "Email sending cancelled, sir."
-            self.ui.write_log(f"Brahma Evo: {msg}")
+            self.ui.write_log(f"Nexus Core: {msg}")
             self.speak(msg)
             try:
                 self.ui.finish_task_workspace("Email sending cancelled.", "Cancelled", 100)
@@ -4786,7 +4786,7 @@ class BrahmaLive:
             self._email_recipient = text.strip()
             self._email_step = 1
             prompt = "Which email app would you like to use? (Gmail, default mail app, etc.)"
-            self.ui.write_log(f"Brahma Evo: {prompt}")
+            self.ui.write_log(f"Nexus Core: {prompt}")
             self.speak(prompt)
             try:
                 self.ui.update_task_workspace(
@@ -4804,7 +4804,7 @@ class BrahmaLive:
             self._email_step = 2
             
             prompt = "What is the message you'd like to send?"
-            self.ui.write_log(f"Brahma Evo: {prompt}")
+            self.ui.write_log(f"Nexus Core: {prompt}")
             self.speak(prompt)
             try:
                 self.ui.update_task_workspace(
@@ -4824,7 +4824,7 @@ class BrahmaLive:
             
             # Now let's execute composing!
             msg = f"Opening {self._email_app} and composing email to {self._email_recipient}..."
-            self.ui.write_log(f"Brahma Evo: {msg}")
+            self.ui.write_log(f"Nexus Core: {msg}")
             self.speak(msg)
             try:
                 self.ui.update_task_workspace(
@@ -4838,7 +4838,7 @@ class BrahmaLive:
             try:
                 import urllib.parse
                 import webbrowser
-                subject = "Message from Brahma Evo"
+                subject = "Message from Nexus Core"
                 quoted_recipient = urllib.parse.quote(self._email_recipient)
                 quoted_subject = urllib.parse.quote(subject)
                 quoted_body = urllib.parse.quote(self._email_message)
@@ -4853,7 +4853,7 @@ class BrahmaLive:
                 if "gmail" in app_lower or "chrome" in app_lower:
                     import urllib.parse
                     quoted_recipient = urllib.parse.quote(self._email_recipient)
-                    quoted_subject = urllib.parse.quote("Message from Brahma Evo")
+                    quoted_subject = urllib.parse.quote("Message from Nexus Core")
                     quoted_body = urllib.parse.quote(self._email_message)
                     url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quoted_recipient}&su={quoted_subject}&body={quoted_body}"
                     
@@ -4898,7 +4898,7 @@ class BrahmaLive:
                 return self._prompt_message_reply(event)
             if self._attention_matches(lower, ("hear", "read", "what is it", "tell me", "show it", "open it")):
                 preview = read_event_preview(event)
-                self.ui.write_log(f"Brahma Evo: {preview}")
+                self.ui.write_log(f"Nexus Core: {preview}")
                 threading.Thread(target=speak_native, args=(preview,), daemon=True).start()
                 with self._attention_lock:
                     self._pending_attention = None
@@ -4948,7 +4948,7 @@ class BrahmaLive:
         if kind == "message":
             if decision == "hear":
                 preview = read_event_preview(event)
-                self.ui.write_log(f"Brahma Evo: {preview}")
+                self.ui.write_log(f"Nexus Core: {preview}")
                 threading.Thread(target=speak_native, args=(preview,), daemon=True).start()
             elif decision == "reply":
                 self._prompt_message_reply(event)
@@ -5005,7 +5005,7 @@ class BrahmaLive:
             try:
                 self.ui.update_task_workspace(
                     status="Thinking",
-                    output="Brahma Evo is drafting a direct reply.",
+                    output="Nexus Core is drafting a direct reply.",
                     percent=35,
                 )
             except Exception:
@@ -5048,7 +5048,7 @@ class BrahmaLive:
                     reply = openrouter_client.chat(
                         request_text,
                         system=(
-                            "You are Brahma Evo, a concise, helpful desktop assistant. "
+                            "You are Nexus Core, a concise, helpful desktop assistant. "
                             "Reply naturally and briefly. Do not mention internal implementation details."
                         ),
                     )
@@ -5079,7 +5079,7 @@ class BrahmaLive:
                     except Exception:
                         pass
                     if not prompt_txt:
-                        prompt_txt = "You are Brahma Evo, the autonomous desktop operating system."
+                        prompt_txt = "You are Nexus Core, the autonomous desktop operating system."
 
                     system_prompt = (
                         f"{prompt_txt}\n\n"
@@ -5167,7 +5167,7 @@ class BrahmaLive:
             if not reply and local_brain.is_available():
                 try:
                     res = local_brain.chat_complete([
-                        {"role": "system", "content": "You are Brahma Evo, the autonomous desktop operating system. You control this PC. Never claim you cannot do automations."},
+                        {"role": "system", "content": "You are Nexus Core, the autonomous desktop operating system. You control this PC. Never claim you cannot do automations."},
                         {"role": "user", "content": request_text}
                     ], model=local_model_target, tools=TOOL_DECLARATIONS, focus_core=True)
                     msg_net = res.get("choices", [{}])[0].get("message", {})
@@ -5197,7 +5197,7 @@ class BrahmaLive:
                     reply = "I'm unable to reach the local AI engine. Please ensure Ollama is running."
                 else:
                     reply = "I’m ready, sir."
-            self.ui.write_log(f"Brahma Evo: {reply}")
+            self.ui.write_log(f"Nexus Core: {reply}")
             if not getattr(self.ui, "muted", False):
                 self.speak(reply, proactive=True)
             try:
@@ -5292,7 +5292,7 @@ class BrahmaLive:
                 try:
                     prompt = (
                         f"Deliver this update aloud to the user right now in your Charon voice. "
-                        f"Speak directly to the user as Brahma Evo without saying thank you or acknowledging this prompt:\n{text}"
+                        f"Speak directly to the user as Nexus Core without saying thank you or acknowledging this prompt:\n{text}"
                     )
                     content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
                     await self.session.send_client_content(turns=[content], turn_complete=True)
@@ -5366,7 +5366,7 @@ class BrahmaLive:
             except Exception:
                 pass
             try:
-                self.ui.write_log(f"Brahma Evo: {announcement}")
+                self.ui.write_log(f"Nexus Core: {announcement}")
                 if execution_output:
                     self.ui.write_log(f"Result:\n{execution_output}")
             except Exception:
@@ -5453,7 +5453,7 @@ class BrahmaLive:
             parts.append(mem_str)
         parts.append(sys_prompt)
         parts.append(
-            "Wake-word mode: if the microphone is muted, still listen for the words 'Brahma Evo', 'hey', 'hi', and 'hello'. "
+            "Wake-word mode: if the microphone is muted, still listen for the words 'Nexus Core', 'hey', 'hi', and 'hello'. "
             "When you hear one of these activation cues, keep the session friendly and concise, "
             "and wait for the user's next command. "
             "IMPORTANT: Do NOT speak an unprompted generic greeting (like 'Thank you, how can I help you?') upon connecting. "
@@ -5464,7 +5464,7 @@ class BrahmaLive:
             "When given an input asking you to deliver or speak an update, briefing, announcement, or direct speech to the user, "
             "you MUST deliver the provided message aloud to the user in your natural Charon voice immediately and faithfully. "
             "Never reply with 'Thank you for the briefing', never acknowledge the prompt, never add conversational filler like 'Okay, I got it', "
-            "and do not call tools unless explicitly needed. Speak the update directly to the user as their AI assistant Brahma Evo."
+            "and do not call tools unless explicitly needed. Speak the update directly to the user as their AI assistant Nexus Core."
         )
 
         tool_declarations = list(TOOL_DECLARATIONS)
@@ -5769,7 +5769,7 @@ class BrahmaLive:
                     if recipient:
                         if action == "take_over":
                             add_auto_thread(thread_id or recipient)
-                            result = f"Successfully took over the chat with @{recipient}. Brahma Evo will now automatically reply."
+                            result = f"Successfully took over the chat with @{recipient}. Nexus Core will now automatically reply."
                         else:
                             res = InstagramService.instance().send_dm(recipient, reply_text, open_in_browser=True)
                             result = f"Sent reply to @{recipient}: '{reply_text}'. Thread opened in browser."
@@ -6167,7 +6167,7 @@ class BrahmaLive:
                     from core.confirm import request
                     result = request(
                         "start-call-screening",
-                        "Answer this call as Brahma Evo",
+                        "Answer this call as Nexus Core",
                         f"Brahma will answer {event['title']} in {event['app']}, listen to the caller, and prepare a transcript and summary.",
                         lambda: (start_call_proxy(event, ui=self.ui, speak_fn=self.speak) and "Call screening started.")
                     )
@@ -6216,7 +6216,7 @@ class BrahmaLive:
                             out_text = str(run_res.get("summary") or run_res.get("output") or run_res.get("text") or run_res).strip()
                         else:
                             out_text = str(run_res).strip()
-                        self.ui.write_log(f"Brahma Evo [{skill_name}]:\n{out_text}")
+                        self.ui.write_log(f"Nexus Core [{skill_name}]:\n{out_text}")
                         result = out_text
                 else:
                     result = "Choose list or run."
@@ -6231,7 +6231,7 @@ class BrahmaLive:
                         out_text = str(run_res.get("summary") or run_res.get("output") or run_res.get("text") or run_res).strip()
                     else:
                         out_text = str(run_res).strip()
-                    self.ui.write_log(f"Brahma Evo [{name}]:\n{out_text}")
+                    self.ui.write_log(f"Nexus Core [{name}]:\n{out_text}")
                     result = out_text
                 else:
                     result = f"Unknown tool: {name}"
@@ -6392,7 +6392,7 @@ class BrahmaLive:
         tool_voice = self._connect_tool_voice(name, result)
         if tool_voice:
             try:
-                self.ui.write_log(f"Brahma Evo: {tool_voice}")
+                self.ui.write_log(f"Nexus Core: {tool_voice}")
             except Exception:
                 pass
 
@@ -6632,7 +6632,7 @@ class BrahmaLive:
 
                             full_out = "".join(out_buf).strip()
                             if full_out:
-                                self.ui.write_log(f"Brahma Evo: {full_out}")
+                                self.ui.write_log(f"Nexus Core: {full_out}")
                                 if hasattr(self.ui, "set_live_subtitles"):
                                     self.ui.set_live_subtitles("BRAHMA", full_out, interim=False)
                                 try:
@@ -6781,7 +6781,7 @@ class BrahmaLive:
                         except Exception:
                             pass
                         self.ui.set_state("LISTENING")
-                        self.ui.write_log("SYS: Brahma Evo online.")
+                        self.ui.write_log("SYS: Nexus Core online.")
 
                         tg.create_task(self._send_realtime())
                         tg.create_task(self._listen_audio())
@@ -6836,7 +6836,7 @@ def main():
             _SINGLE_INSTANCE_MUTEX = ctypes.windll.kernel32.CreateMutexW(None, wintypes.BOOL(True), _MUTEX_NAME)
             if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
                 _startup_log("Exiting duplicate Brahma instance (already running).")
-                print("[BRAHMA EVO] Another instance of Brahma Evo is already running. Exiting.")
+                print("[BRAHMA EVO] Another instance of Nexus Core is already running. Exiting.")
                 return
         except Exception as _mex:
             _startup_log(f"Mutex check skipped: {_mex}")
@@ -6854,7 +6854,7 @@ def main():
     if DashboardServer is not None and not dashboard_enabled:
         _startup_log("dashboard disabled: port 8000 already in use")
         try:
-            ui.write_log("SYS: Mobile Connect is already running in another Brahma Evo instance.")
+            ui.write_log("SYS: Mobile Connect is already running in another Nexus Core instance.")
         except Exception:
             pass
     if dashboard_enabled:
@@ -7027,7 +7027,7 @@ def main():
                     snippet = f": '{clean_text[:75]}...'" if len(clean_text) > 75 else (f": '{clean_text}'" if clean_text else "")
                     msg = f"You received a new Instagram message from {username}{snippet}. What should I reply, or should I take over the chat?"
                     ui.write_log(f"📱 Insta (@{username}): {clean_text or '[Media/Attachment]'}")
-                    ui.write_log(f"Brahma Evo: {msg}")
+                    ui.write_log(f"Nexus Core: {msg}")
                     brahma_evo.speak(msg)
                     return None
                 
@@ -7048,14 +7048,14 @@ def main():
                     subj_preview = f"'{clean_subj[:70]}...'" if len(clean_subj) > 70 else f"'{clean_subj}'"
                     msg = f"You received a new email from {sender} with subject: {subj_preview}."
                     ui.write_log(f"📧 Email ({sender}): {clean_subj}")
-                    ui.write_log(f"Brahma Evo: {msg}")
+                    ui.write_log(f"Nexus Core: {msg}")
                     brahma_evo.speak(msg)
 
                 set_email_prompt_callback(_email_handler)
                 start_email_daemon(poll_interval=25)
-                print("[Brahma Evo] Background email watcher started.")
+                print("[Nexus Core] Background email watcher started.")
         except Exception as e:
-            print(f"[Brahma Evo] Email daemon initialization notice: {e}")
+            print(f"[Nexus Core] Email daemon initialization notice: {e}")
 
         # Smart Clipboard Sentry
         try:
@@ -7072,21 +7072,21 @@ def main():
                     if now - _last_clipboard_speak_time > 180:
                         _last_clipboard_speak_time = now
                         msg = "I noticed an error traceback on your clipboard, sir. Would you like me to analyze and heal it?"
-                        ui.write_log(f"Brahma Evo: {msg}")
+                        ui.write_log(f"Nexus Core: {msg}")
                         brahma_evo.speak(msg, proactive=True)
                 elif category == "youtube_url":
                     ui.write_log(f"📋 CLIPBOARD [YouTube]: {clean}")
                     if now - _last_clipboard_speak_time > 300:
                         _last_clipboard_speak_time = now
                         msg = "YouTube link detected. Let me know if you'd like a summary or key insights."
-                        ui.write_log(f"Brahma Evo: {msg}")
+                        ui.write_log(f"Nexus Core: {msg}")
                         brahma_evo.speak(msg, proactive=True)
                 elif category == "github_url":
                     ui.write_log(f"📋 CLIPBOARD [GitHub]: {clean}")
                     if now - _last_clipboard_speak_time > 300:
                         _last_clipboard_speak_time = now
                         msg = "GitHub repository copied. I'm ready to clone or inspect the code whenever you are."
-                        ui.write_log(f"Brahma Evo: {msg}")
+                        ui.write_log(f"Nexus Core: {msg}")
                         brahma_evo.speak(msg, proactive=True)
                 elif category in ("json_data", "sql_query", "code_snippet"):
                     ui.write_log(f"📋 CLIPBOARD [{category}]: {clean[:80]}...")
@@ -7094,7 +7094,7 @@ def main():
                         _last_clipboard_speak_time = now
                         reply = _clipboard_gemini_reply(clean[:1000])
                         if reply:
-                            ui.write_log(f"Brahma Evo (Clipboard): {reply}")
+                            ui.write_log(f"Nexus Core (Clipboard): {reply}")
                             brahma_evo.speak(reply, proactive=True)
 
             clip_sentry = ClipboardSentry(callback=_clipboard_callback)

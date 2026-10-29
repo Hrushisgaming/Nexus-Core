@@ -17,7 +17,7 @@ from actions.ppt_template_workflow import infer_presentation_profile
 
 
 PROJECT_NAME = "Brahma AI - Lite"
-DEFAULT_OUTPUT_DIR = Path.home() / "Desktop" / "BrahmaAI"
+DEFAULT_OUTPUT_DIR = Path.home() / "Desktop" / "NexusCore"
 
 
 def _sanitize_filename(name: str, default: str) -> str:
