@@ -1685,7 +1685,7 @@ TOOL_DECLARATIONS = [
         }
     },
     {
-        "name": "shutdown_brahma",
+        "name": "shutdown_nexus",
         "description": (
             "Shuts down the assistant completely. "
         "Call this when the user expresses intent to end the conversation, "
@@ -1966,7 +1966,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "geospatial_globe",
-        "description": "Opens Brahma's interactive 3D map for routes, live aircraft, weather, earthquakes, nearby places, and ISS tracking.",
+        "description": "Opens Nexus Core's interactive 3D map for routes, live aircraft, weather, earthquakes, nearby places, and ISS tracking.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -1983,7 +1983,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "call_screening",
-        "description": "Screens an incoming call with Brahma as an AI attendant. Answering always waits for the user to confirm on the Echo HUD.",
+        "description": "Screens an incoming call with Nexus Core as an AI attendant. Answering always waits for the user to confirm on the Echo HUD.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -2009,7 +2009,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "dynamic_skill",
-        "description": "Lists and runs installed Brahma skills, including stock, crypto, cricket, speed-test, and ISS examples. Running a skill requires user confirmation.",
+        "description": "Lists and runs installed Nexus Core skills, including stock, crypto, cricket, speed-test, and ISS examples. Running a skill requires user confirmation.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -2321,7 +2321,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "skill_install",
-        "description": "Install a new markdown skill into Brahma's skills/ library, allowing Brahma to perpetually learn new procedures and protocols from the internet or user.",
+        "description": "Install a new markdown skill into Nexus Core's skills/ library, allowing Nexus Core to perpetually learn new procedures and protocols from the internet or user.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -2333,7 +2333,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "skill_list",
-        "description": "List all installed community and markdown skills available in Brahma.",
+        "description": "List all installed community and markdown skills available in Nexus Core.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
@@ -3403,7 +3403,7 @@ class BrahmaLive:
                                 self.ui.begin_task_workspace(
                                     "NetSentinel: Zero-Touch Mesh Sync",
                                     [
-                                        "Broadcast Brahma Online beacon across subnet",
+                                        "Broadcast Nexus Core Online beacon across subnet",
                                         "Probe SSDP, Cast & UPnP services on LAN endpoints",
                                         "Establish zero-install device telemetry mesh",
                                         "Synchronize Radar HUD device status"
@@ -3585,7 +3585,7 @@ class BrahmaLive:
                             "description": text,
                             "workspace_path": developer_workspace
                         }, speak=self.speak)
-                        self.ui.write_log(f"[BrahmaDev] {res[:400]}")
+                        self.ui.write_log(f"[NexusDev] {res[:400]}")
                         if "encountered an error during inference" in res or "LLM error:" in res:
                             if hasattr(self.ui, "update_task_workspace"):
                                 self.ui.update_task_workspace(status="Build Error", output=res, percent=0)

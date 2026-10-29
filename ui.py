@@ -12393,7 +12393,7 @@ class SystemConnectivityPage(QWidget):
         ast_row = QHBoxLayout()
         ast_row.addWidget(QLabel("Assistant Name"))
         self._set_ast_name = QLineEdit(identity.get_assistant_name())
-        self._set_ast_name.textChanged.connect(lambda t: identity.set_assistant_name(t.strip() or "Brahma"))
+        self._set_ast_name.textChanged.connect(lambda t: identity.set_assistant_name(t.strip() or "Nexus"))
         ast_row.addWidget(self._set_ast_name)
         ilay.addLayout(ast_row)
         
