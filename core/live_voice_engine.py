@@ -799,9 +799,10 @@ class LiveVoiceEngine:
 
         client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
         model_candidates = [
-            "models/gemini-2.0-flash",
-            "models/gemini-2.0-flash-live-001",
-            "models/gemini-2.5-flash-preview-native-audio-dialog",
+            "models/gemini-3.5-transcribe-live",
+            "models/gemini-3.5-flash-live",
+            "models/gemini-2.5-flash-live",
+            "models/gemini-2.0-flash-live",
         ]
 
         while self._running:
@@ -839,7 +840,7 @@ class LiveVoiceEngine:
                     await asyncio.sleep(1.0)
 
             if not connected:
-                logger.error("[LiveVoice] All model connection attempts failed. Voice features disabled.")
+                logger.error("[LiveVoice] All Gemini Live model attempts failed. Voice features disabled.")
                 self.set_state("ERROR")
                 if self._running:
                     logger.info("[LiveVoice] 🔄 Retrying connection in 10s...")
