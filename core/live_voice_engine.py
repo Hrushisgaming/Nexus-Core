@@ -43,6 +43,14 @@ try:
 except Exception:
     _STT_PROVIDERS_AVAILABLE = False
 
+# Moonshine STT (local, fast speech-to-text)
+try:
+    from core.moonshine_stt import get_moonshine_stt, is_moonshine_available
+    _MOONSHINE_AVAILABLE = is_moonshine_available()
+except Exception:
+    _MOONSHINE_AVAILABLE = False
+    get_moonshine_stt = None  # type: ignore
+
 # TTS Providers
 try:
     from core.tts_providers import (
@@ -186,6 +194,9 @@ class LiveVoiceEngine:
         self.tts_engine: str = "elevenlabs" if _TTS_PROVIDERS_AVAILABLE else "gemini_live"
         self.tts_voice_id: Optional[str] = None
         self._tts_provider = None
+
+        # STT executor for non-blocking transcription
+        self._stt_executor = None
 
         # Metrics
         self.last_speech_start_time = 0.0
@@ -788,9 +799,9 @@ class LiveVoiceEngine:
 
         client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
         model_candidates = [
-            "models/gemini-2.5-flash-native-audio-latest",
-            "models/gemini-2.5-flash-native-audio-preview-12-2025",
-            "models/gemini-2.0-flash-exp",
+            "models/gemini-2.0-flash",
+            "models/gemini-2.0-flash-live-001",
+            "models/gemini-2.5-flash-preview-native-audio-dialog",
         ]
 
         while self._running:
@@ -827,10 +838,18 @@ class LiveVoiceEngine:
                     logger.warning(f"[LiveVoice] Connection attempt failed on {target_model}: {e}")
                     await asyncio.sleep(1.0)
 
+            if not connected:
+                logger.error("[LiveVoice] All model connection attempts failed. Voice features disabled.")
+                self.set_state("ERROR")
+                if self._running:
+                    logger.info("[LiveVoice] 🔄 Retrying connection in 10s...")
+                    await asyncio.sleep(10.0)
+                continue
+
             if not self._running:
                 break
 
-            logger.info("[LiveVoice] 🔄 Reconnecting session in 3s...")
+            logger.info("[LiveVoice] 🔄 Session ended, reconnecting in 3s...")
             self.set_state("RECONNECTING")
             await asyncio.sleep(3.0)
 
