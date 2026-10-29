@@ -1,4 +1,3 @@
-
 name: Build Multi-Platform Installers
 
 on:
@@ -127,11 +126,17 @@ PY
             --add-data "assets:assets" \
             --add-data "config:config" \
             --add-data "core:core" \
+            --add-data "brahma_connect:brahma_connect" \
             --add-data "actions:actions" \
+            --add-data "memory:memory" \
+            --add-data "plugins:plugins" \
             --add-data "features:features" \
+            --add-data "skills:skills" \
             --add-data "smart_home:smart_home" \
             --add-data "dashboard/static:dashboard/static" \
             --add-data "workspace_store.py:." \
+            --add-data "version.txt:." \
+            --add-data "requirements.txt:." \
             main.py
 
           test -d "dist/BrahmaEvo"
