@@ -32,13 +32,27 @@ RECEIVE_SAMPLE_RATE = 24000  # 24 kHz Mono output from Gemini Live
 CHUNK_SIZE = 512             # 32ms per frame @ 16kHz for ultra-low latency VAD & transport
 CHANNELS = 1
 
-# Moonshine STT (local, fast speech-to-text)
+# STT Providers
 try:
-    from core.moonshine_stt import get_moonshine_stt, is_moonshine_available
-    _MOONSHINE_AVAILABLE = is_moonshine_available()
+    from core.stt_providers import (
+        get_stt_provider,
+        get_available_stt_engines,
+        get_default_stt,
+    )
+    _STT_PROVIDERS_AVAILABLE = True
 except Exception:
-    _MOONSHINE_AVAILABLE = False
-    get_moonshine_stt = None  # type: ignore
+    _STT_PROVIDERS_AVAILABLE = False
+
+# TTS Providers
+try:
+    from core.tts_providers import (
+        get_tts_provider,
+        get_available_tts_providers,
+        get_default_tts,
+    )
+    _TTS_PROVIDERS_AVAILABLE = True
+except Exception:
+    _TTS_PROVIDERS_AVAILABLE = False
 
 logger = logging.getLogger("BrahmaLiveVoice")
 
@@ -168,6 +182,11 @@ class LiveVoiceEngine:
         self._stt_model = None
         self._stt_audio_buffer: List[bytes] = []
 
+        # TTS Engine selection: "elevenlabs", "groq_tts", "fish_audio", or "gemini_live"
+        self.tts_engine: str = "elevenlabs" if _TTS_PROVIDERS_AVAILABLE else "gemini_live"
+        self.tts_voice_id: Optional[str] = None
+        self._tts_provider = None
+
         # Metrics
         self.last_speech_start_time = 0.0
         self.last_speech_stop_time = 0.0
@@ -215,6 +234,69 @@ class LiveVoiceEngine:
         if autocorrect is not None:
             self.stt_autocorrect = autocorrect
             logger.info(f"[LiveVoice] STT autocorrect set to: {self.stt_autocorrect}")
+
+    # ── TTS Configuration ────────────────────────────────────────────────────
+    def get_tts_config(self) -> dict:
+        """Return current TTS engine configuration."""
+        return {
+            "engine": self.tts_engine,
+            "voice_id": self.tts_voice_id,
+            "providers": get_available_tts_providers() if _TTS_PROVIDERS_AVAILABLE else [],
+        }
+
+    def set_tts_config(self, engine: Optional[str] = None, voice_id: Optional[str] = None) -> None:
+        """Update TTS engine configuration."""
+        if engine is not None:
+            if _TTS_PROVIDERS_AVAILABLE:
+                provider = get_tts_provider(engine)
+                if provider and provider.available:
+                    self.tts_engine = engine
+                    self._tts_provider = provider
+                    logger.info(f"[LiveVoice] TTS engine set to: {self.tts_engine}")
+                else:
+                    logger.warning(f"[LiveVoice] TTS engine {engine} not available")
+            else:
+                logger.warning("[LiveVoice] TTS providers module not available")
+        if voice_id is not None:
+            self.tts_voice_id = voice_id
+            logger.info(f"[LiveVoice] TTS voice set to: {self.tts_voice_id}")
+
+    def get_available_tts_providers(self) -> list[dict]:
+        """Return list of available TTS providers."""
+        if _TTS_PROVIDERS_AVAILABLE:
+            return get_available_tts_providers()
+        return []
+
+    def get_available_stt_engines_list(self) -> list[dict]:
+        """Return list of available STT engines."""
+        if _STT_PROVIDERS_AVAILABLE:
+            return get_available_stt_engines()
+        return []
+
+    def _get_tts_provider(self) -> Optional[Any]:
+        """Get or create the TTS provider instance."""
+        if not _TTS_PROVIDERS_AVAILABLE:
+            return None
+        if self._tts_provider is None and self.tts_engine:
+            self._tts_provider = get_tts_provider(self.tts_engine, voice_id=self.tts_voice_id)
+        return self._tts_provider
+
+    async def speak_tts(self, text: str) -> None:
+        """Speak text using the configured TTS engine."""
+        if not text or not text.strip():
+            return
+        provider = self._get_tts_provider()
+        if provider is None:
+            logger.warning("[LiveVoice] No TTS provider available")
+            return
+        try:
+            audio_bytes = provider.synthesize(text.strip(), voice_id=self.tts_voice_id)
+            if audio_bytes:
+                # Queue audio for playback
+                self.out_audio_queue.put_nowait(audio_bytes)
+                self.set_state("SPEAKING")
+        except Exception as exc:
+            logger.error(f"[LiveVoice] TTS synthesis error: {exc}")
 
     def register_ws_client(self, websocket: Any):
         with self._ws_lock:

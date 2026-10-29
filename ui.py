@@ -67,6 +67,10 @@ from core.local_brain import local_brain
 from workspace_store import store as workspace_store
 from core.identity import identity
 from core.moonshine_stt import get_available_stt_engines, is_moonshine_available
+from core.stt_providers import get_available_stt_engines as get_stt_engines_list
+from core.tts_providers import get_available_tts_providers
+from core.search_providers import get_available_search_providers
+from core.image_providers import get_available_image_providers
 from sound_manager import sound_mgr
 
 def _base_dir() -> Path:
@@ -1550,6 +1554,16 @@ def _default_app_settings() -> dict:
         # STT Engine Settings
         "stt_engine": "moonshine",
         "stt_autocorrect": True,
+        # TTS Engine Settings
+        "tts_engine": "elevenlabs",
+        "tts_voice_id": "pNInz6obpgDQGcFmaJgB",
+        # Search Engine Settings
+        "search_engine": "tavily",
+        # Image Generation Settings
+        "image_engine": "pollinations",
+        "image_model": "flux",
+        # Advanced AI Settings
+        "advanced_ai_enabled": False,
     }
 
 
@@ -12656,6 +12670,104 @@ class SystemConnectivityPage(QWidget):
 
         lay.addWidget(stt_card)
 
+        # TTS Engine Settings
+        tts_card = self._card("Text-to-Speech Engine", "Choose how Nexus Core speaks.")
+        tts_lay = tts_card.layout()
+
+        tts_engine_row = QHBoxLayout()
+        tts_engine_row.addWidget(QLabel("TTS Engine"))
+        self._tts_engine_combo = QComboBox()
+        tts_providers = get_available_tts_providers()
+        for p in tts_providers:
+            label = p["name"]
+            if not p["available"]:
+                label += " (not configured)"
+            self._tts_engine_combo.addItem(label, p["id"])
+        current_tts = self._load_app_settings().get("tts_engine", "elevenlabs")
+        idx = self._tts_engine_combo.findData(current_tts)
+        if idx >= 0:
+            self._tts_engine_combo.setCurrentIndex(idx)
+        self._tts_engine_combo.currentTextChanged.connect(self._on_tts_engine_changed)
+        tts_engine_row.addWidget(self._tts_engine_combo, 1)
+        tts_lay.addLayout(tts_engine_row)
+
+        # Voice selection
+        tts_voice_row = QHBoxLayout()
+        tts_voice_row.addWidget(QLabel("Voice"))
+        self._tts_voice_combo = QComboBox()
+        current_voice = self._load_app_settings().get("tts_voice_id", "pNInz6obpgDQGcFmaJgB")
+        # Populate with default voices from first available provider
+        for p in tts_providers:
+            if p["available"]:
+                for v in p.get("voices", []):
+                    self._tts_voice_combo.addItem(f"{v['name']} ({v['id']})", v["id"])
+        if self._tts_voice_combo.findData(current_voice) >= 0:
+            self._tts_voice_combo.setCurrentData(current_voice)
+        self._tts_voice_combo.currentDataChanged.connect(lambda: self._set_setting("tts_voice_id", self._tts_voice_combo.currentData()))
+        tts_voice_row.addWidget(self._tts_voice_combo, 1)
+        tts_lay.addLayout(tts_voice_row)
+
+        lay.addWidget(tts_card)
+
+        # Search Engine Settings
+        search_card = self._card("Search Engine", "Choose how Nexus Core searches the web.")
+        search_lay = search_card.layout()
+
+        search_engine_row = QHBoxLayout()
+        search_engine_row.addWidget(QLabel("Search Engine"))
+        self._search_engine_combo = QComboBox()
+        search_providers = get_available_search_providers()
+        for p in search_providers:
+            label = p["name"]
+            if not p["available"]:
+                label += " (not configured)"
+            self._search_engine_combo.addItem(label, p["id"])
+        current_search = self._load_app_settings().get("search_engine", "tavily")
+        idx = self._search_engine_combo.findData(current_search)
+        if idx >= 0:
+            self._search_engine_combo.setCurrentIndex(idx)
+        self._search_engine_combo.currentTextChanged.connect(lambda: self._set_setting("search_engine", self._search_engine_combo.currentData()))
+        search_engine_row.addWidget(self._search_engine_combo, 1)
+        search_lay.addLayout(search_engine_row)
+
+        lay.addWidget(search_card)
+
+        # Image Generation Settings
+        image_card = self._card("Image Generation", "Choose how Nexus Core generates images.")
+        image_lay = image_card.layout()
+
+        image_engine_row = QHBoxLayout()
+        image_engine_row.addWidget(QLabel("Image Engine"))
+        self._image_engine_combo = QComboBox()
+        image_providers = get_available_image_providers()
+        for p in image_providers:
+            label = p["name"]
+            if not p["available"]:
+                label += " (not configured)"
+            self._image_engine_combo.addItem(label, p["id"])
+        current_image = self._load_app_settings().get("image_engine", "pollinations")
+        idx = self._image_engine_combo.findData(current_image)
+        if idx >= 0:
+            self._image_engine_combo.setCurrentIndex(idx)
+        self._image_engine_combo.currentTextChanged.connect(lambda: self._set_setting("image_engine", self._image_engine_combo.currentData()))
+        image_engine_row.addWidget(self._image_engine_combo, 1)
+        image_lay.addLayout(image_engine_row)
+
+        # Pollinations model selection
+        image_model_row = QHBoxLayout()
+        image_model_row.addWidget(QLabel("Pollinations Model"))
+        self._image_model_combo = QComboBox()
+        self._image_model_combo.addItems(["flux", "flux-pro", "flux-dev", "turbo"])
+        current_image_model = self._load_app_settings().get("image_model", "flux")
+        idx = self._image_model_combo.findText(current_image_model)
+        if idx >= 0:
+            self._image_model_combo.setCurrentIndex(idx)
+        self._image_model_combo.currentTextChanged.connect(lambda t: self._set_setting("image_model", t))
+        image_model_row.addWidget(self._image_model_combo, 1)
+        image_lay.addLayout(image_model_row)
+
+        lay.addWidget(image_card)
+
         # Mobile connect
         mobile = self._card("Mobile Connect", "Connect your phone and control Nexus Core remotely.")
         ml = mobile.layout()
@@ -14272,6 +14384,21 @@ class SystemConnectivityPage(QWidget):
             pass
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(f"SYS: STT auto-correction {'enabled' if checked else 'disabled'}")
+
+    def _on_tts_engine_changed(self, text: str):
+        """Handle TTS engine dropdown change."""
+        if not hasattr(self, "_tts_engine_combo"):
+            return
+        engine_id = self._tts_engine_combo.currentData()
+        if engine_id:
+            self._set_setting("tts_engine", engine_id)
+            try:
+                from core.live_voice_engine import live_voice_engine as lve
+                lve.set_tts_config(engine=engine_id)
+            except Exception:
+                pass
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log(f"SYS: TTS engine set to {engine_id}")
 
     def _toggle_attention_message_prompts(self, checked: bool):
         self._set_setting("attention_message_prompts", bool(checked))

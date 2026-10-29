@@ -135,7 +135,7 @@ BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Nexus Core" / "startup.log"
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
+LIVE_MODEL          = "models/gemini-2.0-flash-exp"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -340,7 +340,7 @@ def _gemini_text_reply(prompt: str) -> str:
         "Reply naturally and briefly. Do not mention internal implementation details."
     )
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash-exp",
         contents=f"{system_prompt}\n\nUser: {prompt}",
         config={"temperature": 0.6},
     )
@@ -362,7 +362,7 @@ def _ig_gemini_reply(username: str, text: str) -> str:
             http_options={"api_version": "v1beta"},
         )
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash-exp",
             contents=f"{system_prompt}\n\nUser: {prompt}",
             config={"temperature": 0.6},
         )
@@ -394,7 +394,7 @@ def _clipboard_gemini_reply(text: str) -> str:
             http_options={"api_version": "v1beta"},
         )
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash-exp",
             contents=f"{system_prompt}\n\nClipboard Text: {prompt}",
             config={"temperature": 0.8},
         )
@@ -4699,7 +4699,7 @@ class BrahmaLive:
         try:
             client = genai.Client(api_key=_get_api_key(), http_options={"api_version": "v1beta"})
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash-exp",
                 contents=f"{system_prompt}\n\nUser Response: {text}",
                 config={"temperature": 0.1, "response_mime_type": "application/json"}
             )
