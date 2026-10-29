@@ -6974,18 +6974,18 @@ def main():
         def _proactive_sensorium_voice(alert_type: str, meta: dict):
             # Meeting mode transitions
             if alert_type == "meeting_mode_enter":
-                brahma_evo._start_meeting_mode({
+                nexus_core._start_meeting_mode({
                     "app": meta.get("process", "Meeting"),
                     "title": meta.get("message", "Meeting Mode")
                 })
             elif alert_type == "meeting_mode_exit":
-                brahma_evo._stop_meeting_mode("Meeting concluded. Normal audio levels restored.")
+                nexus_core._stop_meeting_mode("Meeting concluded. Normal audio levels restored.")
 
             # Morning greeting -> compile daily briefing and deliver via Charon voice
             elif alert_type == "morning_greeting":
                 threading.Thread(
                     target=_speak_daily_briefing,
-                    kwargs={"ui": brahma_evo.ui, "speak": brahma_evo.speak},
+                    kwargs={"ui": nexus_core.ui, "speak": nexus_core.speak},
                     daemon=True,
                     name="morning-briefing-worker"
                 ).start()
@@ -6994,18 +6994,18 @@ def main():
             spoken_text = meta.get("speech")
             if spoken_text and not getattr(ui, "muted", False):
                 try:
-                    brahma_evo.speak(spoken_text, proactive=True)
+                    nexus_core.speak(spoken_text, proactive=True)
                 except Exception as exc:
                     print(f"[Sensorium Speak Error]: {exc}")
 
         sensorium.register_interjection_handler(_proactive_sensorium_voice)
         try:
             if plugin_manager is not None:
-                brahma_evo.plugin_manager = plugin_manager
-                plugin_manager.register_brahma(brahma_evo)
+                nexus_core.plugin_manager = plugin_manager
+                plugin_manager.register_brahma(nexus_core)
                 # allow plugins to run a startup hook
                 try:
-                    plugin_manager.dispatch("on_startup", brahma_evo)
+                    plugin_manager.dispatch("on_startup", nexus_core)
                 except Exception:
                     pass
         except Exception:
@@ -7023,8 +7023,8 @@ def main():
                 if is_auto:
                     return _ig_gemini_reply(username, text)
                 else:
-                    brahma_evo._ig_reply_mode = True
-                    brahma_evo._ig_pending_thread = {
+                    nexus_core._ig_reply_mode = True
+                    nexus_core._ig_pending_thread = {
                         "thread_id": thread_id,
                         "username": username,
                         "message": text
@@ -7034,7 +7034,7 @@ def main():
                     msg = f"You received a new Instagram message from {username}{snippet}. What should I reply, or should I take over the chat?"
                     ui.write_log(f"📱 Insta (@{username}): {clean_text or '[Media/Attachment]'}")
                     ui.write_log(f"Nexus Core: {msg}")
-                    brahma_evo.speak(msg)
+                    nexus_core.speak(msg)
                     return None
                 
             set_ig_prompt_callback(_ig_handler)
@@ -7055,7 +7055,7 @@ def main():
                     msg = f"You received a new email from {sender} with subject: {subj_preview}."
                     ui.write_log(f"📧 Email ({sender}): {clean_subj}")
                     ui.write_log(f"Nexus Core: {msg}")
-                    brahma_evo.speak(msg)
+                    nexus_core.speak(msg)
 
                 set_email_prompt_callback(_email_handler)
                 start_email_daemon(poll_interval=25)
@@ -7079,21 +7079,21 @@ def main():
                         _last_clipboard_speak_time = now
                         msg = "I noticed an error traceback on your clipboard, sir. Would you like me to analyze and heal it?"
                         ui.write_log(f"Nexus Core: {msg}")
-                        brahma_evo.speak(msg, proactive=True)
+                        nexus_core.speak(msg, proactive=True)
                 elif category == "youtube_url":
                     ui.write_log(f"📋 CLIPBOARD [YouTube]: {clean}")
                     if now - _last_clipboard_speak_time > 300:
                         _last_clipboard_speak_time = now
                         msg = "YouTube link detected. Let me know if you'd like a summary or key insights."
                         ui.write_log(f"Nexus Core: {msg}")
-                        brahma_evo.speak(msg, proactive=True)
+                        nexus_core.speak(msg, proactive=True)
                 elif category == "github_url":
                     ui.write_log(f"📋 CLIPBOARD [GitHub]: {clean}")
                     if now - _last_clipboard_speak_time > 300:
                         _last_clipboard_speak_time = now
                         msg = "GitHub repository copied. I'm ready to clone or inspect the code whenever you are."
                         ui.write_log(f"Nexus Core: {msg}")
-                        brahma_evo.speak(msg, proactive=True)
+                        nexus_core.speak(msg, proactive=True)
                 elif category in ("json_data", "sql_query", "code_snippet"):
                     ui.write_log(f"📋 CLIPBOARD [{category}]: {clean[:80]}...")
                     if now - _last_clipboard_speak_time > 600:
@@ -7101,7 +7101,7 @@ def main():
                         reply = _clipboard_gemini_reply(clean[:1000])
                         if reply:
                             ui.write_log(f"Nexus Core (Clipboard): {reply}")
-                            brahma_evo.speak(reply, proactive=True)
+                            nexus_core.speak(reply, proactive=True)
 
             clip_sentry = ClipboardSentry(callback=_clipboard_callback)
             clip_sentry.start()
@@ -7144,7 +7144,7 @@ def main():
                             target=lambda: AutoHealEngine.heal_traceback(
                                 tb_to_heal,
                                 player=ui,
-                                speak=brahma_evo.speak,
+                                speak=nexus_core.speak,
                                 module_name=""
                             ),
                             daemon=True,
@@ -7166,7 +7166,7 @@ def main():
                     pass
             get_game_sentinel_manager().start_background_watchdog(
                 poll_interval=3.5,
-                speak_cb=brahma_evo.speak,
+                speak_cb=nexus_core.speak,
                 hud_cb=_game_hud_cb
             )
         except Exception as e_gs:
@@ -7176,13 +7176,13 @@ def main():
         try:
             from core.anticipatory_watcher import get_anticipatory_watcher
             watcher = get_anticipatory_watcher()
-            watcher.set_nudge_callback(lambda msg, cat: brahma_evo.speak(msg))
+            watcher.set_nudge_callback(lambda msg, cat: nexus_core.speak(msg))
             watcher.start()
         except Exception as e_watch:
             logger.debug(f"[AnticipatoryWatcher] Start error: {e_watch}")
 
         try:
-            asyncio.run(brahma_evo.run())
+            asyncio.run(nexus_core.run())
         except KeyboardInterrupt:
             print("\n🔴 Shutting down...")
 
