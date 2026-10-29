@@ -12412,13 +12412,27 @@ class SystemConnectivityPage(QWidget):
             "nvidia/nemotron-3-super-120b-a12b",
             "nvidia",
         )
+        self._groq_row, self._groq_status, self._groq_key = self._provider_row(
+            "Groq",
+            self._api_defaults.get("groq_api_key", ""),
+            "llama-3.1-8b-instant",
+            "groq",
+        )
+        self._custom_row, self._custom_status, self._custom_key = self._provider_row(
+            "Custom",
+            self._api_defaults.get("custom_ai_api_key", ""),
+            "custom-model",
+            "custom",
+        )
         lay1.addWidget(self._gemini_row)
         lay1.addWidget(self._or_row)
         lay1.addWidget(self._nvidia_row)
+        lay1.addWidget(self._groq_row)
+        lay1.addWidget(self._custom_row)
         controls = QHBoxLayout()
         controls.setSpacing(12)
         self._default_provider = QComboBox()
-        self._default_provider.addItems(["Google Gemini", "OpenRouter", "NVIDIA", "Local"])
+        self._default_provider.addItems(["Google Gemini", "OpenRouter", "NVIDIA", "Groq", "Custom", "Local"])
         
         current_provider = self._load_app_settings().get("default_ai_provider", "Gemini")
         if current_provider in {"Gemini", "Google Gemini"}:
@@ -12427,6 +12441,10 @@ class SystemConnectivityPage(QWidget):
             self._default_provider.setCurrentText("Local")
         elif current_provider == "NVIDIA":
             self._default_provider.setCurrentText("NVIDIA")
+        elif current_provider == "Groq":
+            self._default_provider.setCurrentText("Groq")
+        elif current_provider == "Custom":
+            self._default_provider.setCurrentText("Custom")
         else:
             self._default_provider.setCurrentText("OpenRouter")
             
@@ -14016,6 +14034,26 @@ class SystemConnectivityPage(QWidget):
             if hasattr(self, "_local_ai_widget"):
                 self._local_ai_widget.setVisible(False)
             msg = "SYS: Default AI provider set to NVIDIA NIM. Cloud connectivity active."
+        elif raw == "groq":
+            provider = "Groq"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to Groq. Cloud connectivity active."
+        elif raw == "custom":
+            provider = "Custom"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to Custom OpenAI-compatible endpoint. Cloud connectivity active."
         else:
             provider = "OpenRouter"
             self._set_setting("offline_mode_enabled", False)
@@ -14185,6 +14223,10 @@ class SystemConnectivityPage(QWidget):
             self._or_key.setText(self._provider_key_preview(api.get("openrouter_api_key", "")))
             self._nvidia_status.setText("Connected" if api.get("nvidia_api_key") else "Not connected")
             self._nvidia_key.setText(self._provider_key_preview(api.get("nvidia_api_key", "")))
+            self._groq_status.setText("Connected" if api.get("groq_api_key") else "Not connected")
+            self._groq_key.setText(self._provider_key_preview(api.get("groq_api_key", "")))
+            self._custom_status.setText("Connected" if api.get("custom_ai_api_key") else "Not connected")
+            self._custom_key.setText(self._provider_key_preview(api.get("custom_ai_api_key", "")))
             
             prov = app.get("default_ai_provider", "Gemini")
             is_offline = bool(app.get("offline_mode_enabled", False))
@@ -14194,6 +14236,10 @@ class SystemConnectivityPage(QWidget):
                 disp_prov = "OpenRouter"
             elif prov == "NVIDIA":
                 disp_prov = "NVIDIA"
+            elif prov == "Groq":
+                disp_prov = "Groq"
+            elif prov == "Custom":
+                disp_prov = "Custom"
             else:
                 disp_prov = "Google Gemini"
             if hasattr(self, "_default_provider"):

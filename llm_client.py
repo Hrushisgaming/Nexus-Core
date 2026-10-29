@@ -1,6 +1,7 @@
 from core.user_paths import get_user_data_dir
 import json
 import logging
+import os
 import requests
 from pathlib import Path
 from typing import Optional
@@ -77,32 +78,74 @@ class UnifiedAIClient:
             logger.error(f"[LLM Client] Failed to init Gemini client: {e}")
             return None
 
+    # ═══════════════════════════════════════════════════════════════════
+    # API key loaders
+    # ═══════════════════════════════════════════════════════════════════
+
+    def _load_api_key_from_file(self, key_name: str) -> str:
+        """Generic loader for any key from api_keys.json."""
+        try:
+            api_keys_path = get_user_data_dir() / "config" / "api_keys.json"
+            if api_keys_path.exists():
+                with open(api_keys_path, "r", encoding="utf-8") as f:
+                    key = json.load(f).get(key_name, "").strip()
+                if key:
+                    return key
+        except Exception as e:
+            logger.error(f"[LLM Client] Failed reading {key_name}: {e}")
+        return ""
+
     def _load_nvidia_key(self) -> str:
         """Load NVIDIA API key from env or api_keys.json."""
         import os
         env_key = os.environ.get("NVIDIA_API_KEY", "").strip()
         if env_key:
             return env_key
-        try:
-            api_keys_path = get_user_data_dir() / "config" / "api_keys.json"
-            if api_keys_path.exists():
-                with open(api_keys_path, "r", encoding="utf-8") as f:
-                    key = json.load(f).get("nvidia_api_key", "").strip()
-                if key:
-                    return key
-        except Exception as e:
-            logger.error(f"[LLM Client] Failed reading NVIDIA key: {e}")
-        return ""
+        return self._load_api_key_from_file("nvidia_api_key")
 
-    def _nvidia_chat_completion(self, messages: list[dict], temperature: float = 0.7, model: str = "nvidia/nemotron-3-super-120b-a12b", max_tokens: int = 4096) -> Optional[str]:
-        """Chat completion via NVIDIA NIM API (OpenAI-compatible)."""
-        api_key = self._load_nvidia_key()
-        if not api_key:
+    def _load_groq_key(self) -> str:
+        """Load Groq API key from env or api_keys.json."""
+        import os
+        env_key = os.environ.get("GROQ_API_KEY", "").strip()
+        if env_key:
+            return env_key
+        return self._load_api_key_from_file("groq_api_key")
+
+    def _get_custom_provider_settings(self) -> dict:
+        """Load custom OpenAI-compatible provider settings from app_settings.json."""
+        try:
+            data = {}
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            pass
+        return {
+            "base_url": (data.get("custom_ai_base_url") or "").strip().rstrip("/"),
+            "api_key": self._load_api_key_from_file("custom_ai_api_key")
+            or os.environ.get("CUSTOM_AI_API_KEY", "").strip(),
+            "model": (data.get("custom_ai_model") or "custom-model").strip(),
+        }
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Generic OpenAI-compatible chat / vision (used by NVIDIA, Groq, Custom)
+    # ════════════════════════════════════════════════════════════════════
+
+    def _openai_compatible_chat_completion(
+        self,
+        messages: list[dict],
+        base_url: str,
+        api_key: str,
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> Optional[str]:
+        """Chat completion via any OpenAI-compatible API endpoint."""
+        if not api_key or not base_url:
             return None
         try:
             import requests
             resp = requests.post(
-                "https://integrate.api.nvidia.com/v1/chat/completions",
+                f"{base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -120,21 +163,32 @@ class UnifiedAIClient:
             if resp.status_code == 200:
                 data = resp.json()
                 return (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-            logger.error(f"[LLM Client] NVIDIA API error {resp.status_code}: {resp.text[:200]}")
+            logger.error(
+                f"[LLM Client] OpenAI-compatible API error {resp.status_code}: {resp.text[:200]}"
+            )
             return None
         except Exception as e:
-            logger.error(f"[LLM Client] NVIDIA request failed: {e}")
+            logger.error(f"[LLM Client] OpenAI-compatible request failed: {e}")
             return None
 
-    def _nvidia_vision(self, prompt: str, image_b64: str, mime: str = "image/png", system: str = "Analyze the image.", model: str = "nvidia/nemotron-3-super-120b-a12b", max_tokens: int = 1024) -> Optional[str]:
-        """Vision via NVIDIA NIM API."""
-        api_key = self._load_nvidia_key()
-        if not api_key:
+    def _openai_compatible_vision(
+        self,
+        prompt: str,
+        image_b64: str,
+        base_url: str,
+        api_key: str,
+        model: str,
+        mime: str = "image/png",
+        system: str = "Analyze the image.",
+        max_tokens: int = 1024,
+    ) -> Optional[str]:
+        """Vision via any OpenAI-compatible API endpoint."""
+        if not api_key or not base_url:
             return None
         try:
             import requests
             resp = requests.post(
-                "https://integrate.api.nvidia.com/v1/chat/completions",
+                f"{base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -160,11 +214,129 @@ class UnifiedAIClient:
             if resp.status_code == 200:
                 data = resp.json()
                 return (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-            logger.error(f"[LLM Client] NVIDIA vision error {resp.status_code}: {resp.text[:200]}")
+            logger.error(
+                f"[LLM Client] OpenAI-compatible vision error {resp.status_code}: {resp.text[:200]}"
+            )
             return None
         except Exception as e:
-            logger.error(f"[LLM Client] NVIDIA vision failed: {e}")
+            logger.error(f"[LLM Client] OpenAI-compatible vision failed: {e}")
             return None
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Provider-specific wrappers
+    # ═══════════════════════════════════════════════════════════════════
+
+    def _nvidia_chat_completion(
+        self, messages: list[dict], temperature: float = 0.7, model: str = "nvidia/nemotron-3-super-120b-a12b", max_tokens: int = 4096
+    ) -> Optional[str]:
+        """Chat completion via NVIDIA NIM API."""
+        return self._openai_compatible_chat_completion(
+            messages,
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=self._load_nvidia_key(),
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    def _nvidia_vision(
+        self,
+        prompt: str,
+        image_b64: str,
+        mime: str = "image/png",
+        system: str = "Analyze the image.",
+        model: str = "nvidia/nemotron-3-super-120b-a12b",
+        max_tokens: int = 1024,
+    ) -> Optional[str]:
+        """Vision via NVIDIA NIM API."""
+        return self._openai_compatible_vision(
+            prompt,
+            image_b64,
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=self._load_nvidia_key(),
+            model=model,
+            mime=mime,
+            system=system,
+            max_tokens=max_tokens,
+        )
+
+    def _groq_chat_completion(
+        self, messages: list[dict], temperature: float = 0.7, model: str = "llama-3.1-8b-instant", max_tokens: int = 4096
+    ) -> Optional[str]:
+        """Chat completion via Groq API."""
+        return self._openai_compatible_chat_completion(
+            messages,
+            base_url="https://api.groq.com/openai/v1",
+            api_key=self._load_groq_key(),
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    def _groq_vision(
+        self,
+        prompt: str,
+        image_b64: str,
+        mime: str = "image/png",
+        system: str = "Analyze the image.",
+        model: str = "llama-3.2-11b-vision-preview",
+        max_tokens: int = 1024,
+    ) -> Optional[str]:
+        """Vision via Groq API."""
+        return self._openai_compatible_vision(
+            prompt,
+            image_b64,
+            base_url="https://api.groq.com/openai/v1",
+            api_key=self._load_groq_key(),
+            model=model,
+            mime=mime,
+            system=system,
+            max_tokens=max_tokens,
+        )
+
+    def _custom_chat_completion(
+        self,
+        messages: list[dict],
+        temperature: float = 0.7,
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+    ) -> Optional[str]:
+        """Chat completion via a custom OpenAI-compatible endpoint."""
+        settings = self._get_custom_provider_settings()
+        if not settings["base_url"] or not settings["api_key"]:
+            return None
+        return self._openai_compatible_chat_completion(
+            messages,
+            base_url=settings["base_url"],
+            api_key=settings["api_key"],
+            model=model or settings["model"],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    def _custom_vision(
+        self,
+        prompt: str,
+        image_b64: str,
+        mime: str = "image/png",
+        system: str = "Analyze the image.",
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+    ) -> Optional[str]:
+        """Vision via a custom OpenAI-compatible endpoint."""
+        settings = self._get_custom_provider_settings()
+        if not settings["base_url"] or not settings["api_key"]:
+            return None
+        return self._openai_compatible_vision(
+            prompt,
+            image_b64,
+            base_url=settings["base_url"],
+            api_key=settings["api_key"],
+            model=model or settings["model"],
+            mime=mime,
+            system=system,
+            max_tokens=max_tokens,
+        )
 
     def _gemini_chat_completion(self, messages: list[dict], temperature: float = 0.7, json_mode: bool = False) -> Optional[str]:
         client = self._get_gemini_client()
@@ -201,6 +373,7 @@ class UnifiedAIClient:
         self.reload_settings()
         provider = self._provider
         nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+        groq_model = model or "llama-3.1-8b-instant"
 
         if provider in ("Gemini", "Google Gemini"):
             messages = [{"role": "system", "content": system}]
@@ -228,6 +401,32 @@ class UnifiedAIClient:
             except Exception:
                 pass
             return self._local_chat_completion(messages, temperature) or ""
+        elif provider == "Groq":
+            messages = [{"role": "system", "content": system}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": prompt})
+            result = self._groq_chat_completion(messages, temperature, groq_model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.chat(prompt, system, history, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
+        elif provider == "Custom":
+            messages = [{"role": "system", "content": system}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": prompt})
+            result = self._custom_chat_completion(messages, temperature, model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.chat(prompt, system, history, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
         elif self._provider == "Local":
             messages = [{"role": "system", "content": system}]
             if history:
@@ -245,6 +444,7 @@ class UnifiedAIClient:
         self.reload_settings()
         provider = self._provider
         nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+        groq_model = model or "llama-3.1-8b-instant"
 
         if provider in ("Gemini", "Google Gemini"):
             messages = [
@@ -298,6 +498,58 @@ class UnifiedAIClient:
                 return json.loads(clean)
             except json.JSONDecodeError as e:
                 raise ValueError(f"NVIDIA model returned unparseable JSON: {e}\nRaw output: {raw[:200]}")
+        elif provider == "Groq":
+            messages = [
+                {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
+                {"role": "user", "content": prompt}
+            ]
+            raw = self._groq_chat_completion(messages, temperature=0.2, model=groq_model, max_tokens=max_tokens)
+            if not raw:
+                try:
+                    return openrouter_client.chat_json(prompt, system, model, max_tokens)
+                except Exception:
+                    pass
+                raw = self._local_chat_completion(messages, temperature=0.2, response_format={"type": "json_object"})
+            if not raw:
+                raise RuntimeError("Groq request failed for JSON generation.")
+            
+            clean = raw.strip()
+            if clean.startswith("```"):
+                parts = clean.split("```")
+                clean = parts[1] if len(parts) > 1 else clean
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip().rstrip("`").strip()
+            try:
+                return json.loads(clean)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Groq model returned unparseable JSON: {e}\nRaw output: {raw[:200]}")
+        elif provider == "Custom":
+            messages = [
+                {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
+                {"role": "user", "content": prompt}
+            ]
+            raw = self._custom_chat_completion(messages, temperature=0.2, model=model, max_tokens=max_tokens)
+            if not raw:
+                try:
+                    return openrouter_client.chat_json(prompt, system, model, max_tokens)
+                except Exception:
+                    pass
+                raw = self._local_chat_completion(messages, temperature=0.2, response_format={"type": "json_object"})
+            if not raw:
+                raise RuntimeError("Custom provider request failed for JSON generation.")
+            
+            clean = raw.strip()
+            if clean.startswith("```"):
+                parts = clean.split("```")
+                clean = parts[1] if len(parts) > 1 else clean
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip().rstrip("`").strip()
+            try:
+                return json.loads(clean)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Custom model returned unparseable JSON: {e}\nRaw output: {raw[:200]}")
         elif self._provider == "Local":
             messages = [
                 {"role": "system", "content": system + " Output valid JSON only, without any markdown formatting."},
@@ -326,6 +578,7 @@ class UnifiedAIClient:
         self.reload_settings()
         provider = self._provider
         nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+        groq_model = model or "llama-3.2-11b-vision-preview"
 
         if provider == "NVIDIA":
             result = self._nvidia_vision(prompt, image_b64, mime, system, nvidia_model, max_tokens)
@@ -336,6 +589,24 @@ class UnifiedAIClient:
             except Exception:
                 pass
             raise RuntimeError("NVIDIA vision request failed.")
+        elif provider == "Groq":
+            result = self._groq_vision(prompt, image_b64, mime, system, groq_model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.vision(prompt, image_b64, mime, system, model, max_tokens)
+            except Exception:
+                pass
+            raise RuntimeError("Groq vision request failed.")
+        elif provider == "Custom":
+            result = self._custom_vision(prompt, image_b64, mime, system, model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.vision(prompt, image_b64, mime, system, model, max_tokens)
+            except Exception:
+                pass
+            raise RuntimeError("Custom provider vision request failed.")
         if provider in ("Gemini", "Google Gemini"):
             client = self._get_gemini_client()
             if client:
@@ -384,7 +655,7 @@ class UnifiedAIClient:
     def vision_from_file(self, prompt: str, image_path: str, system: str = "Analyze the image.", model: Optional[str] = None, max_tokens: int = 1024) -> str:
         self.reload_settings()
         provider = self._provider
-        if provider == "NVIDIA":
+        if provider in ("NVIDIA", "Groq", "Custom"):
             import base64
             path = Path(image_path)
             mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif"}
@@ -407,9 +678,28 @@ class UnifiedAIClient:
         self.reload_settings()
         provider = self._provider
         nvidia_model = model or "nvidia/nemotron-3-super-120b-a12b"
+        groq_model = model or "llama-3.1-8b-instant"
 
         if provider == "NVIDIA":
             result = self._nvidia_chat_completion(messages, temperature, nvidia_model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.multi_turn(messages, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
+        elif provider == "Groq":
+            result = self._groq_chat_completion(messages, temperature, groq_model, max_tokens)
+            if result:
+                return result
+            try:
+                return openrouter_client.multi_turn(messages, model, max_tokens, temperature)
+            except Exception:
+                pass
+            return self._local_chat_completion(messages, temperature) or ""
+        elif provider == "Custom":
+            result = self._custom_chat_completion(messages, temperature, model, max_tokens)
             if result:
                 return result
             try:
