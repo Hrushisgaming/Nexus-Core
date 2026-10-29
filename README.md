@@ -22,7 +22,7 @@
 
 ---
 
-## ⚡ What's New in Brahma AI Evo
+## ⚡ What's New in Nexus Core Evo
 
 ### 1. 🔌 Holographic Hardware Assembler & Circuit HUD
 - **Screen & Voice Part Recognition**: Brahma scans your screen via computer vision or parses voice commands (`"Brahma, how to connect DHT11 to Arduino Pro Mini"`) to recognize microcontrollers (Arduino Uno, Pro Mini, ESP32), sensors (DHT11, HC-SR04 ultrasonic, servos), and passive components.
@@ -130,13 +130,13 @@
    - macOS: `~/Library/Application Support/BrahmaAI`
 
 4. **Configure API Keys:**
-   - Launch Brahma AI Evo.
+   - Launch Nexus Core Evo.
    - Click the **Settings** icon on the top navigation bar.
    - Enter your **Gemini API Key** and any optional credentials (Spotify MCP, Weather, etc.) into the respective cards.
    - Click **Save & Connect**.
 
 3. **Configure API Keys:**
-   - Launch Brahma AI Evo.
+   - Launch Nexus Core Evo.
    - Click the **Settings** icon on the top navigation bar.
    - Enter your **Gemini API Key** and any optional credentials (Spotify MCP, Weather, etc.) into the respective cards.
    - Click **Save & Connect**.
@@ -162,7 +162,7 @@
 ## 🏗️ Architecture
 
 ```
-Brahma AI Evo/
+Nexus Core Evo/
 ├── main.py                     # Main application entry point & live event loop
 ├── ui.py                       # PyQt6 GUI: Command Bar, Waveform FFT, HUD Wings, Chat
 ├── actions/                    # Built-in action tools & executors
@@ -200,7 +200,7 @@ Brahma AI Evo/
 
 **Personal & Private Local Use Only — No Distribution.**
 
-This project is licensed under the **Brahma AI Evo Source-Available Personal Use License**.
+This project is licensed under the **Nexus Core Evo Source-Available Personal Use License**.
 
 - ✅ **Allowed:** You may download, clone, inspect, build, and run the software locally strictly on your own personal device for private, personal, educational, and research use.
 - 🚫 **Strictly Prohibited (No Distribution):** You may **NOT** distribute, redistribute, re-upload, mirror, share, transmit, sublicense, or publish this software, repository, binaries, or derivative works anywhere (including other Git hosts, public repositories, or cloud platforms). The only official distribution source is this repository.
@@ -209,5 +209,5 @@ This project is licensed under the **Brahma AI Evo Source-Available Personal Use
 For full terms and legal conditions, see the [LICENSE](LICENSE) file. For commercial licensing inquiries, reach out via [Discord](https://discord.gg/gEYmJKKtq3).
 
 <div align="center">
-<b>Brahma AI Evo</b> • Built with intelligence, precision, and autonomy.
+<b>Nexus Core Evo</b> • Built with intelligence, precision, and autonomy.
 </div>

@@ -269,7 +269,7 @@ Skill Architecture Guidelines:
      c) For web images/GIFs: Attempt downloading using safe SSL context or requests, but if download fails or if network is unavailable, IMMEDIATELY fall back to drawing a crisp high-tech visual deliverable using PIL/matplotlib so execution always succeeds and displays on screen.
      d) Return format for visuals:
         `return {'image_path': image_path, 'title': '...', 'summary': '...'}`
-        This triggers Brahma Evo's HUD Result Wing to immediately display the card!
+        This triggers Nexus Core's HUD Result Wing to immediately display the card!
 6. Output Format:
    Output MUST be clean JSON with exact structure:
 {

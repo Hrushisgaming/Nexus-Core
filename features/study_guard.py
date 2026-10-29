@@ -1,6 +1,6 @@
 """
 features/study_guard.py
-Hot-loaded dynamic feature for Brahma Evo: StudyGuard & Focus Sentinel.
+Hot-loaded dynamic feature for Nexus Core: StudyGuard & Focus Sentinel.
 """
 
 from typing import Any, Dict

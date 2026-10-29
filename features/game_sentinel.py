@@ -1,6 +1,6 @@
 """
 features/game_sentinel.py
-Hot-loaded dynamic feature for Brahma Evo: Game Sentinel & Hardware Turbo Boost.
+Hot-loaded dynamic feature for Nexus Core: Game Sentinel & Hardware Turbo Boost.
 """
 
 from typing import Any, Dict

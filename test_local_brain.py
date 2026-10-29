@@ -23,7 +23,7 @@ if available:
         try:
             res = local_brain.chat_complete(
                 messages=[
-                    {"role": "system", "content": "You are Brahma Evo, a concise desktop AI."},
+                    {"role": "system", "content": "You are Nexus Core, a concise desktop AI."},
                     {"role": "user", "content": "Introduce yourself in one punchy sentence."}
                 ],
                 model=test_model

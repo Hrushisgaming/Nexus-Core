@@ -86,7 +86,7 @@ class OpenRouterClient:
                 "Authorization": f"Bearer {self.api_key}" if self.api_key else "",
                 "Content-Type":  "application/json",
                 "HTTP-Referer":  "https://github.com/brahma-ai",
-                "X-Title":       "Brahma Evo",
+                "X-Title":       "Nexus Core",
             }
         return self.api_key
 
@@ -237,7 +237,7 @@ class OpenRouterClient:
         self,
         prompt: str,
         system: str = (
-            "You are a component of Brahma Evo, an autonomous self-evolving personal assistant. "
+            "You are a component of Nexus Core, an autonomous self-evolving personal assistant. "
             "Be concise, helpful, and precise."
         ),
         history: Optional[list[dict]] = None,
@@ -368,7 +368,7 @@ client = OpenRouterClient()
 
 if __name__ == "__main__":
     print("=" * 55)
-    print("  Brahma Evo — OpenRouter Client Self-Test")
+    print("  Nexus Core — OpenRouter Client Self-Test")
     print("=" * 55)
 
     print("\n[TEST 1] Basic chat...")

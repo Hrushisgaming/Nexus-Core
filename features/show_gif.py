@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 def execute(**kwargs):
     """
     Renders and displays an animated GIF deliverable for the requested query
-    on the Brahma Evo HUD.
+    on the Nexus Core HUD.
     """
     query = (
         kwargs.get('query')

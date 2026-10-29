@@ -167,7 +167,7 @@ def main():
     print("\n" + "=" * 40)
     print("✅ Setup complete!")
     print("=" * 40)
-    print("\nTo start Brahma Evo:")
+    print("\nTo start Nexus Core:")
     print("  macOS/Linux: python3 main.py")
     print("  Windows:     python main.py  or  start_brahma.bat")
     print("\nManage API keys anytime in Settings → AI Providers.")

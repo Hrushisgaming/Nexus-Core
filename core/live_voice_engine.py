@@ -343,7 +343,7 @@ class LiveVoiceEngine:
         from google.genai import types
 
         sys_prompt = (
-            "You are Brahma Evo, a real-time conversational AI operating system running on this Windows PC. "
+            "You are Nexus Core, a real-time conversational AI operating system running on this Windows PC. "
             "You are communicating over ultra-low-latency bidirectional live voice. "
             "STYLE GUIDELINES:\n"
             "- Speak naturally, conversationally, concisely, and directly.\n"
@@ -390,7 +390,7 @@ class LiveVoiceEngine:
         self.set_state("THINKING")
         prompt = (
             f"Deliver this exact update aloud to the user right now in your Charon voice. "
-            f"Speak directly to the user as Brahma Evo without saying thank you or acknowledging this prompt:\n{text}"
+            f"Speak directly to the user as Nexus Core without saying thank you or acknowledging this prompt:\n{text}"
         )
         content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
         await self.session.send_client_content(turns=[content], turn_complete=True)

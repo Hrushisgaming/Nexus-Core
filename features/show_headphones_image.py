@@ -15,7 +15,7 @@ import numpy as np
 def execute(**kwargs):
     """
     Renders and displays a sleek high-fidelity headphones visual deliverable
-    on the Brahma Evo HUD screen.
+    on the Nexus Core HUD screen.
     """
     try:
         output_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'NexusCore', 'deliverables')

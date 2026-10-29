@@ -1,6 +1,6 @@
 """
 Feature: flowstate
-Description: FlowState Time Machine for Brahma Evo.
+Description: FlowState Time Machine for Nexus Core.
 Snapshots and restores persistent desktop workspace environments (browser tabs,
 open apps, VS Code projects, and window layouts) that survive reboots.
 """

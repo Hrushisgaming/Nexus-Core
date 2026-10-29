@@ -16,9 +16,9 @@ Please report security concerns through a private channel or repository owner co
 - Revoke any exposed credentials immediately.
 - Update local configuration files after rotating secrets.
 
-## Brahma Evo Security Overview
+## Nexus Core Security Overview
 
-This repository includes a security overview for Brahma Evo's current runtime model, gateway exposure, and authentication flow.
+This repository includes a security overview for Nexus Core's current runtime model, gateway exposure, and authentication flow.
 
 ### Local credential handling
 
@@ -29,13 +29,13 @@ This repository includes a security overview for Brahma Evo's current runtime mo
 
 ### AI provider access
 
-- Brahma Evo uses Gemini as the primary AI provider and OpenRouter as a fallback.
+- Nexus Core uses Gemini as the primary AI provider and OpenRouter as a fallback.
 - Both API keys are loaded from the local config file and sent to the respective service clients.
 - `config/api_keys.json` is plaintext JSON and is not encrypted by the application.
 
 ### Brahma Connect gateway exposure
 
-Brahma Connect is the local device gateway layer for Brahma Evo.
+Brahma Connect is the local device gateway layer for Nexus Core.
 
 #### Configuration
 
@@ -126,5 +126,5 @@ Because the gateway binds to `0.0.0.0`, it is reachable from any interface on th
 - Use OS firewall rules to restrict access to port `8765` when Brahma Connect is enabled.
 - Disable `advertise` in `config/brahma_connect.json` unless discovery is needed.
 - Revoke lost or untrusted devices using `/gateway/devices/{device_id}/revoke`.
-- Run Brahma Evo on a trusted local network.
+- Run Nexus Core on a trusted local network.
 - Consider adding HTTPS/TLS support for the gateway websocket and admin REST endpoints for secure remote access.

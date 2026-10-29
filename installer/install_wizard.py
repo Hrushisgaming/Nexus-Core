@@ -82,14 +82,14 @@ class InstallThread(QThread):
             if self.create_desktop and os.path.exists(exe_path):
                 try:
                     desktop = shell.SpecialFolders("Desktop")
-                    shortcut_path = os.path.join(desktop, "Brahma Evo.lnk")
+                    shortcut_path = os.path.join(desktop, "Nexus Core.lnk")
                     shortcut = shell.CreateShortCut(shortcut_path)
                     shortcut.Targetpath = exe_path
                     shortcut.WorkingDirectory = self.target_dir
                     if os.path.exists(ico_path):
                         shortcut.IconLocation = ico_path
                     shortcut.WindowStyle = 1
-                    shortcut.Description = "Brahma Evo - Autonomous AI Assistant"
+                    shortcut.Description = "Nexus Core - Autonomous AI Assistant"
                     shortcut.save()
                 except Exception as e:
                     print(f"Failed to create desktop shortcut: {e}")
@@ -98,14 +98,14 @@ class InstallThread(QThread):
             if self.create_start_menu and os.path.exists(exe_path):
                 try:
                     start_menu = shell.SpecialFolders("Programs")
-                    shortcut_path_sm = os.path.join(start_menu, "Brahma Evo.lnk")
+                    shortcut_path_sm = os.path.join(start_menu, "Nexus Core.lnk")
                     shortcut_sm = shell.CreateShortCut(shortcut_path_sm)
                     shortcut_sm.Targetpath = exe_path
                     shortcut_sm.WorkingDirectory = self.target_dir
                     if os.path.exists(ico_path):
                         shortcut_sm.IconLocation = ico_path
                     shortcut_sm.WindowStyle = 1
-                    shortcut_sm.Description = "Brahma Evo - Autonomous AI Assistant"
+                    shortcut_sm.Description = "Nexus Core - Autonomous AI Assistant"
                     shortcut_sm.save()
 
                     # Start Menu Uninstall Shortcut
@@ -113,13 +113,13 @@ class InstallThread(QThread):
                     uninst_cmd = os.path.join(self.target_dir, "uninstall.cmd")
                     uninst_target = uninst_exe if os.path.exists(uninst_exe) else uninst_cmd
                     if os.path.exists(uninst_target):
-                        shortcut_path_un = os.path.join(start_menu, "Uninstall Brahma Evo.lnk")
+                        shortcut_path_un = os.path.join(start_menu, "Uninstall Nexus Core.lnk")
                         shortcut_un = shell.CreateShortCut(shortcut_path_un)
                         shortcut_un.Targetpath = uninst_target
                         shortcut_un.WorkingDirectory = self.target_dir
                         if os.path.exists(ico_path):
                             shortcut_un.IconLocation = ico_path
-                        shortcut_un.Description = "Uninstall Brahma Evo"
+                        shortcut_un.Description = "Uninstall Nexus Core"
                         shortcut_un.save()
                 except Exception as e:
                     print(f"Failed to create start menu shortcut: {e}")
@@ -128,14 +128,14 @@ class InstallThread(QThread):
             if self.run_startup and os.path.exists(exe_path):
                 try:
                     startup_dir = shell.SpecialFolders("Startup")
-                    shortcut_path_su = os.path.join(startup_dir, "Brahma Evo.lnk")
+                    shortcut_path_su = os.path.join(startup_dir, "Nexus Core.lnk")
                     shortcut_su = shell.CreateShortCut(shortcut_path_su)
                     shortcut_su.Targetpath = exe_path
                     shortcut_su.WorkingDirectory = self.target_dir
                     if os.path.exists(ico_path):
                         shortcut_su.IconLocation = ico_path
                     shortcut_su.WindowStyle = 1
-                    shortcut_su.Description = "Brahma Evo Startup Daemon"
+                    shortcut_su.Description = "Nexus Core Startup Daemon"
                     shortcut_su.save()
                 except Exception as e:
                     print(f"Failed to register startup shortcut: {e}")
@@ -145,7 +145,7 @@ class InstallThread(QThread):
                 import winreg
                 reg_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\BrahmaEvo"
                 with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE) as reg_key:
-                    winreg.SetValueEx(reg_key, "DisplayName", 0, winreg.REG_SZ, "Brahma Evo")
+                    winreg.SetValueEx(reg_key, "DisplayName", 0, winreg.REG_SZ, "Nexus Core")
                     winreg.SetValueEx(reg_key, "DisplayVersion", 0, winreg.REG_SZ, "1.0.0")
                     winreg.SetValueEx(reg_key, "Publisher", 0, winreg.REG_SZ, "Brahma AI")
                     winreg.SetValueEx(reg_key, "InstallLocation", 0, winreg.REG_SZ, self.target_dir)
@@ -376,9 +376,9 @@ class InstallWizard(QWidget):
         lay.addWidget(title)
 
         desc = QLabel(
-            "This setup wizard will guide you through installing Brahma Evo — the autonomous "
+            "This setup wizard will guide you through installing Nexus Core — the autonomous "
             "AI assistant with local action execution, real-time voice, vision, and system control.\n\n"
-            "Brahma Evo will be installed with full hardware acceleration and optimized background "
+            "Nexus Core will be installed with full hardware acceleration and optimized background "
             "subsystems."
         )
         desc.setFont(QFont("Segoe UI", 11))
@@ -434,7 +434,7 @@ class InstallWizard(QWidget):
         title.setStyleSheet("color: #ffffff;")
         lay.addWidget(title)
 
-        desc = QLabel("Setup will deploy Brahma Evo into the following folder. To install into a different location, click Browse.")
+        desc = QLabel("Setup will deploy Nexus Core into the following folder. To install into a different location, click Browse.")
         desc.setFont(QFont("Segoe UI", 10))
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #94a3b8;")
@@ -548,7 +548,7 @@ class InstallWizard(QWidget):
         oc_lay = QVBoxLayout(options_card)
         oc_lay.setSpacing(12)
 
-        self.chk_desktop = QCheckBox("Create Desktop Shortcut (with Brahma Evo Logo)")
+        self.chk_desktop = QCheckBox("Create Desktop Shortcut (with Nexus Core Logo)")
         self.chk_desktop.setChecked(True)
         oc_lay.addWidget(self.chk_desktop)
 
@@ -623,7 +623,7 @@ class InstallWizard(QWidget):
 
         lay.addStretch()
 
-        tip_label = QLabel("💡 Tip: Brahma Evo features integrated Voice, Vision, and local AI automation.")
+        tip_label = QLabel("💡 Tip: Nexus Core features integrated Voice, Vision, and local AI automation.")
         tip_label.setFont(QFont("Segoe UI", 9))
         tip_label.setStyleSheet("color: #64748b; font-style: italic;")
         lay.addWidget(tip_label)
@@ -643,7 +643,7 @@ class InstallWizard(QWidget):
         lay.addWidget(icon_title)
 
         desc = QLabel(
-            "Brahma Evo has been successfully installed on your computer.\n"
+            "Nexus Core has been successfully installed on your computer.\n"
             "The application may be launched by selecting the installed shortcuts."
         )
         desc.setFont(QFont("Segoe UI", 11))
@@ -655,7 +655,7 @@ class InstallWizard(QWidget):
         finish_card.setStyleSheet("background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 10px; padding: 14px;")
         fc_lay = QVBoxLayout(finish_card)
         
-        self.chk_launch = QCheckBox("Launch Brahma Evo now")
+        self.chk_launch = QCheckBox("Launch Nexus Core now")
         self.chk_launch.setChecked(True)
         self.chk_launch.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         fc_lay.addWidget(self.chk_launch)

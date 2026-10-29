@@ -1,6 +1,6 @@
 """
 features/net_sentinel.py
-Hot-loaded dynamic feature for Brahma Evo / Ultron: NetSentinel & Network Bridge.
+Hot-loaded dynamic feature for Nexus Core / Ultron: NetSentinel & Network Bridge.
 """
 
 from typing import Any, Dict

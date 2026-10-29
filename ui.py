@@ -771,7 +771,7 @@ class DailyBriefingOverlay(QWidget):
         hdr_info = QVBoxLayout()
         hdr_info.setSpacing(2)
 
-        title_lbl = QLabel("⚡ BRAHMA INTELLIGENCE // UNIFIED MORNING BRIEFING")
+        title_lbl = QLabel("⚡ NEXUS INTELLIGENCE // UNIFIED MORNING BRIEFING")
         title_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         title_lbl.setStyleSheet(f"color: {C.PRI}; letter-spacing: 1.5px; background: transparent; border: none;")
         hdr_info.addWidget(title_lbl)
@@ -1254,7 +1254,7 @@ class MemoryInspectorOverlay(QWidget):
 
         from memory.memory_manager import all_entries_for_ui
 
-        hdr = QLabel("🧠  WHAT BRAHMA REMEMBERS")
+        hdr = QLabel("🧠  WHAT NEXUS REMEMBERS")
         hdr.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; letter-spacing: 0.5px;")
         self._lay.addWidget(hdr)
@@ -1270,7 +1270,7 @@ class MemoryInspectorOverlay(QWidget):
 
         cap = QLabel(
             f"{len(rows)} stored memory entries. Stored locally in memory/long_term.json. "
-            f"Brahma recalls these during relevant conversations."
+            f"Nexus recalls these during relevant conversations."
         )
         cap.setWordWrap(True)
         cap.setFont(QFont("Segoe UI", 8))
@@ -2202,7 +2202,7 @@ class GestureCameraPreview(QFrame):
                     candidate_dirs = [
                         BASE_DIR / "config" / "models",
                         Path(__file__).resolve().parent / "config" / "models",
-                        BASE_DIR / "dist" / "BrahmaEvo" / "_internal" / "config" / "models",
+                        BASE_DIR / "dist" / "NexusCore" / "_internal" / "config" / "models",
                     ]
                     if hasattr(sys, "_MEIPASS"):
                         candidate_dirs.append(Path(sys._MEIPASS) / "config" / "models")
@@ -3682,7 +3682,7 @@ class WorkspaceSidebar(QWidget):
 
         header = QHBoxLayout()
         header.setSpacing(10)
-        self._title = QLabel("BRAHMA EVO WORKSPACE")
+        self._title = QLabel("NEXUS EVO WORKSPACE")
         self._title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         self._title.setStyleSheet("color: #FFFFFF; background: transparent; letter-spacing: 1px;")
         header.addWidget(self._title)
@@ -4178,7 +4178,7 @@ class WorkspaceSidebar(QWidget):
         if not raw:
             return
         low = raw.lower()
-        if low.startswith(("you:", "brahma evo:")):
+        if low.startswith(("you:", "nexus core:")):
             return
         if low.startswith("sys:"):
             self.record_chat_event({"role": "system", "text": raw.split(":", 1)[1].strip(), "source": "local"})
@@ -4632,7 +4632,7 @@ class InlineChatWorkspace(QFrame):
         low = raw.lower()
         if low.startswith("you:"):
             self.record_chat_event({"role": "user", "text": raw.split(":", 1)[1].strip()})
-        elif low.startswith("brahma evo:"):
+        elif low.startswith("nexus core:"):
             self.record_chat_event({"role": "assistant", "text": raw.split(":", 1)[1].strip()})
         elif low.startswith("sys:"):
             self.record_chat_event({"role": "system", "text": raw.split(":", 1)[1].strip()})
@@ -4743,7 +4743,7 @@ class LauncherControlPanel(QDialog):
         lay.setContentsMargins(18, 16, 18, 16)
         lay.setSpacing(10)
 
-        title = QLabel("BRAHMA EVO CONTROL")
+        title = QLabel("NEXUS EVO CONTROL")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title.setStyleSheet("color: #FFFFFF; background: transparent; letter-spacing: 1px;")
         lay.addWidget(title)
@@ -4889,7 +4889,7 @@ class SmallPanelCard(QFrame):
 
 class BrahmaTelemetryWing(QFrame):
     """
-    Brahma Right Wing: Live Operations, Research Streams, and Sources.
+    Nexus Right Wing: Live Operations, Research Streams, and Sources.
     Auto-dismisses in 10 seconds unless pinned or hovered.
     Adapts dynamically to the active theme color (Amber Gold by default).
     """
@@ -5202,7 +5202,7 @@ class BrahmaTelemetryWing(QFrame):
 
 class BrahmaResultWing(QFrame):
     """
-    Brahma Left Wing: Final Results, Generated Deliverables (PDF/Word/Media/Code),
+    Nexus Left Wing: Final Results, Generated Deliverables (PDF/Word/Media/Code),
     Executive Summary Bullets, and Quick Action Buttons.
     Auto-dismisses in 10 seconds unless pinned or hovered.
     Adapts dynamically to the active theme color (Amber Gold by default).
@@ -5708,9 +5708,9 @@ class LogWidget(QScrollArea):
         tl = raw.lower()
         if tl.startswith("you:"):
             return "user", "You", raw[4:].strip()
-        if tl.startswith("brahma evo:"):
+        if tl.startswith("nexus core:"):
             return "assistant", "Nexus Core", raw[len("Nexus Core:"):].strip()
-        if tl.startswith("brahma evo:"):
+        if tl.startswith("nexus core:"):
             return "assistant", "Nexus Core", raw[len("Nexus Core:"):].strip()
         if tl.startswith("file:"):
             return "file", "File", raw[5:].strip()
@@ -6132,7 +6132,7 @@ class SetupOverlay(QWidget):
         self._stack.addWidget(page)
 
     def _save_identity_and_next(self):
-        identity.set_assistant_name(self._inp_ast.text().strip() or "Brahma")
+        identity.set_assistant_name(self._inp_ast.text().strip() or "Nexus")
         identity.set_application_name(self._inp_app.text().strip() or "Nexus Core")
         self._stack.setCurrentIndex(2)
 
@@ -7523,7 +7523,7 @@ class OmniCommandPalette(QDialog):
         hint.setStyleSheet("color: rgba(255, 255, 255, 0.35); background: transparent;")
         foot.addWidget(hint)
         foot.addStretch(1)
-        brand = QLabel("BRAHMA EVO OMNI-BAR")
+        brand = QLabel("NEXUS EVO OMNI-BAR")
         brand.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         brand.setStyleSheet("color: #00e5ff; background: transparent; letter-spacing: 1px;")
         foot.addWidget(brand)
@@ -7553,8 +7553,8 @@ class OmniCommandPalette(QDialog):
                     matches.append(item)
             matches.append({
                 "id": "custom_query",
-                "title": f'Ask Brahma: "{text.strip()}"',
-                "desc": "Submit prompt directly to Brahma AI agent",
+                "title": f'Ask Nexus: "{text.strip()}"',
+                "desc": "Submit prompt directly to Nexus AI agent",
                 "icon": "💬",
                 "badge": "Query",
                 "cmd": text.strip(),
@@ -8420,7 +8420,7 @@ class BootSequenceOverlay(QWidget):
                     painter.drawEllipse(QPointF(s['x'], s['y']), s['size'], s['size'])
 
             # -------------------------------------------------------------
-            # 3. DRAW "BRAHMA" TEXT & TYPOGRAPHY EFFECT
+            # 3. DRAW "NEXUS" TEXT & TYPOGRAPHY EFFECT
             # -------------------------------------------------------------
             if self._time >= 1.35:
                 text_t = min(1.0, (self._time - 1.35) / 0.45)
@@ -8429,43 +8429,43 @@ class BootSequenceOverlay(QWidget):
                 spacing_prog = min(1.0, (self._time - 1.35) / 1.5)
                 letter_spacing = 10.0 + (spacing_prog * 14.0)
 
-                font_brahma = QFont("Segoe UI", 56, QFont.Weight.Black)
-                font_brahma.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, letter_spacing)
-                painter.setFont(font_brahma)
+                font_nexus = QFont("Segoe UI", 56, QFont.Weight.Black)
+                font_nexus.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, letter_spacing)
+                painter.setFont(font_nexus)
 
-                rect_brahma = QRectF(cx - 500, cy - 85, 1000, 90)
+                rect_nexus = QRectF(cx - 500, cy - 85, 1000, 90)
 
-                # Outer text cyan glow
-                glow_col = QColor(0, 240, 255, int(text_alpha * 0.45))
+                # Outer text ice glow
+                glow_col = QColor(47, 209, 217, int(text_alpha * 0.45))
                 painter.setPen(glow_col)
                 for ox, oy in [(-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, 1)]:
-                    painter.drawText(rect_brahma.translated(ox, oy), Qt.AlignmentFlag.AlignCenter, "BRAHMA")
+                    painter.drawText(rect_nexus.translated(ox, oy), Qt.AlignmentFlag.AlignCenter, "NEXUS")
 
                 # Core white text with dynamic shimmer
                 if 1.8 <= self._time < 2.5:
                     shim_t = (self._time - 1.8) / 0.7
                     sweep_x = cx - 350 + (shim_t * 700)
                     grad = QLinearGradient(sweep_x - 120, cy, sweep_x + 120, cy)
-                    grad.setColorAt(0.0, QColor(255, 255, 255, int(text_alpha * 0.75)))
-                    grad.setColorAt(0.5, QColor(0, 240, 255, text_alpha))
-                    grad.setColorAt(0.7, QColor(255, 255, 255, text_alpha))
-                    grad.setColorAt(1.0, QColor(255, 255, 255, int(text_alpha * 0.75)))
+                    grad.setColorAt(0.0, QColor(232, 238, 245, int(text_alpha * 0.75)))
+                    grad.setColorAt(0.5, QColor(217, 243, 251, text_alpha))
+                    grad.setColorAt(0.7, QColor(232, 238, 245, text_alpha))
+                    grad.setColorAt(1.0, QColor(232, 238, 245, int(text_alpha * 0.75)))
                     painter.setPen(QPen(QBrush(grad), 1))
                 else:
-                    painter.setPen(QColor(255, 255, 255, text_alpha))
+                    painter.setPen(QColor(232, 238, 245, text_alpha))
 
-                painter.drawText(rect_brahma, Qt.AlignmentFlag.AlignCenter, "BRAHMA")
+                painter.drawText(rect_nexus, Qt.AlignmentFlag.AlignCenter, "NEXUS")
 
             # -------------------------------------------------------------
-            # 4. DRAW "AI - EVO" WITH MAXIMUM IMPACT (>= 2.5s)
+            # 4. DRAW "CORE" SUBTITLE WITH MAXIMUM IMPACT (>= 2.5s)
             # -------------------------------------------------------------
             if self._time >= 2.5:
-                evo_dt = self._time - 2.5
-                evo_alpha = int(255 * min(1.0, evo_dt / 0.08) * global_alpha)
+                core_dt = self._time - 2.5
+                core_alpha = int(255 * min(1.0, core_dt / 0.08) * global_alpha)
 
                 slam_scale = 1.0
-                if evo_dt < 0.18:
-                    slam_t = evo_dt / 0.18
+                if core_dt < 0.18:
+                    slam_t = core_dt / 0.18
                     slam_scale = 1.5 - (0.5 * math.sin(slam_t * math.pi * 0.5))
 
                 painter.save()
@@ -8476,28 +8476,16 @@ class BootSequenceOverlay(QWidget):
                 badge_h = 44.0
                 badge_rect = QRectF(-badge_w / 2.0, -badge_h / 2.0, badge_w, badge_h)
 
-                painter.setPen(QPen(QColor(0, 240, 255, int(evo_alpha * 0.8)), 1.5))
-                painter.setBrush(QColor(0, 20, 35, int(evo_alpha * 0.55)))
+                painter.setPen(QPen(QColor(47, 209, 217, int(core_alpha * 0.8)), 1.5))
+                painter.setBrush(QColor(43, 35, 71, int(core_alpha * 0.55)))
                 painter.drawRoundedRect(badge_rect, 22.0, 22.0)
 
                 font_sub = QFont("Segoe UI", 18, QFont.Weight.Bold)
                 font_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 4.0)
                 painter.setFont(font_sub)
 
-                painter.setPen(QColor(220, 230, 245, evo_alpha))
-                painter.drawText(QRectF(-badge_w / 2.0, -badge_h / 2.0, 125, badge_h), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "AI - ")
-
-                font_evo = QFont("Segoe UI", 20, QFont.Weight.Black)
-                font_evo.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 5.0)
-                painter.setFont(font_evo)
-
-                evo_glow = QColor(0, 240, 255, int(evo_alpha * 0.6))
-                painter.setPen(evo_glow)
-                for ox, oy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                    painter.drawText(QRectF(-badge_w / 2.0 + 130, -badge_h / 2.0, 115, badge_h).translated(ox, oy), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "EVO")
-
-                painter.setPen(QColor(0, 240, 255, evo_alpha))
-                painter.drawText(QRectF(-badge_w / 2.0 + 130, -badge_h / 2.0, 115, badge_h), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "EVO")
+                painter.setPen(QColor(232, 238, 245, core_alpha))
+                painter.drawText(QRectF(-badge_w / 2.0, -badge_h / 2.0, 125, badge_h), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "CORE")
 
                 painter.restore()
 
@@ -9398,7 +9386,7 @@ class FloatingLauncher(QWidget):
         hide_act.triggered.connect(self.hide)
         menu.addAction(hide_act)
 
-        quit_act = QAction("Quit Brahma", self)
+        quit_act = QAction("Quit Nexus", self)
         quit_act.triggered.connect(lambda: self.action_requested.emit("quit"))
         menu.addAction(quit_act)
 
@@ -10395,7 +10383,7 @@ class MainWindow(QMainWindow):
                     self.on_chat_event({"role": "user", "text": user_msg, "source": source})
                 except Exception:
                     pass
-        if hasattr(self, "_result_card") and low.startswith("brahma evo:"):
+        if hasattr(self, "_result_card") and low.startswith("nexus core:"):
             reply = raw.split(":", 1)[1].strip()
             self._result_card.set_body(reply[:80] + ("…" if len(reply) > 80 else ""))
             self._result_card.hide()
@@ -10854,7 +10842,7 @@ class MainWindow(QMainWindow):
                 self._live_sub_speaker.setText(f"● {speaker_upper}")
                 if speaker_upper in ("YOU", "USER"):
                     self._live_sub_speaker.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
-                elif speaker_upper in ("BRAHMA", "AI", "MODEL"):
+                elif speaker_upper in ("NEXUS", "AI", "MODEL"):
                     self._live_sub_speaker.setStyleSheet("color: #10b981; background: transparent; border: none;")
                 else:
                     self._live_sub_speaker.setStyleSheet("color: #f59e0b; background: transparent; border: none;")
@@ -10869,7 +10857,7 @@ class MainWindow(QMainWindow):
                         border-radius: 13px;
                         padding: 4px 12px;
                     """)
-                elif speaker_upper in ("BRAHMA", "AI", "MODEL"):
+                elif speaker_upper in ("NEXUS", "AI", "MODEL"):
                     self._desktop_sub_badge.setStyleSheet("""
                         color: #10b981;
                         background: rgba(16, 185, 129, 0.22);
@@ -11015,7 +11003,7 @@ class MainWindow(QMainWindow):
             ph_map = {
                 "LISTENING": "Listening... (or type your command)",
                 "SPEAKING": "Nexus Core is responding...",
-                "THINKING": "Brahma is thinking...",
+                "THINKING": "Nexus is thinking...",
                 "PROCESSING": "Processing request...",
                 "EXECUTING": "Executing action...",
                 "WORKING": "Working on it...",
@@ -11028,7 +11016,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_inline_workspace") and hasattr(self._inline_workspace, "_footer_status"):
             foot_map = {
                 "LISTENING": "● Listening for voice command...",
-                "SPEAKING": "● Brahma is speaking...",
+                "SPEAKING": "● Nexus is speaking...",
                 "THINKING": "● Thinking...",
                 "PROCESSING": "● Processing...",
                 "EXECUTING": "● Executing system command...",
@@ -11489,7 +11477,7 @@ class MainWindow(QMainWindow):
         pulse_dot.setStyleSheet("color: #37ff5f; background: transparent;")
         header_bar.addWidget(pulse_dot)
 
-        header_title = QLabel("BRAHMA CHAT")
+        header_title = QLabel("NEXUS CHAT")
         header_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         header_title.setStyleSheet(f"color: {C.WHITE}; background: transparent; letter-spacing: 1px;")
         header_bar.addWidget(header_title)
@@ -12797,7 +12785,7 @@ class SystemConnectivityPage(QWidget):
 
         rule_input_row = QHBoxLayout()
         self._ah_rule_input = QLineEdit()
-        self._ah_rule_input.setPlaceholderText("Teach Brahma a rule (e.g. Always summarize in bullet points)")
+        self._ah_rule_input.setPlaceholderText("Teach Nexus a rule (e.g. Always summarize in bullet points)")
         rule_input_row.addWidget(self._ah_rule_input)
         self._ah_learn_btn = QPushButton("Teach Rule")
         self._ah_learn_btn.clicked.connect(self._handle_ah_learn_rule)
@@ -12815,7 +12803,7 @@ class SystemConnectivityPage(QWidget):
         except Exception:
             pass
 
-        # Brahma Audio Routing & Hardware Controls
+        # Nexus Audio Routing & Hardware Controls
         audio_card = self._card("Audio Routing & Hardware Controls", "Select hardware audio interfaces, toggle Push-to-Talk, or inspect long-term memory.")
         alay = audio_card.layout()
 
@@ -13164,7 +13152,7 @@ class SystemConnectivityPage(QWidget):
         self._update_ig_status()
         from PyQt6.QtWidgets import QMessageBox
         name_str = f" as @{detected_username}" if detected_username else ""
-        QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Browser{name_str}!\n\nBrahma is now active for voice DM notifications and instant direct replies.")
+        QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Browser{name_str}!\n\nNexus is now active for voice DM notifications and instant direct replies.")
 
     def _ig_browser_error(self, err_msg):
         self._ig_browser_btn.setEnabled(True)
@@ -13255,7 +13243,7 @@ class SystemConnectivityPage(QWidget):
             stop_daemon()
             start_daemon()
             self._update_ig_status()
-            QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Session Cookie!\n\nBrahma background DM daemon is now active.")
+            QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Session Cookie!\n\nNexus background DM daemon is now active.")
 
     class IGLoginWorker(__import__('PyQt6').QtCore.QThread):
         finished_success = __import__('PyQt6').QtCore.pyqtSignal()
@@ -13834,7 +13822,7 @@ class SystemConnectivityPage(QWidget):
             AutoHealEngine.record_last_error(tb)
             self._ah_output_lbl.setText(
                 f"❌ Simulated bug triggered in test_action.py: {type(e).__name__}: {e}\n"
-                f"Traceback captured in AutoHealEngine! Click 'Fix Captured Bug' or say 'Brahma, fix that bug'."
+                f"Traceback captured in AutoHealEngine! Click 'Fix Captured Bug' or say 'Nexus, fix that bug'."
             )
 
     def _handle_ah_fix_captured_bug(self):
@@ -14396,7 +14384,7 @@ class SystemConnectivityPage(QWidget):
             # Base variables
             base_dir = Path(os.path.abspath("."))
             script_path = base_dir / "main.py"
-            icon_path = base_dir / "assets" / "Brahma_Lite_Logo.ico"
+            icon_path = base_dir / "assets" / "nexus_lite_logo.ico"
             
             python_exe = sys.executable
             if not python_exe:
@@ -15173,7 +15161,7 @@ class BrahmaConnectDevicesPage(QFrame):
         self._title = QLabel("DEVICES")
         self._title.setFont(QFont("Segoe UI", 18, QFont.Weight.Black))
         self._title.setStyleSheet("color: #ffffff; letter-spacing: 2px;")
-        self._subtitle = QLabel("Everything connected to Brahma.")
+        self._subtitle = QLabel("Everything connected to Nexus.")
         self._subtitle.setFont(QFont("Segoe UI", 9))
         self._subtitle.setStyleSheet("color: rgba(255,255,255,0.62);")
         title_box.addWidget(self._title)
@@ -15554,7 +15542,7 @@ class BrahmaConnectDevicesPage(QFrame):
             import io
             import qrcode
 
-            self._onboarding_offer = dict(service.create_pairing_offer(device_name="Brahma Connect", platform="gateway"))
+            self._onboarding_offer = dict(service.create_pairing_offer(device_name="Nexus Connect", platform="gateway"))
             code = str(self._onboarding_offer.get("pairing_code") or "------")
             self._onb_code_lbl.setText(code)
             self._onb_status_lbl.setText("WAITING FOR CONNECTION")
@@ -16635,7 +16623,7 @@ class BrahmaUI:
             self._win._ultron_malfunction_sig.emit(payload or {})
 
     def show_content(self, title: str, body: str):
-        """Universal rich content presenter. Automatically routes to the Brahma Holographic Left Deliverable Wing."""
+        """Universal rich content presenter. Automatically routes to the Nexus Holographic Left Deliverable Wing."""
         import re
         file_path = None
         m = re.search(r'([A-Za-z]:\\[^\s"\'<>`\r\n]+\.(?:pdf|docx|xlsx|pptx|png|jpg|mp4|py|html|json|txt))', body)

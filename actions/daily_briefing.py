@@ -392,7 +392,7 @@ def daily_briefing(
     if player:
         try:
             player.show_daily_briefing(data)
-            player.write_log(f"Brahma Evo: {narrative}")
+            player.write_log(f"Nexus Core: {narrative}")
         except Exception as e:
             print(f"[DailyBriefing] UI render notice: {e}")
 

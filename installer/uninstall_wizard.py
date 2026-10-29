@@ -15,7 +15,7 @@ from PyQt6.QtGui import QFont, QColor
 
 
 def get_default_install_dir() -> str:
-    """Detect directory where Brahma Evo is installed."""
+    """Detect directory where Nexus Core is installed."""
     if hasattr(sys, '_MEIPASS'):
         # If running as compiled exe inside install folder
         exe_dir = os.path.dirname(os.path.abspath(sys.executable))
@@ -51,7 +51,7 @@ class UninstallThread(QThread):
 
     def run(self):
         try:
-            self.status.emit("Closing active Brahma Evo instances...")
+            self.status.emit("Closing active Nexus Core instances...")
             self.progress.emit(10)
             
             # Kill running processes
@@ -75,10 +75,10 @@ class UninstallThread(QThread):
                 startup = shell.SpecialFolders("Startup")
 
                 for sc in [
-                    os.path.join(desktop, "Brahma Evo.lnk"),
-                    os.path.join(start_menu, "Brahma Evo.lnk"),
-                    os.path.join(start_menu, "Uninstall Brahma Evo.lnk"),
-                    os.path.join(startup, "Brahma Evo.lnk")
+                    os.path.join(desktop, "Nexus Core.lnk"),
+                    os.path.join(start_menu, "Nexus Core.lnk"),
+                    os.path.join(start_menu, "Uninstall Nexus Core.lnk"),
+                    os.path.join(startup, "Nexus Core.lnk")
                 ]:
                     if os.path.exists(sc):
                         try:
@@ -128,7 +128,7 @@ class UninstallThread(QThread):
                 print(f"Failed to spawn detachment cleanup: {e}")
 
             self.progress.emit(100)
-            self.status.emit("Brahma Evo was successfully removed!")
+            self.status.emit("Nexus Core was successfully removed!")
             time.sleep(0.4)
             self.finished.emit()
 
@@ -139,7 +139,7 @@ class UninstallThread(QThread):
 class UninstallWizard(QWidget):
     def __init__(self, target_dir: str = None):
         super().__init__()
-        self.setWindowTitle("Brahma Evo - Uninstall")
+        self.setWindowTitle("Nexus Core - Uninstall")
         self.resize(680, 440)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -280,13 +280,13 @@ class UninstallWizard(QWidget):
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(14)
 
-        title = QLabel("Uninstall Brahma Evo")
+        title = QLabel("Uninstall Nexus Core")
         title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         title.setStyleSheet("color: #ffffff;")
         lay.addWidget(title)
 
         desc = QLabel(
-            "Are you sure you want to completely remove Brahma Evo and all of its components "
+            "Are you sure you want to completely remove Nexus Core and all of its components "
             "from your computer?"
         )
         desc.setFont(QFont("Segoe UI", 11))
@@ -336,12 +336,12 @@ class UninstallWizard(QWidget):
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(14)
 
-        title = QLabel("Uninstalling Brahma Evo...")
+        title = QLabel("Uninstalling Nexus Core...")
         title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         title.setStyleSheet("color: #ffffff;")
         lay.addWidget(title)
 
-        subtitle = QLabel("Please wait while Brahma Evo is removed from your system.")
+        subtitle = QLabel("Please wait while Nexus Core is removed from your system.")
         subtitle.setFont(QFont("Segoe UI", 10))
         subtitle.setStyleSheet("color: #94a3b8;")
         lay.addWidget(subtitle)
@@ -374,7 +374,7 @@ class UninstallWizard(QWidget):
         lay.addWidget(title)
 
         desc = QLabel(
-            "Brahma Evo has been successfully removed from your computer.\n"
+            "Nexus Core has been successfully removed from your computer.\n"
             "All shortcuts, registry entries, and core files have been cleaned."
         )
         desc.setFont(QFont("Segoe UI", 11))

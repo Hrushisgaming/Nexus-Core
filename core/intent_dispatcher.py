@@ -1,7 +1,7 @@
 """
 core/intent_dispatcher.py
 =========================
-Intelligent 3-Tier Semantic Intent Dispatcher for Brahma Evo.
+Intelligent 3-Tier Semantic Intent Dispatcher for Nexus Core.
 
 Architecture:
 - Tier 1: Instant Local Reflex (< 2ms)
@@ -871,7 +871,7 @@ class IntentDispatcher:
         device_context = ", ".join(device_names) if device_names else "None connected"
 
         system_instruction = (
-            "You are the high-speed Semantic Intent Dispatcher for Brahma Evo AI OS.\n"
+            "You are the high-speed Semantic Intent Dispatcher for Nexus Core AI OS.\n"
             "Your job is to analyze the user's voice command and classify it into an executable action.\n\n"
             "Available Intent Categories and Actions:\n"
             "1. 'vision' (Target: 'pc')\n"

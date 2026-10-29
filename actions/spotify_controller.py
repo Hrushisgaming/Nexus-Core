@@ -283,7 +283,7 @@ def spotify_controller(
             _open_url_in_chrome(direct_url)
             if player:
                 try:
-                    player.write_log(f"Brahma Evo: Playing '{query}' in Google Chrome")
+                    player.write_log(f"Nexus Core: Playing '{query}' in Google Chrome")
                 except Exception:
                     pass
             return f"Playing '{query}' in Google Chrome."

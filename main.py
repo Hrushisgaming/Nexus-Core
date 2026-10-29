@@ -1166,7 +1166,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "connect_list_devices",
         "description": (
-            "Lists devices connected to Brahma Connect. Use when the user asks what devices are connected, "
+            "Lists devices connected to Nexus Connect. Use when the user asks what devices are connected, "
             "what is online, or wants a simple inventory of paired devices."
         ),
         "parameters": {
@@ -1214,7 +1214,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "connect_execute",
         "description": (
-            "Routes a Brahma Connect command to a paired device through the gateway. "
+            "Routes a Nexus Connect command to a paired device through the gateway. "
             "Use for actions such as launch_app, open_url, get_battery, capture_screen, take_photo, "
             "clipboard_get, clipboard_set, send_file, receive_file, media_play, media_pause, volume_set, "
             "notification_list, get_device_info, close_app, mouse_move, keyboard_type, unlock_phone, file_list, file_read, file_write, file_delete."
@@ -1248,7 +1248,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "connect_pair_device",
         "description": (
-            "Creates or approves Brahma Connect pairing. Use to generate a QR code / pairing code for a new device, "
+            "Creates or approves Nexus Connect pairing. Use to generate a QR code / pairing code for a new device, "
             "or to approve a pending pairing request."
         ),
         "parameters": {
@@ -1264,7 +1264,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "connect_disconnect_device",
         "description": (
-            "Disconnects a device from Brahma Connect and marks it offline. "
+            "Disconnects a device from Nexus Connect and marks it offline. "
             "Use when the user asks to disconnect, log out, or stop a paired device."
         ),
         "parameters": {
@@ -3152,7 +3152,7 @@ class BrahmaLive:
                         )
                         self.ui.write_log(res)
                         if hasattr(self.ui, "update_task_workspace"):
-                            self.ui.update_task_workspace(status="Render Complete", output="Saved to Desktop/Brahma_Images", percent=100)
+                            self.ui.update_task_workspace(status="Render Complete", output="Saved to Desktop/Nexus_Images", percent=100)
                     except Exception as exc:
                         self.ui.write_log(f"ERR: Image generation failed: {exc}")
                         self.speak(f"Image generation encountered an error: {exc}")
@@ -3407,7 +3407,7 @@ class BrahmaLive:
                                     source=source or "local"
                                 )
 
-                            c_res = sentinel.connect_all_devices("Brahma AI Online // Node Linked")
+                            c_res = sentinel.connect_all_devices("Nexus AI Online // Node Linked")
                             linked_devs = c_res.get("total_devices_linked", 0)
 
                             # Push updated linked devices to Radar HUD
@@ -3466,7 +3466,7 @@ class BrahmaLive:
 
             if intent_res.intent == "space_cleaner":
                 sc_action = str(intent_res.action or "open_sentinel").lower()
-                self.speak(intent_res.voice_ack or "Initializing Brahma Storage Sentinel...")
+                self.speak(intent_res.voice_ack or "Initializing Nexus Storage Sentinel...")
 
                 def _run_space_cleaner():
                     try:
@@ -3525,7 +3525,7 @@ class BrahmaLive:
                     try:
                         from actions.office_generator import generate_presentation_from_prompt
                         res = generate_presentation_from_prompt(presentation_topic, player=self.ui, speak=self.speak)
-                        self.ui.write_log(f"[BrahmaOffice] {res}")
+                        self.ui.write_log(f"[NexusOffice] {res}")
                         if hasattr(self.ui, "update_task_workspace"):
                             self.ui.update_task_workspace(status="Presentation Completed", output=res, percent=100)
                         self.speak("Your presentation has been created and saved to Desktop, sir.")
@@ -3550,7 +3550,7 @@ class BrahmaLive:
                     try:
                         from actions.office_generator import generate_spreadsheet_from_prompt
                         res = generate_spreadsheet_from_prompt(sheet_topic, player=self.ui, speak=self.speak)
-                        self.ui.write_log(f"[BrahmaOffice] {res}")
+                        self.ui.write_log(f"[NexusOffice] {res}")
                         if hasattr(self.ui, "update_task_workspace"):
                             self.ui.update_task_workspace(status="Spreadsheet Completed", output=res, percent=100)
                         self.speak("Your spreadsheet workbook has been created and saved to Desktop, sir.")
@@ -3566,10 +3566,10 @@ class BrahmaLive:
                 developer_settings = self.ui._load_app_settings() if hasattr(self.ui, "_load_app_settings") else {}
                 developer_workspace = str(developer_settings.get("developer_mode_workspace", "")).strip()
                 if not developer_workspace:
-                    developer_workspace = str(Path.home() / "Desktop" / "BrahmaProjects")
+                    developer_workspace = str(Path.home() / "Desktop" / "NexusProjects")
                     Path(developer_workspace).mkdir(parents=True, exist_ok=True)
 
-                self.speak(intent_res.voice_ack or "Working on your project with Brahma Dev...")
+                self.speak(intent_res.voice_ack or "Working on your project with Nexus Dev...")
                 if hasattr(self.ui, "begin_task_workspace"):
                     self.ui.begin_task_workspace(text, ["Analyzing specifications", "Scaffolding files", "Writing code", "Verifying build"], source=source or "local")
 
@@ -3602,7 +3602,7 @@ class BrahmaLive:
                         except Exception:
                             pass
                     except Exception as exc:
-                        self.ui.write_log(f"ERR: Brahma Dev failed: {exc}")
+                        self.ui.write_log(f"ERR: Nexus Dev failed: {exc}")
                         if hasattr(self.ui, "update_task_workspace"):
                             self.ui.update_task_workspace(status="Build Failed", output=str(exc), percent=0)
                         self.speak("There was an issue building the project, sir. Please check the logs.")
@@ -3649,14 +3649,14 @@ class BrahmaLive:
         except Exception as e_dyn:
             print(f"[Registry] Match error: {e_dyn}")
 
-        # Brahma Connect Mobile Routing (fallback intercept)
+        # Nexus Connect Mobile Routing (fallback intercept)
         if source != "instagram" and self._handle_brahma_connect_command(text, source=source or "local"):
             return
 
         developer_settings = self.ui._load_app_settings() if hasattr(self.ui, "_load_app_settings") else {}
         developer_workspace = str(developer_settings.get("developer_mode_workspace", "")).strip()
         if not developer_workspace:
-            developer_workspace = str(Path.home() / "Desktop" / "BrahmaProjects")
+            developer_workspace = str(Path.home() / "Desktop" / "NexusProjects")
             Path(developer_workspace).mkdir(parents=True, exist_ok=True)
 
         presentation_request = _looks_like_presentation_request(text)
@@ -3675,7 +3675,7 @@ class BrahmaLive:
                 try:
                     from actions.office_generator import generate_presentation_from_prompt
                     res = generate_presentation_from_prompt(text, player=self.ui, speak=self.speak)
-                    self.ui.write_log(f"[BrahmaOffice] {res}")
+                    self.ui.write_log(f"[NexusOffice] {res}")
                     if hasattr(self.ui, "update_task_workspace"):
                         self.ui.update_task_workspace(status="Presentation Completed", output=res, percent=100)
                     self.speak("Your presentation has been created and saved to Desktop, sir.")
@@ -3701,7 +3701,7 @@ class BrahmaLive:
                 try:
                     from actions.office_generator import generate_spreadsheet_from_prompt
                     res = generate_spreadsheet_from_prompt(text, player=self.ui, speak=self.speak)
-                    self.ui.write_log(f"[BrahmaOffice] {res}")
+                    self.ui.write_log(f"[NexusOffice] {res}")
                     if hasattr(self.ui, "update_task_workspace"):
                         self.ui.update_task_workspace(status="Spreadsheet Completed", output=res, percent=100)
                     self.speak("Your spreadsheet workbook has been created and saved to Desktop, sir.")
@@ -3718,7 +3718,7 @@ class BrahmaLive:
         code_request = (not presentation_request and not spreadsheet_request) and _looks_like_code_request(text) and any(re.search(rf"\b{re.escape(w)}\b", text.lower()) for w in ("app", "website", "web", "program", "script", "project", "game", "calc", "html", "react"))
 
         if website_request or code_request:
-            self.speak("Working on your project with Brahma Dev...")
+            self.speak("Working on your project with Nexus Dev...")
             if hasattr(self.ui, "begin_task_workspace"):
                 self.ui.begin_task_workspace(text, ["Analyzing specifications", "Scaffolding files", "Writing code", "Verifying build"], source=source or "local")
 
@@ -3757,7 +3757,7 @@ class BrahmaLive:
                     except Exception:
                         pass
                 except Exception as exc:
-                    self.ui.write_log(f"ERR: Brahma Dev failed: {exc}")
+                    self.ui.write_log(f"ERR: Nexus Dev failed: {exc}")
                     if hasattr(self.ui, "update_task_workspace"):
                         self.ui.update_task_workspace(status="Build Failed", output=str(exc), percent=0)
                     self.speak("There was an issue building the project, sir. Please check the logs.")
@@ -4282,10 +4282,10 @@ class BrahmaLive:
             devices = []
 
         if not devices:
-            msg = "No phone is currently connected to Brahma. Please pair or connect your phone via Brahma Connect or the Mobile Connect dashboard, sir."
+            msg = "No phone is currently connected to Brahma. Please pair or connect your phone via Nexus Connect or the Mobile Connect dashboard, sir."
             try:
                 self.ui.update_task_workspace(
-                    title=f"Brahma Connect: {action}",
+                    title=f"Nexus Connect: {action}",
                     command=text,
                     plan=["Search for paired devices", "Verify mobile connection"],
                     status="No Device Connected",
@@ -4295,7 +4295,7 @@ class BrahmaLive:
                 )
             except Exception:
                 pass
-            self.ui.write_log(f"[Brahma Connect] {msg}")
+            self.ui.write_log(f"[Nexus Connect] {msg}")
             self.speak(msg)
             return True
 
@@ -4370,13 +4370,13 @@ class BrahmaLive:
                         detail = "Ringing your phone now, sir."
                     else:
                         detail = "Device command completed."
-                title = f"Brahma Connect: {action}"
+                title = f"Nexus Connect: {action}"
                 self.ui.update_task_workspace(
                     title=title,
                     command=text,
                     plan=[
                         "Identify the paired phone or device",
-                        "Route the command through Brahma Connect",
+                        "Route the command through Nexus Connect",
                         "Verify the device response",
                         "Report the result",
                     ],
@@ -4392,11 +4392,11 @@ class BrahmaLive:
                 return True
 
             error_msg = str(result.get("error") or "Device command failed.")
-            self.ui.write_log(f"ERR: Brahma Connect command failed: {error_msg}")
+            self.ui.write_log(f"ERR: Nexus Connect command failed: {error_msg}")
             self.speak(f"Could not complete action on your phone: {error_msg}")
             try:
                 self.ui.update_task_workspace(
-                    title=f"Brahma Connect: {action}",
+                    title=f"Nexus Connect: {action}",
                     command=text,
                     plan=["Route command to phone", "Execute action"],
                     status="Execution Failed",
@@ -4408,7 +4408,7 @@ class BrahmaLive:
                 pass
             return True
         except Exception as exc:
-            self.ui.write_log(f"ERR: Brahma Connect exception: {exc}")
+            self.ui.write_log(f"ERR: Nexus Connect exception: {exc}")
             return False
 
     def _connect_tool_voice(self, name: str, raw_result: str) -> str | None:
@@ -6848,7 +6848,7 @@ def main():
     except Exception as exc:
         _startup_log(f"GitHub update skipped: {exc}")
     _ensure_desktop_shortcut()
-    ui = BrahmaUI(str(BASE_DIR / "assets" / "Brahma_Lite_Logo.png"), show_immediately=True)
+    ui = BrahmaUI(str(BASE_DIR / "assets" / "nexus_core_logo.png"), show_immediately=True)
     dashboard = None
     dashboard_enabled = DashboardServer is not None and not _is_port_in_use(8000)
     if DashboardServer is not None and not dashboard_enabled:
@@ -6884,7 +6884,7 @@ def main():
         except Exception as exc:
             _startup_log(f"brahma connect init failed: {exc}")
             try:
-                ui.write_log(f"ERR: Brahma Connect failed to initialize: {exc}")
+                ui.write_log(f"ERR: Nexus Connect failed to initialize: {exc}")
             except Exception:
                 pass
             brahma_connect = None
@@ -6898,7 +6898,7 @@ def main():
         if _is_port_in_use(connect_port):
             _startup_log(f"brahma connect disabled: port {connect_port} already in use")
             try:
-                ui.write_log(f"SYS: Brahma Connect is already running on port {connect_port}.")
+                ui.write_log(f"SYS: Nexus Connect is already running on port {connect_port}.")
             except Exception:
                 pass
         else:
@@ -6910,7 +6910,7 @@ def main():
                 except Exception as exc:
                     _startup_log(f"brahma connect thread error: {exc}")
                     try:
-                        ui.write_log(f"ERR: Brahma Connect server failed: {exc}")
+                        ui.write_log(f"ERR: Nexus Connect server failed: {exc}")
                     except Exception:
                         pass
 
@@ -6957,7 +6957,7 @@ def main():
         _startup_log("runner waiting api key")
         ui.wait_for_api_key()
         _startup_log("runner api key ready")
-        brahma_evo = BrahmaLive(
+        nexus_core = BrahmaLive(
             ui,
             dashboard=dashboard,
             dashboard_started=dashboard is not None,
