@@ -61,41 +61,48 @@ print('All modules import OK')
       - name: Build BrahmaEvo.app (macOS)
         id: build
         run: |
-          # macOS needs an .icns icon; fall back to no icon if missing.
-          ICON_ARG=""
+          # Build the PyInstaller args array safely
+          ARGS=(--noconfirm --clean --windowed --name BrahmaEvo)
+
+          # Only add --icon if an .icns exists
           if [ -f "assets/Brahma_Lite_Logo.icns" ]; then
-            ICON_ARG="--icon=assets/Brahma_Lite_Logo.icns"
+            ARGS+=(--icon=assets/Brahma_Lite_Logo.icns)
           fi
 
-          pyinstaller \
-            --noconfirm --clean \
-            --windowed \
-            --name BrahmaEvo \
-            $ICON_ARG \
-            --add-data "assets:assets" \
-            --add-data "core:core" \
-            --add-data "actions:actions" \
-            --add-data "memory:memory" \
-            --add-data "smart_home:smart_home" \
-            --add-data "plugins:plugins" \
-            --add-data "features:features" \
-            --add-data "skills:skills" \
-            --add-data "dashboard/static:dashboard/static" \
-            --add-data "version.txt:." \
-            --add-data "requirements.txt:." \
-            --hidden-import mediapipe \
-            --hidden-import cv2 \
-            --hidden-import google.genai \
-            --hidden-import PyQt6 \
-            --hidden-import PyQt6.QtWebEngineCore \
-            --hidden-import PyQt6.QtWebEngineWidgets \
-            --hidden-import pyautogui \
-            --hidden-import sounddevice \
-            --hidden-import numpy \
+          ARGS+=(
+            --add-data "assets:assets"
+            --add-data "core:core"
+            --add-data "actions:actions"
+            --add-data "memory:memory"
+            --add-data "smart_home:smart_home"
+            --add-data "plugins:plugins"
+            --add-data "features:features"
+            --add-data "skills:skills"
+            --add-data "dashboard/static:dashboard/static"
+            --add-data "version.txt:."
+            --add-data "requirements.txt:."
+            --hidden-import mediapipe
+            --hidden-import cv2
+            --hidden-import google.genai
+            --hidden-import PyQt6
+            --hidden-import PyQt6.QtWebEngineCore
+            --hidden-import PyQt6.QtWebEngineWidgets
+            --hidden-import pyautogui
+            --hidden-import sounddevice
+            --hidden-import numpy
             main.py
+          )
+
+          pyinstaller "${ARGS[@]}"
 
           # Locate the produced .app bundle
           APP_PATH=$(find dist -maxdepth 1 -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ No .app bundle found in dist/"
+            ls -la dist/ 2>/dev/null || true
+            exit 1
+          fi
+          echo "Built: $APP_PATH"
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
 
       # ── Upload .app as a workflow artifact ──────────────────────
@@ -124,5 +131,5 @@ print('All modules import OK')
             2. Drag it into your `/Applications` folder.
             3. On first launch, macOS may ask for Accessibility / Automation permissions
                (System Settings → Privacy & Security) for window control and idle detection.
-          files: ${{ steps.build.outputs.app_path }}/Contents/MacOS/BrahmaEvo
+          files: ${{ steps.build.outputs.app_path }}
           generate_release_notes: false
