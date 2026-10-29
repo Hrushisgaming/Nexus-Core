@@ -10,7 +10,11 @@ echo "  Brahma Evo - macOS App + DMG Build"
 echo "=============================================="
 
 APP_NAME="BrahmaEvo"
-VERSION=$(cat version.txt 2>/dev/null | tr -d '[:space:]' || echo "1.0.0")
+
+# Read only the numeric version, not the entire VSVersionInfo() blob
+VERSION=$(cat version.txt 2>/dev/null | tr -d '\r\n' | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "1.0.0")
+VERSION="${VERSION:-1.0.0}"
+
 DMG_NAME="BrahmaEvo-${VERSION}-macOS.dmg"
 
 # ── 1. Clean previous builds ──────────────────────────────────────────
@@ -91,18 +95,13 @@ cp -R "$APP_PATH" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
 
 # Create a read-only DMG
-hdiutil create "${DMG_NAME}" \
+hdiutil create "dist/${DMG_NAME}" \
   -volname "Brahma Evo ${VERSION}" \
   -srcfolder "$STAGING" \
   -ov -format UDZO
 
 # Clean up staging
 rm -rf "$STAGING"
-
-# Move DMG into dist/
-if [ -f "${DMG_NAME}" ]; then
-  mv "${DMG_NAME}" "dist/${DMG_NAME}"
-fi
 
 # ── 5. Verify ─────────────────────────────────────────────────────────
 echo "[5/5] Verifying build output..."
