@@ -179,7 +179,7 @@ class InstallThread(QThread):
 class InstallWizard(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Brahma Evo - Setup")
+        self.setWindowTitle("Nexus Core - Setup")
         self.resize(840, 560)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -370,7 +370,7 @@ class InstallWizard(QWidget):
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(16)
 
-        title = QLabel("Welcome to Brahma Evo Setup")
+        title = QLabel("Welcome to Nexus Core Setup")
         title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         title.setStyleSheet("color: #ffffff;")
         lay.addWidget(title)
@@ -556,7 +556,7 @@ class InstallWizard(QWidget):
         self.chk_start_menu.setChecked(True)
         oc_lay.addWidget(self.chk_start_menu)
 
-        self.chk_startup = QCheckBox("Launch Brahma Evo automatically when Windows starts")
+        self.chk_startup = QCheckBox("Launch Nexus Core automatically when Windows starts")
         self.chk_startup.setChecked(False)
         oc_lay.addWidget(self.chk_startup)
 
@@ -599,7 +599,7 @@ class InstallWizard(QWidget):
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(16)
 
-        title = QLabel("Installing Brahma Evo")
+        title = QLabel("Installing Nexus Core")
         title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         title.setStyleSheet("color: #ffffff;")
         lay.addWidget(title)

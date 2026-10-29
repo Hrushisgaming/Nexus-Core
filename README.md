@@ -1,8 +1,8 @@
-# ⚡ Brahma AI Evo — Autonomous Desktop Operating Intelligence
+# ⚡ Nexus Core — Autonomous Desktop Operating Intelligence
 
 <div align="center">
 
-<img src="assets/brahma_evo_logo.png" alt="Brahma AI Evo Logo" width="220" />
+<img src="assets/nexus_core_logo.png" alt="Nexus Core Logo" width="220" />
 
 ### *The Self-Evolving, Multimodal Personal AI Desktop Environment*
 
@@ -18,7 +18,7 @@
 
 ## 🌌 Overview
 
-**Brahma AI Evo** is a next-generation desktop intelligence built to function like an authentic JARVIS workstation. Combining real-time bi-directional native voice audio, multimodal computer vision, autonomous code self-evolution, and local system orchestrations, Brahma Evo transforms your Windows PC or Mac into a self-evolving command center.
+**Nexus Core** is a next-generation desktop intelligence built to function like an authentic JARVIS workstation. Combining real-time bi-directional native voice audio, multimodal computer vision, autonomous code self-evolution, and local system orchestrations, Nexus Core transforms your Windows PC or Mac into a self-evolving command center.
 
 ---
 

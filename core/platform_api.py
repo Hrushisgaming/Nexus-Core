@@ -671,7 +671,7 @@ class PlatformAPI:
 
     # ── startup / shortcuts ────────────────────────────────────────
 
-    def is_startup_enabled(self, app_name: str = "Brahma Evo") -> bool:
+    def is_startup_enabled(self, app_name: str = "Nexus Core") -> bool:
         if _OS != "Windows" or _winreg is None:
             return False
         try:
@@ -685,7 +685,7 @@ class PlatformAPI:
         except Exception:
             return False
 
-    def set_startup(self, enabled: bool, app_name: str = "Brahma Evo",
+    def set_startup(self, enabled: bool, app_name: str = "Nexus Core",
                     target_path: Optional[str] = None) -> bool:
         """Add/remove the app from the user's startup run key (Windows)."""
         if _OS != "Windows" or _winreg is None:
@@ -709,14 +709,14 @@ class PlatformAPI:
     # ── environment paths ──────────────────────────────────────────
 
     def get_data_dir(self) -> str:
-        """Platform-appropriate application data directory (with BrahmaAI subdir)."""
+        """Platform-appropriate application data directory (with NexusCore subdir)."""
         if _OS == "Windows":
             base = os.getenv("LOCALAPPDATA", os.path.expanduser("~"))
         elif _OS == "Darwin":
             base = str(Path(os.path.expanduser("~")) / "Library" / "Application Support")
         else:
             base = os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-        return str(Path(base) / "BrahmaAI")
+        return str(Path(base) / "NexusCore")
 
 
 # Singleton instance
