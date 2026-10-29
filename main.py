@@ -6640,7 +6640,7 @@ class BrahmaLive:
                             if full_out:
                                 self.ui.write_log(f"Nexus Core: {full_out}")
                                 if hasattr(self.ui, "set_live_subtitles"):
-                                    self.ui.set_live_subtitles("BRAHMA", full_out, interim=False)
+                                    self.ui.set_live_subtitles("NEXUS", full_out, interim=False)
                                 try:
                                     self.ui.finish_task_workspace(full_out, "Reply delivered.", 100)
                                 except Exception:

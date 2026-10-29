@@ -154,7 +154,7 @@ class GlobeWindow(QWidget):
         tb_layout = QHBoxLayout(title_bar)
         tb_layout.setContentsMargins(18, 0, 14, 0)
 
-        title_lbl = QLabel("🌐  BRAHMA MAPS // GEOSPATIAL INTELLIGENCE")
+        title_lbl = QLabel("🌐  NEXUS CORE MAPS // GEOSPATIAL INTELLIGENCE")
         title_lbl.setStyleSheet("color: #bae6fd; font-size: 12px; font-weight: 700; letter-spacing: 0.1em;")
         tb_layout.addWidget(title_lbl)
 
