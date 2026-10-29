@@ -545,7 +545,7 @@ class DashboardServer:
 
         # 2. Instant conversational reflex for greetings
         norm_speech = text_cmd.lower().strip().rstrip(".?!")
-        if norm_speech in ("hello", "hey", "hi", "hey brahma", "hello brahma", "hi brahma", "yo"):
+        if norm_speech in ("hello", "hey", "hi", "hey nexus", "hey brahma", "hello nexus", "hello brahma", "hi nexus", "hi brahma", "yo"):
             greeting = "Hello there! How can I help you today, sir?"
             try:
                 await websocket.send_text(json.dumps({

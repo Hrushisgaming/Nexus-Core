@@ -603,6 +603,10 @@ def _wakeword_detected(text: str) -> bool:
     if not words:
         return False
     phrases = (
+        "nexus core",
+        "hey nexus core",
+        "hi nexus core",
+        "hello nexus core",
         "brahma evo",
         "hey brahma evo",
         "hi brahma evo",
@@ -614,7 +618,7 @@ def _wakeword_detected(text: str) -> bool:
     compact = " ".join(words)
     if compact in phrases or any(p in compact for p in phrases):
         return True
-    return any(word in {"brahma evo", "hey", "hi", "hello"} for word in words)
+    return any(word in {"nexus", "nexus core", "hey", "hi", "hello"} for word in words)
 
 
 def _build_task_plan(text: str) -> list[str]:

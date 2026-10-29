@@ -122,7 +122,7 @@ class IntentDispatcher:
             return None
 
         # Strip wake-word prefixes
-        for pfx in ("hey brahma ", "ok brahma ", "brahma "):
+        for pfx in ("hey nexus ", "hey brahma ", "ok nexus ", "ok brahma ", "nexus ", "brahma "):
             if low.startswith(pfx):
                 low = low[len(pfx):].strip()
                 break

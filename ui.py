@@ -12869,6 +12869,20 @@ class SystemConnectivityPage(QWidget):
         )
         tools_row.addWidget(self._ptt_toggle)
 
+        # Wake-word listening toggle (off by default = not intrusive)
+        try:
+            from memory import config_manager
+            ww_enabled = config_manager.get_wake_word_enabled()
+        except Exception:
+            ww_enabled = False
+
+        self._ww_toggle = self._mk_toggle(
+            "Wake-word listening (Say 'Hey Nexus')",
+            ww_enabled,
+            self._on_ww_toggled
+        )
+        tools_row.addWidget(self._ww_toggle)
+
         mem_btn = QPushButton("🧠 Inspect Memory")
         mem_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         mem_btn.clicked.connect(self._open_memory_inspector)
@@ -12915,6 +12929,14 @@ class SystemConnectivityPage(QWidget):
             self._audio_status_lbl.setText(f"✅ Push-to-Talk {'enabled (Hold Ctrl+Space)' if checked else 'disabled'}")
         except Exception as e:
             self._audio_status_lbl.setText(f"Error toggling PTT: {e}")
+
+    def _on_ww_toggled(self, checked: bool):
+        try:
+            from memory import config_manager
+            config_manager.save_wake_word_enabled(checked)
+            self._audio_status_lbl.setText(f"✅ Wake-word listening {'ON (say Hey Nexus)' if checked else 'OFF (not intrusive)'}")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error toggling wake word: {e}")
 
     def _open_memory_inspector(self):
         try:

@@ -83,7 +83,7 @@ def set_push_to_talk_enabled(enabled: bool) -> None:
 # --- Wake Word & Briefing
 
 def get_wake_word_enabled() -> bool:
-    return bool(get_setting("wake_word_enabled", True))
+    return bool(get_setting("wake_word_enabled", False))
 
 
 def save_wake_word_enabled(enabled: bool) -> None:
