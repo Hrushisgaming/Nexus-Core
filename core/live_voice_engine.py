@@ -549,17 +549,16 @@ class LiveVoiceEngine:
             "- Stay silent on initial connection until the user speaks to you."
         )
 
+        # Use TEXT response mode for transcribe-only models (gemini-3.5-transcribe-live).
+        # The TTS provider (ElevenLabs/Groq/Fish Audio) handles speaking the response.
+        response_modalities = ["TEXT"]
+
         return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
+            response_modalities=response_modalities,
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction=sys_prompt,
             thinking_config=types.ThinkingConfig(thinking_budget=0),  # Zero latency thinking budget
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Charon")
-                )
-            ),
         )
 
     async def send_text_turn(self, text: str):

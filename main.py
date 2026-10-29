@@ -135,7 +135,7 @@ BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Nexus Core" / "startup.log"
-LIVE_MODEL          = "models/gemini-2.0-flash"
+LIVE_MODEL          = "models/gemini-3.5-transcribe-live"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -5496,21 +5496,16 @@ class BrahmaLive:
             print(f"[MCPRegistry] MCP tools unavailable: {exc}")
 
 
+        # Use TEXT response mode for transcribe-only models (gemini-3.5-transcribe-live).
+        # The TTS provider (ElevenLabs/Groq/Fish Audio) handles speaking the response.
         return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
+            response_modalities=["TEXT"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
             tools=[{"function_declarations": tool_declarations}],
             session_resumption=types.SessionResumptionConfig(handle=getattr(self, '_resume_handle', None)),
             thinking_config=types.ThinkingConfig(thinking_budget=0),
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Charon"
-                    )
-                )
-            ),
         )
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
