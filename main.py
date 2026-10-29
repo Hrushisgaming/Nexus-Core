@@ -2,11 +2,24 @@ from core.user_paths import get_user_data_dir
 from typing import Any, Optional
 import os
 
-# Hardware acceleration & WebGL flags for smooth 180fps+ rendering in Chromium
-os.environ.setdefault(
-    "QTWEBENGINE_CHROMIUM_FLAGS",
-    "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-accelerated-2d-canvas --enable-webgl --enable-webgl2-compute-context --disable-frame-rate-limit --disable-gpu-vsync --num-raster-threads=4 --use-angle=d3d11 --disable-gpu-driver-bug-workarounds"
+# Hardware acceleration & WebGL flags for smooth rendering in Chromium.
+# ANGLE backend must match the host OS: d3d11 on Windows, metal on macOS,
+# opengl/egl on Linux. Using the wrong backend makes Qt WebEngine fail to
+# initialize GPU acceleration on that platform.
+import sys as _sys
+_base_chromium_flags = (
+    "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist "
+    "--enable-accelerated-2d-canvas --enable-webgl --enable-webgl2-compute-context "
+    "--disable-frame-rate-limit --disable-gpu-vsync --num-raster-threads=4 "
+    "--disable-gpu-driver-bug-workarounds"
 )
+if _sys.platform == "win32":
+    _base_chromium_flags += " --use-angle=d3d11"
+elif _sys.platform == "darwin":
+    _base_chromium_flags += " --use-angle=metal"
+else:
+    _base_chromium_flags += " --use-angle=egl"
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _base_chromium_flags)
 
 try:
     from PyQt6.QtCore import QCoreApplication, Qt

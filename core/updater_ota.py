@@ -86,11 +86,16 @@ def download_and_apply_update(url: str, ui_callback=None):
                         ui_callback(progress)
                         
         if setup_path.exists():
-            print(f"[OTA] Launching silent updater: {setup_path}")
-            # Ensure DETACHED_PROCESS to survive sys.exit
-            DETACHED_PROCESS = 0x00000008
-            subprocess.Popen([str(setup_path), "--silent"], creationflags=subprocess.CREATE_NO_WINDOW | DETACHED_PROCESS)
-            sys.exit(0)
+            if sys.platform == "win32":
+                print(f"[OTA] Launching silent updater: {setup_path}")
+                # Ensure DETACHED_PROCESS to survive sys.exit
+                DETACHED_PROCESS = 0x00000008
+                subprocess.Popen([str(setup_path), "--silent"],
+                                 creationflags=subprocess.CREATE_NO_WINDOW | DETACHED_PROCESS)
+                sys.exit(0)
+            else:
+                print(f"[OTA] Downloaded Windows-only updater ({setup_path.name}); "
+                      "silent .exe installation is not supported on macOS.")
             
     except Exception as e:
         print(f"[OTA] Failed to download or apply update: {e}")

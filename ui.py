@@ -30,8 +30,6 @@ from collections import deque
 from pathlib import Path
 
 import psutil
-if platform.system() == "Windows":
-    import winreg
 
 from PyQt6.QtCore import (
     QEasingCurve, QEvent, QPoint, QPointF, QRectF, QSize, Qt,
@@ -2346,13 +2344,8 @@ class GestureCameraPreview(QFrame):
             import pyautogui
             pyautogui.PAUSE = 0
 
-            try:
-                import ctypes
-                screen_w = int(ctypes.windll.user32.GetSystemMetrics(0))
-                screen_h = int(ctypes.windll.user32.GetSystemMetrics(1))
-            except Exception:
-                screen_w, screen_h = pyautogui.size()
-
+            from core.platform_api import platform_api
+            screen_w, screen_h = platform_api.get_screen_size()
             if screen_w <= 0 or screen_h <= 0:
                 screen_w, screen_h = pyautogui.size()
 
@@ -2907,7 +2900,13 @@ class ArtifactCard(QFrame):
         if not self._path or not Path(self._path).exists():
             return
         try:
-            os.startfile(self._path)
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(self._path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(self._path)])
+            else:
+                subprocess.Popen(["xdg-open", str(self._path)])
         except Exception:
             pass
 
@@ -2915,10 +2914,14 @@ class ArtifactCard(QFrame):
         if not self._path or not Path(self._path).exists():
             return
         try:
-            if platform.system() == "Windows":
+            import subprocess
+            if sys.platform == "win32":
                 subprocess.Popen(["explorer", "/select,", self._path])
+            elif sys.platform == "darwin":
+                # Reveal the file/folder in Finder.
+                subprocess.Popen(["open", "-R", str(self._path)])
             else:
-                os.startfile(str(Path(self._path).parent))
+                subprocess.Popen(["xdg-open", str(Path(self._path).parent)])
         except Exception:
             pass
 
@@ -5495,10 +5498,12 @@ class BrahmaResultWing(QFrame):
             p = Path(self._active_file_path).resolve()
             if p.exists():
                 try:
+                    import subprocess
                     if sys.platform == "win32":
                         os.startfile(str(p))
+                    elif sys.platform == "darwin":
+                        subprocess.Popen(["open", str(p)])
                     else:
-                        import subprocess
                         subprocess.Popen(["xdg-open", str(p)])
                 except Exception as e:
                     print(f"[BrahmaResultWing] Open file error: {e}")
@@ -5513,6 +5518,9 @@ class BrahmaResultWing(QFrame):
                         subprocess.Popen(["explorer.exe", f"/select,{str(p)}"])
                     elif p.parent.exists():
                         subprocess.Popen(["explorer.exe", str(p.parent)])
+                elif sys.platform == "darwin":
+                    target = p if p.exists() else p.parent
+                    subprocess.Popen(["open", "-R", str(target)])
                 else:
                     subprocess.Popen(["xdg-open", str(p.parent)])
             except Exception as e:
@@ -9931,40 +9939,17 @@ class MainWindow(QMainWindow):
         }
 
     def _startup_enabled(self) -> bool:
-        if platform.system() != "Windows":
-            return False
-        try:
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                _startup_registry_key(),
-                0,
-                winreg.KEY_READ | winreg.KEY_WRITE,
-            ) as key:
-                try:
-                    value, _ = winreg.QueryValueEx(key, "Brahma Evo")
-                    run_value = _startup_run_value()
-                    if value != run_value:
-                        winreg.SetValueEx(key, "Brahma Evo", 0, winreg.REG_SZ, run_value)
-                    return bool(value)
-                except FileNotFoundError:
-                    return False
-        except Exception:
-            return False
+        from core.platform_api import platform_api
+        return platform_api.is_startup_enabled("Brahma Evo")
 
     def _set_startup_enabled(self, enabled: bool) -> bool:
-        if platform.system() != "Windows":
-            return False
-        run_value = _startup_run_value()
+        from core.platform_api import platform_api
         try:
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _startup_registry_key()) as key:
-                if enabled:
-                    winreg.SetValueEx(key, "Brahma Evo", 0, winreg.REG_SZ, run_value)
-                else:
-                    try:
-                        winreg.DeleteValue(key, "Brahma Evo")
-                    except FileNotFoundError:
-                        pass
-            return True
+            return platform_api.set_startup(
+                enabled,
+                app_name="Brahma Evo",
+                target_path=_startup_run_value().strip('"').split(" ")[0] if _startup_run_value() else None,
+            )
         except Exception as e:
             self._log.append_log(f"ERR: startup setting failed: {e}")
             return False
@@ -11758,13 +11743,25 @@ class SystemConnectivitySidebar(QFrame):
 
     def _open_data_folder(self):
         try:
-            os.startfile(str(CONFIG_DIR))
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(CONFIG_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(CONFIG_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(CONFIG_DIR)])
         except Exception:
             pass
 
     def _view_logs(self):
         try:
-            os.startfile(str(BASE_DIR))
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(BASE_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(BASE_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(BASE_DIR)])
         except Exception:
             pass
 
@@ -14116,13 +14113,25 @@ class SystemConnectivityPage(QWidget):
 
     def _open_data_folder(self):
         try:
-            os.startfile(str(CONFIG_DIR))
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(CONFIG_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(CONFIG_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(CONFIG_DIR)])
         except Exception:
             pass
 
     def _view_logs(self):
         try:
-            os.startfile(str(BASE_DIR))
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(BASE_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(BASE_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(BASE_DIR)])
         except Exception:
             pass
 
@@ -14240,9 +14249,11 @@ class SystemConnectivityPage(QWidget):
             )
 
     def _create_desktop_shortcut_logic(self):
+        # .lnk desktop shortcuts are a Windows-only concept; skip on macOS/Linux.
+        if sys.platform != "win32":
+            return
         try:
             import os
-            import sys
             import shutil
             import subprocess
             from pathlib import Path

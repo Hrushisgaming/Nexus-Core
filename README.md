@@ -10,7 +10,7 @@
 [![PyQt6](https://img.shields.io/badge/GUI-PyQt6%20%2B%20WebEngine-darkgreen?logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
 [![Gemini 2.5](https://img.shields.io/badge/Model-Gemini%202.5%20Flash%20Native%20Audio-orange?logo=google&logoColor=white)](https://ai.google.dev/)
 [![MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-purple)](https://modelcontextprotocol.io/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6?logo=windows&logoColor=white)](https://microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20%7C%20macOS-0078D6?logo=apple&logoColor=white)](https://microsoft.com/windows)
 
 </div>
 
@@ -18,7 +18,7 @@
 
 ## 🌌 Overview
 
-**Brahma AI Evo** is a next-generation desktop intelligence built to function like an authentic JARVIS workstation. Combining real-time bi-directional native voice audio, multimodal computer vision, autonomous code self-evolution, and local system orchestrations, Brahma Evo transforms your Windows PC into a self-evolving command center.
+**Brahma AI Evo** is a next-generation desktop intelligence built to function like an authentic JARVIS workstation. Combining real-time bi-directional native voice audio, multimodal computer vision, autonomous code self-evolution, and local system orchestrations, Brahma Evo transforms your Windows PC or Mac into a self-evolving command center.
 
 ---
 
@@ -102,7 +102,7 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Windows 10 / 11** (64-bit)
+- **Windows 10 / 11** (64-bit) or **macOS** (Apple Silicon or Intel)
 - **Python 3.11** or **Python 3.12**
 - **Git**
 - Working Microphone & Speakers (Webcam optional for vision)
@@ -111,19 +111,29 @@
 ### Installation
 
 1. **Clone the repository:**
-   ```powershell
-   git clone https://github.com/titechprabhasolutions/Brahma-Ai-Evo.git
+   ```bash
+   git clone https://github.com/Hrushisgaming/Brahma-Ai-Evo.git
    cd Brahma-Ai-Evo
    ```
 
-2. **Run the Automated Setup:**
-   ```powershell
-   python setup.py
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
    ```
-   *Or launch using the included batch file:*
-   ```cmd
-   start_brahma.bat
-   ```
+
+3. **Launch:**
+   - **Windows:** `python setup.py` or `start_brahma.bat`
+   - **macOS:** `python3 main.py`
+
+   On first launch Brahma creates its data folder at:
+   - Windows: `%LOCALAPPDATA%\BrahmaAI`
+   - macOS: `~/Library/Application Support/BrahmaAI`
+
+4. **Configure API Keys:**
+   - Launch Brahma AI Evo.
+   - Click the **Settings** icon on the top navigation bar.
+   - Enter your **Gemini API Key** and any optional credentials (Spotify MCP, Weather, etc.) into the respective cards.
+   - Click **Save & Connect**.
 
 3. **Configure API Keys:**
    - Launch Brahma AI Evo.

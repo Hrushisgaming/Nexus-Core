@@ -8,35 +8,17 @@ and user idle state with zero performance overhead.
 import sys
 import time
 import threading
-import ctypes
-from ctypes import wintypes
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 import psutil
 
 from core.window_context import get_foreground_window_info
-
-user32 = ctypes.windll.user32 if sys.platform == "win32" else None
-kernel32 = ctypes.windll.kernel32 if sys.platform == "win32" else None
-
-
-class LASTINPUTINFO(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.UINT),
-        ("dwTime", wintypes.DWORD),
-    ]
+from core.platform_api import platform_api
 
 
 def get_idle_time_seconds() -> float:
     """Returns the number of seconds since the user last touched mouse or keyboard."""
-    if not user32 or not kernel32:
-        return 0.0
-    lii = LASTINPUTINFO()
-    lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
-    if user32.GetLastInputInfo(ctypes.byref(lii)):
-        millis = kernel32.GetTickCount() - lii.dwTime
-        return max(0.0, millis / 1000.0)
-    return 0.0
+    return platform_api.get_idle_seconds()
 
 
 class PassiveSensorium:

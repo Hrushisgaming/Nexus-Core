@@ -5,9 +5,13 @@ import json
 import time
 import subprocess
 import threading
-import winreg
 from pathlib import Path
 from datetime import datetime
+
+try:
+    import winreg  # Windows-only registry access
+except Exception:  # pragma: no cover - macOS / Linux
+    winreg = None
 
 
 def _find_steam_path() -> Path | None:
