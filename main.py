@@ -2447,7 +2447,7 @@ class BrahmaLive:
             from core.live_voice_engine import LiveVoiceEngine
             _lve = LiveVoiceEngine.get_instance()
             _lve.on_user_transcript = lambda txt, interim: self.ui.set_live_subtitles("YOU", txt, interim)
-            _lve.on_ai_transcript = lambda txt, interim: self.ui.set_live_subtitles("BRAHMA", txt, interim)
+            _lve.on_ai_transcript = lambda txt, interim: self.ui.set_live_subtitles("NEXUS", txt, interim)
         except Exception:
             pass
 
@@ -5202,7 +5202,9 @@ class BrahmaLive:
                 else:
                     reply = "I’m ready, sir."
             self.ui.write_log(f"Nexus Core: {reply}")
-            if not getattr(self.ui, "muted", False):
+            # Only speak non-fallback replies; avoid looping on fallback
+            is_fallback = reply in ("I’m ready, sir.", "I'm unable to reach the local AI engine. Please ensure Ollama is running.", "Sir, I couldn't reach OpenRouter right now. Please check your OpenRouter API key and internet connection.")
+            if not getattr(self.ui, "muted", False) and not is_fallback:
                 self.speak(reply, proactive=True)
             try:
                 self.ui.finish_task_workspace(reply, "Reply delivered.", 100)
@@ -5283,7 +5285,7 @@ class BrahmaLive:
             return
 
         if hasattr(self.ui, "set_live_subtitles"):
-            self.ui.set_live_subtitles("BRAHMA", text, interim=False)
+            self.ui.set_live_subtitles("NEXUS", text, interim=False)
 
         if getattr(self, "_in_live_tool", False):
             # Gemini Live duplex tool execution will vocalize completion via send_tool_response
@@ -6596,7 +6598,7 @@ class BrahmaLive:
                             if txt:
                                 out_buf.append(txt)
                                 if hasattr(self.ui, "set_live_subtitles"):
-                                    self.ui.set_live_subtitles("BRAHMA", "".join(out_buf).strip(), interim=True)
+                                    self.ui.set_live_subtitles("NEXUS", "".join(out_buf).strip(), interim=True)
                         elif getattr(sc, "model_turn", None):
                             for part in sc.model_turn.parts:
                                 if getattr(part, "text", None) and not getattr(part, "thought", False):
@@ -6604,7 +6606,7 @@ class BrahmaLive:
                                     if txt and txt not in out_buf:
                                         out_buf.append(txt)
                                         if hasattr(self.ui, "set_live_subtitles"):
-                                            self.ui.set_live_subtitles("BRAHMA", "".join(out_buf).strip(), interim=True)
+                                            self.ui.set_live_subtitles("NEXUS", "".join(out_buf).strip(), interim=True)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = sc.input_transcription.text.strip()

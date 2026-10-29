@@ -15798,6 +15798,10 @@ class BrahmaUI:
     def __init__(self, face_path: str, size=None, *, show_immediately: bool = True):
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
+        # Set application icon for dock/taskbar when minimized
+        app_icon = _logo_icon()
+        if not app_icon.isNull():
+            self._app.setWindowIcon(app_icon)
         self._app.setStyleSheet("""
             QMessageBox, QDialog, QInputDialog {
                 background-color: #0b0f19;
