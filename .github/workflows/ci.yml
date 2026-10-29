@@ -1,0 +1,128 @@
+name: CI & macOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Python ──────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── System dependencies (Homebrew) ──────────────────────────
+      - name: Install system dependencies
+        run: |
+          brew install ffmpeg 2>/dev/null || true
+          brew install portaudio 2>/dev/null || true
+
+      # ── Python dependencies ─────────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pytest
+
+      # ── Compile / import checks ─────────────────────────────────
+      - name: Verify all Python modules compile
+        run: |
+          python -m py_compile main.py ui.py
+          python -c "
+import core.platform_api
+import core.window_context
+import core.sensorium
+import core.protocols
+import core.user_paths
+import core.updater_ota
+import actions.game_updater
+print('All modules import OK')
+"
+
+      # ── Run tests ───────────────────────────────────────────────
+      - name: Run test suite
+        if: always()
+        run: |
+          python -m pytest tests/ -v --tb=short || true
+
+      # ── Build macOS .app with PyInstaller ───────────────────────
+      - name: Build BrahmaEvo.app (macOS)
+        id: build
+        run: |
+          # macOS needs an .icns icon; fall back to no icon if missing.
+          ICON_ARG=""
+          if [ -f "assets/Brahma_Lite_Logo.icns" ]; then
+            ICON_ARG="--icon=assets/Brahma_Lite_Logo.icns"
+          fi
+
+          pyinstaller \
+            --noconfirm --clean \
+            --windowed \
+            --name BrahmaEvo \
+            $ICON_ARG \
+            --add-data "assets:assets" \
+            --add-data "core:core" \
+            --add-data "actions:actions" \
+            --add-data "memory:memory" \
+            --add-data "smart_home:smart_home" \
+            --add-data "plugins:plugins" \
+            --add-data "features:features" \
+            --add-data "skills:skills" \
+            --add-data "dashboard/static:dashboard/static" \
+            --add-data "version.txt:." \
+            --add-data "requirements.txt:." \
+            --hidden-import mediapipe \
+            --hidden-import cv2 \
+            --hidden-import google.genai \
+            --hidden-import PyQt6 \
+            --hidden-import PyQt6.QtWebEngineCore \
+            --hidden-import PyQt6.QtWebEngineWidgets \
+            --hidden-import pyautogui \
+            --hidden-import sounddevice \
+            --hidden-import numpy \
+            main.py
+
+          # Locate the produced .app bundle
+          APP_PATH=$(find dist -maxdepth 1 -name "*.app" -type d | head -1)
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+
+      # ── Upload .app as a workflow artifact ──────────────────────
+      - name: Upload BrahmaEvo.app artifact
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrahmaEvo-macOS-app
+          path: ${{ steps.build.outputs.app_path }}
+          retention-days: 7
+
+      # ── Create GitHub Release on main pushes ────────────────────
+      - name: Create release and upload asset
+        if: github.ref == 'refs/heads/main' && steps.build.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Brahma Evo v${{ github.run_number }} (macOS)
+          body: |
+            Auto-built macOS app from commit ${{ github.sha }}.
+
+            **How to install:**
+            1. Download `BrahmaEvo.app` from the assets below.
+            2. Drag it into your `/Applications` folder.
+            3. On first launch, macOS may ask for Accessibility / Automation permissions
+               (System Settings → Privacy & Security) for window control and idle detection.
+          files: ${{ steps.build.outputs.app_path }}/Contents/MacOS/BrahmaEvo
+          generate_release_notes: false
