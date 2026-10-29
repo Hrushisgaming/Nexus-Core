@@ -25,19 +25,19 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Uninstaller & BrahmaEvo
+      - name: Build Uninstaller & NexusCore
         run: |
           pyinstaller --noconfirm installer/Uninstall.spec
           pyinstaller --noconfirm installer/BrahmaEvo.spec
-          Copy-Item "dist/Uninstall.exe" -Destination "dist/BrahmaEvo/Uninstall.exe" -Force
-          Copy-Item "installer/uninstall.cmd" -Destination "dist/BrahmaEvo/uninstall.cmd" -Force
+          Copy-Item "dist/Uninstall.exe" -Destination "dist/NexusCore/Uninstall.exe" -Force
+          Copy-Item "installer/uninstall.cmd" -Destination "dist/NexusCore/uninstall.cmd" -Force
           pyinstaller --noconfirm installer/BrahmaEvo_Setup.spec
 
       - name: Upload Windows Setup Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BrahmaEvo-Windows-Setup
-          path: dist/BrahmaEvo_Setup.exe
+          name: NexusCore-Windows-Setup
+          path: dist/NexusCore_Setup.exe
           if-no-files-found: error
 
   build-macos:
