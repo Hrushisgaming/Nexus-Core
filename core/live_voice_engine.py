@@ -32,6 +32,14 @@ RECEIVE_SAMPLE_RATE = 24000  # 24 kHz Mono output from Gemini Live
 CHUNK_SIZE = 512             # 32ms per frame @ 16kHz for ultra-low latency VAD & transport
 CHANNELS = 1
 
+# Moonshine STT (local, fast speech-to-text)
+try:
+    from core.moonshine_stt import get_moonshine_stt, is_moonshine_available
+    _MOONSHINE_AVAILABLE = is_moonshine_available()
+except Exception:
+    _MOONSHINE_AVAILABLE = False
+    get_moonshine_stt = None  # type: ignore
+
 logger = logging.getLogger("BrahmaLiveVoice")
 
 
@@ -154,6 +162,12 @@ class LiveVoiceEngine:
         self._spk_stream = None
         self._spk_active = False
 
+        # STT Engine selection: "moonshine" (local, fast) or "gemini_live" (cloud)
+        self.stt_engine: str = "moonshine" if _MOONSHINE_AVAILABLE else "gemini_live"
+        self.stt_autocorrect: bool = True
+        self._stt_model = None
+        self._stt_audio_buffer: List[bytes] = []
+
         # Metrics
         self.last_speech_start_time = 0.0
         self.last_speech_stop_time = 0.0
@@ -180,6 +194,27 @@ class LiveVoiceEngine:
             "prev_state": old_state.lower(),
             "timestamp": time.time(),
         })
+
+    # ── STT Configuration ────────────────────────────────────────────────────
+    def get_stt_config(self) -> dict:
+        """Return current STT engine configuration."""
+        return {
+            "engine": self.stt_engine,
+            "autocorrect": self.stt_autocorrect,
+            "moonshine_available": _MOONSHINE_AVAILABLE,
+        }
+
+    def set_stt_config(self, engine: Optional[str] = None, autocorrect: Optional[bool] = None) -> None:
+        """Update STT engine configuration."""
+        if engine is not None:
+            if engine == "moonshine" and not _MOONSHINE_AVAILABLE:
+                logger.warning("[LiveVoice] Moonshine not available, keeping current engine")
+            else:
+                self.stt_engine = engine
+                logger.info(f"[LiveVoice] STT engine set to: {self.stt_engine}")
+        if autocorrect is not None:
+            self.stt_autocorrect = autocorrect
+            logger.info(f"[LiveVoice] STT autocorrect set to: {self.stt_autocorrect}")
 
     def register_ws_client(self, websocket: Any):
         with self._ws_lock:
@@ -320,12 +355,79 @@ class LiveVoiceEngine:
                 "energy": round(energy, 3),
             })
 
-        # Forward audio chunk to the active Gemini Live session
-        if self._loop and self._loop.is_running() and self.session:
-            self._loop.call_soon_threadsafe(
-                self.in_audio_queue.put_nowait,
-                {"data": pcm_bytes, "mime_type": "audio/pcm"}
+        # ── STT Engine Routing ───────────────────────────────────────────────
+        # Moonshine: buffer audio locally, transcribe on speech_stop, send text to Gemini
+        # Gemini Live: forward raw audio to Gemini (which does STT internally)
+        if self.stt_engine == "moonshine" and _MOONSHINE_AVAILABLE:
+            self._stt_audio_buffer.append(pcm_bytes)
+            if event == "speech_stop":
+                self._flush_stt_buffer()
+        else:
+            # Forward audio chunk to the active Gemini Live session
+            if self._loop and self._loop.is_running() and self.session:
+                self._loop.call_soon_threadsafe(
+                    self.in_audio_queue.put_nowait,
+                    {"data": pcm_bytes, "mime_type": "audio/pcm"}
+                )
+
+    # ── Moonshine STT Buffer Flush ───────────────────────────────────────────
+    def _flush_stt_buffer(self) -> None:
+        """Transcribe buffered audio with Moonshine and send text to Gemini."""
+        if not self._stt_audio_buffer:
+            return
+
+        try:
+            # Concatenate all buffered audio chunks
+            combined = b"".join(self._stt_audio_buffer)
+            self._stt_audio_buffer.clear()
+
+            # Get or create Moonshine STT instance
+            stt = get_moonshine_stt(
+                model_name="moonshine/base",
+                enable_autocorrect=self.stt_autocorrect,
             )
+
+            if not stt.available:
+                logger.warning(f"[LiveVoice] Moonshine not available: {stt.init_error}")
+                # Fallback: send raw audio to Gemini
+                if self._loop and self._loop.is_running() and self.session:
+                    self._loop.call_soon_threadsafe(
+                        self.in_audio_queue.put_nowait,
+                        {"data": combined, "mime_type": "audio/pcm"}
+                    )
+                return
+
+            # Transcribe in a thread to avoid blocking
+            import asyncio
+
+            def _transcribe():
+                try:
+                    text = stt.transcribe(combined, sample_rate=SEND_SAMPLE_RATE)
+                    if text and text.strip():
+                        logger.info(f"[LiveVoice] Moonshine STT: {text}")
+                        # Send transcribed text to Gemini as a text turn
+                        loop = self._get_active_loop()
+                        if loop and loop.is_running():
+                            asyncio.run_coroutine_threadsafe(
+                                self.send_text_turn(text.strip()),
+                                loop
+                            )
+                            # Mark as user transcript for UI
+                            if self.on_user_transcript:
+                                self.on_user_transcript(text.strip(), False)
+                except Exception as e:
+                    logger.error(f"[LiveVoice] Moonshine transcription error: {e}")
+
+            # Run transcription in executor to avoid blocking the audio callback thread
+            import concurrent.futures
+            if hasattr(self, '_stt_executor'):
+                self._stt_executor.submit(_transcribe)
+            else:
+                self._stt_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                self._stt_executor.submit(_transcribe)
+
+        except Exception as e:
+            logger.error(f"[LiveVoice] _flush_stt_buffer error: {e}")
 
     # ── Gemini Live Session Management ───────────────────────────────────────
     def _get_api_key(self) -> str:

@@ -66,6 +66,7 @@ from smart_home_page_new import BrahmaHomePage, _DeviceTile
 from core.local_brain import local_brain
 from workspace_store import store as workspace_store
 from core.identity import identity
+from core.moonshine_stt import get_available_stt_engines, is_moonshine_available
 from sound_manager import sound_mgr
 
 def _base_dir() -> Path:
@@ -1546,6 +1547,9 @@ def _default_app_settings() -> dict:
         "attention_call_prompts": True,
         "developer_mode_enabled": False,
         "developer_mode_workspace": "",
+        # STT Engine Settings
+        "stt_engine": "moonshine",
+        "stt_autocorrect": True,
     }
 
 
@@ -9686,6 +9690,18 @@ class MainWindow(QMainWindow):
         taskbar_lay.addWidget(self._btn_dashboard)
         taskbar_lay.addWidget(self._btn_chat)
         taskbar_lay.addWidget(self._btn_settings)
+        
+        # Compact Gestures button in top bar
+        self._btn_gestures_top = QPushButton("🖐 Gestures")
+        self._btn_gestures_top.setFixedSize(95, 30)
+        self._btn_gestures_top.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_gestures_top.setStyleSheet(
+            "QPushButton { background: rgba(0, 229, 255, 0.08); color: #ffffff; border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; border: 1px solid #00e5ff; }"
+        )
+        self._btn_gestures_top.clicked.connect(self._toggle_gestures_preview)
+        taskbar_lay.addWidget(self._btn_gestures_top)
+        
         taskbar_lay.addStretch()
 
         root.addWidget(self._taskbar)
@@ -9696,8 +9712,9 @@ class MainWindow(QMainWindow):
         self._shortcut_ctrl_space = QShortcut(QKeySequence("Ctrl+Space"), self)
         self._shortcut_ctrl_space.activated.connect(self._open_command_palette)
 
+        # Floating gesture card (hidden by default - use top bar button instead)
         self._floating_gesture_card = FloatingGestureCard(self.centralWidget())
-        self._floating_gesture_card.show()
+        self._floating_gesture_card.hide()
 
         self._center_panel = self._build_center_panel_modern(face_path)
         body.addWidget(self._center_panel, stretch=1)
@@ -10305,6 +10322,24 @@ class MainWindow(QMainWindow):
             self._apply_state("LISTENING")
             self._log.append_log("SYS: Microphone active.")
             sound_mgr.play_listening_start()
+
+    def _toggle_gestures_preview(self):
+        """Toggle the floating gesture camera preview card."""
+        card = self._floating_gesture_card
+        if card.isVisible():
+            card.hide()
+            card.preview._stop_camera()
+            self._btn_gestures_top.setStyleSheet(
+                "QPushButton { background: rgba(0, 229, 255, 0.08); color: #ffffff; border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; }"
+                "QPushButton:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; border: 1px solid #00e5ff; }"
+            )
+        else:
+            card.show()
+            card.preview._start_camera()
+            self._btn_gestures_top.setStyleSheet(
+                "QPushButton { background: rgba(0, 229, 255, 0.18); color: #00e5ff; border: 1px solid #00e5ff; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; }"
+                "QPushButton:hover { background: rgba(0, 229, 255, 0.25); color: #00e5ff; border: 1px solid #00e5ff; }"
+            )
 
     def set_muted_state(self, muted: bool, *, wakeword: bool = False):
         muted = bool(muted)
@@ -12578,6 +12613,49 @@ class SystemConnectivityPage(QWidget):
         lay1.addWidget(self._offline_mode_btn)
         lay.addWidget(card)
 
+        # STT Engine Settings
+        stt_card = self._card("Speech-to-Text Engine", "Choose how Nexus Core transcribes your voice.")
+        stt_lay = stt_card.layout()
+
+        # Engine selection
+        stt_engine_row = QHBoxLayout()
+        stt_engine_row.addWidget(QLabel("STT Engine"))
+        self._stt_engine_combo = QComboBox()
+        engines = get_available_stt_engines()
+        for eng in engines:
+            label = eng["name"]
+            if not eng["available"]:
+                label += " (not installed)"
+            self._stt_engine_combo.addItem(label, eng["id"])
+        current_stt = self._load_app_settings().get("stt_engine", "moonshine")
+        idx = self._stt_engine_combo.findData(current_stt)
+        if idx >= 0:
+            self._stt_engine_combo.setCurrentIndex(idx)
+        self._stt_engine_combo.currentTextChanged.connect(self._on_stt_engine_changed)
+        stt_engine_row.addWidget(self._stt_engine_combo, 1)
+        stt_lay.addLayout(stt_engine_row)
+
+        # Autocorrect toggle
+        is_autocorrect = bool(self._load_app_settings().get("stt_autocorrect", True))
+        self._stt_autocorrect_btn = self._mk_toggle(
+            "Auto-correct transcriptions",
+            is_autocorrect,
+            self._toggle_stt_autocorrect
+        )
+        stt_lay.addWidget(self._stt_autocorrect_btn)
+
+        # Moonshine availability info
+        moonshine_info = QLabel()
+        if is_moonshine_available():
+            moonshine_info.setText("✅ Moonshine STT is installed and ready")
+            moonshine_info.setStyleSheet(f"color: {C.GREEN}; font-size: 11px;")
+        else:
+            moonshine_info.setText("⚠️ Moonshine not installed. Run: pip install moonshine_onnx transformers")
+            moonshine_info.setStyleSheet(f"color: #ff5555; font-size: 11px;")
+        stt_lay.addWidget(moonshine_info)
+
+        lay.addWidget(stt_card)
+
         # Mobile connect
         mobile = self._card("Mobile Connect", "Connect your phone and control Nexus Core remotely.")
         ml = mobile.layout()
@@ -14164,6 +14242,36 @@ class SystemConnectivityPage(QWidget):
             msg = "🌐 SYSTEM: Offline Mode DISENGAGED. Cloud connectivity restored."
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(msg)
+
+    def _on_stt_engine_changed(self, text: str):
+        """Handle STT engine dropdown change."""
+        if not hasattr(self, "_stt_engine_combo"):
+            return
+        engine_id = self._stt_engine_combo.currentData()
+        if engine_id:
+            self._set_setting("stt_engine", engine_id)
+            # Apply to live voice engine
+            if self._ctrl() and hasattr(self._ctrl(), "_win") and hasattr(self._ctrl()._win, "_brahma_connect"):
+                pass  # Will be applied via engine getter
+            # Update live voice engine if accessible
+            try:
+                from core.live_voice_engine import live_voice_engine as lve
+                lve.set_stt_config(engine=engine_id)
+            except Exception:
+                pass
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log(f"SYS: STT engine set to {engine_id}")
+
+    def _toggle_stt_autocorrect(self, checked: bool):
+        """Toggle STT auto-correction."""
+        self._set_setting("stt_autocorrect", bool(checked))
+        try:
+            from core.live_voice_engine import live_voice_engine as lve
+            lve.set_stt_config(autocorrect=bool(checked))
+        except Exception:
+            pass
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: STT auto-correction {'enabled' if checked else 'disabled'}")
 
     def _toggle_attention_message_prompts(self, checked: bool):
         self._set_setting("attention_message_prompts", bool(checked))
