@@ -164,7 +164,7 @@ class NetSentinel:
                 pass
 
             # Method 2: ip route show default
-            if gateway_ip == "192.168.1.1":
+            if not gateway_ip:
                 try:
                     out = subprocess.check_output(["ip", "-4", "route", "show", "default"], text=True, stderr=subprocess.DEVNULL)
                     m = re.search(r"via\s+([0-9.]+)", out)
