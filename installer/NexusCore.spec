@@ -24,6 +24,7 @@ a = Analysis(
         (os.path.join(cwd, 'README.md'), '.'),
         (os.path.join(cwd, 'requirements.txt'), '.'),
         (os.path.join(cwd, 'version.txt'), '.'),
+        (os.path.join(cwd, 'app_version.txt'), '.'),
         (os.path.join(cwd, 'installer', 'uninstall.cmd'), '.')
     ],
     hiddenimports=[
