@@ -1,9 +1,9 @@
-"""Brahma Connect subsystem.
+"""Nexus Connect subsystem.
 
 This package adds the local gateway, device registry, pairing flow, and
-protocol definitions used by Brahma AI to reach companion devices.
+protocol definitions used by Nexus AI to reach companion devices.
 """
 
-from .service import BrahmaConnectService, get_service
+from .service import NexusConnectService, get_service
 
-__all__ = ["BrahmaConnectService", "get_service"]
+__all__ = ["NexusConnectService", "get_service"]
