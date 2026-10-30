@@ -1,14 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
-cwd = 'D:\\TiTech Prabha Solution\\Brahma AI\\Brahma AI\\Brahma-AI---Lite-main\\Brahma-AI---Lite-main'
-source_dir = 'D:\\TiTech Prabha Solution\\Brahma AI\\Brahma AI\\Brahma-AI---Lite-main\\Brahma-AI---Lite-main\\installer\\dist\\BrahmaEcho'
+cwd = 'D:\\TiTech Prabha Solution\\Nexus AI\\Nexus AI\\Nexus-AI---Lite-main\\Nexus-AI---Lite-main'
+source_dir = 'D:\\TiTech Prabha Solution\\Nexus AI\\Nexus AI\\Nexus-AI---Lite-main\\Nexus-AI---Lite-main\\installer\\dist\\NexusEcho'
 
 a = Analysis(
-    ['D:\\TiTech Prabha Solution\\Brahma AI\\Brahma AI\\Brahma-AI---Lite-main\\Brahma-AI---Lite-main\\install_wizard.py'],
+    ['D:\\TiTech Prabha Solution\\Nexus AI\\Nexus AI\\Nexus-AI---Lite-main\\Nexus-AI---Lite-main\\install_wizard.py'],
     pathex=[],
     binaries=[],
     datas=[
-        (source_dir, 'BrahmaEcho'),
+        (source_dir, 'NexusEcho'),
         (os.path.join(cwd, 'assets'), 'assets')
     ],
     hiddenimports=['PyQt6', 'shutil', 'PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore'],
@@ -27,7 +27,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='BrahmaEcho_Setup',
+    name='NexusEcho_Setup',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
