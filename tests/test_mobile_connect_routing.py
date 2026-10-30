@@ -36,11 +36,11 @@ def test_looks_like_website_request_identifies_website_creation():
     assert _looks_like_website_request("design a website for my business")
 
 
-def test_brahma_connect_command_routing_no_device():
+def test_nexus_connect_command_routing_no_device():
     from main import BrahmaLive
 
     class DummyController:
-        _handle_brahma_connect_command = BrahmaLive._handle_brahma_connect_command
+        _handle_nexus_connect_command = BrahmaLive._handle_nexus_connect_command
         _extract_launch_app_name = BrahmaLive._extract_launch_app_name
         def __init__(self):
             self.ui = MagicMock()
@@ -52,16 +52,16 @@ def test_brahma_connect_command_routing_no_device():
     ctrl = DummyController()
 
     with patch("main.connect_list_devices", return_value=json.dumps({"success": True, "devices": []})):
-        handled = ctrl._handle_brahma_connect_command("open whatsapp on my phone")
+        handled = ctrl._handle_nexus_connect_command("open whatsapp on my phone")
         assert handled is True
         assert any("no phone is currently connected" in msg.lower() for msg in ctrl.spoken_messages)
 
 
-def test_brahma_connect_command_routing_with_connected_phone():
+def test_nexus_connect_command_routing_with_connected_phone():
     from main import BrahmaLive
 
     class DummyController:
-        _handle_brahma_connect_command = BrahmaLive._handle_brahma_connect_command
+        _handle_nexus_connect_command = BrahmaLive._handle_nexus_connect_command
         _extract_launch_app_name = BrahmaLive._extract_launch_app_name
         def __init__(self):
             self.ui = MagicMock()
@@ -77,7 +77,7 @@ def test_brahma_connect_command_routing_with_connected_phone():
 
     with patch("main.connect_list_devices", return_value=json.dumps({"success": True, "devices": fake_devices})), \
          patch("main.connect_execute", return_value=json.dumps({"success": True, "detail": "Launched WhatsApp."})) as mock_exec:
-        handled = ctrl._handle_brahma_connect_command("open whatsapp on my phone")
+        handled = ctrl._handle_nexus_connect_command("open whatsapp on my phone")
         assert handled is True
         mock_exec.assert_called_once()
         call_params = mock_exec.call_args[1]["parameters"]
@@ -86,11 +86,11 @@ def test_brahma_connect_command_routing_with_connected_phone():
         assert call_params["parameters"]["app_name"] == "whatsapp"
 
 
-def test_brahma_connect_ignores_informational_phone_questions():
+def test_nexus_connect_ignores_informational_phone_questions():
     from main import BrahmaLive
 
     class DummyController:
-        _handle_brahma_connect_command = BrahmaLive._handle_brahma_connect_command
+        _handle_nexus_connect_command = BrahmaLive._handle_nexus_connect_command
         _extract_launch_app_name = BrahmaLive._extract_launch_app_name
         def __init__(self):
             self.ui = MagicMock()
@@ -99,5 +99,5 @@ def test_brahma_connect_ignores_informational_phone_questions():
             self.spoken_messages.append(text)
 
     ctrl = DummyController()
-    handled = ctrl._handle_brahma_connect_command("what is a smartphone?")
+    handled = ctrl._handle_nexus_connect_command("what is a smartphone?")
     assert handled is False
