@@ -26,7 +26,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y portaudio19-dev libgl1 libegl1 libxkbcommon-x11-0 libpulse0
+          sudo apt-get install -y portaudio19-dev libgl1 libegl1 libxkbcommon-x11-0 libpulse0 xvfb
 
       - name: Install Python dependencies
         run: |
@@ -35,4 +35,4 @@ jobs:
           python -m pip install pytest
 
       - name: Run test suite
-        run: python -m pytest -q
+        run: xvfb-run -a python -m pytest -q
