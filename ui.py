@@ -79,6 +79,7 @@ from sound_manager import sound_mgr
 from ui_cards import (
     C, qcol, MetricBar, MessageCard, TaskCard, AttachmentCard, EventCard, ArtifactCard,
 )
+from ui_diagnostics import FirstRunDiagnosticsDialog
 
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -1477,6 +1478,7 @@ def _default_app_settings() -> dict:
         "image_model": "community/scriptsnsenses-sys/flux-2-dev-free",
         # Advanced AI Settings
         "advanced_ai_enabled": False,
+        "first_run_diagnostics_complete": False,
     }
 
 
@@ -15957,6 +15959,15 @@ class BrahmaUI:
             self._workspace_sidebar.hide_workspace(animate=False)
         self.set_dashboard_page(getattr(self._win, "_current_page", "dashboard") == "dashboard")
         self._apply_developer_mode_ui()
+        if not self._load_app_settings().get("first_run_diagnostics_complete", False):
+            try:
+                diagnostics = FirstRunDiagnosticsDialog(self._win)
+                diagnostics.exec()
+            except Exception as exc:
+                print(f"First-run diagnostics could not be shown: {exc}")
+            settings = self._load_app_settings()
+            settings["first_run_diagnostics_complete"] = True
+            self._save_app_settings(settings)
         if show_immediately:
             self._launcher.hide()
             if self._should_play_boot_sequence():
