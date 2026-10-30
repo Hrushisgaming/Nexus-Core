@@ -6761,7 +6761,7 @@ class BrahmaLive:
         except Exception:
             pass
 
-        api_key = self._get_api_key()
+        api_key = _get_api_key()
         if not api_key:
             logger.error("[LiveVoice] No Gemini API key configured. Voice features disabled.")
             self.ui.set_live_subtitles("NEXUS", "Please set your Gemini API key in Settings → AI Providers.", True)

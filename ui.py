@@ -14408,7 +14408,7 @@ class SystemConnectivityPage(QWidget):
 
     def _open_api_keys(self):
         if self._ctrl() and hasattr(self._ctrl(), "_win"):
-            self._ctrl()._win._open_api_key_settings()
+            self._ctrl()._win._open_api_keys()
         else:
             try:
                 data = {}
