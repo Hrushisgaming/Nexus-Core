@@ -87,7 +87,7 @@
 - **PowerPoint (`.pptx`)**: Build branded presentations with slide layouts, typography, and speaker notes.
 - **PDF Suite**: Convert, merge, extract, and assemble PDF deliverables.
 
-### 📱 Brahma Connect (Android Companion)
+### 📱 Nexus Connect (Android Companion)
 - **AI Phone Call Proxy**: Nexus screens incoming phone calls, talks to the caller, takes meeting notes, and delivers immediate desktop transcripts and summaries.
 - **Ecosystem Sync**: Device geolocation, SMS notifications, and battery status.
 
@@ -183,7 +183,7 @@ Nexus Core Evo/
 │   ├── circuit_schematic.py    # Modular circuit schematic feature
 │   └── spotify_mcp.py          # Modular Spotify feature
 ├── smart_home/                 # Smart device provider & discovery services
-└── brahma-connect-android/     # Companion Android mobile application
+└── nexus-connect-android/     # Companion Android mobile application
 ```
 
 ---
