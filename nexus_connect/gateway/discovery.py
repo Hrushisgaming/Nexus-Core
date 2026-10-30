@@ -18,7 +18,7 @@ def local_ip() -> str:
 
 @dataclass(slots=True)
 class GatewayDiscovery:
-    service_name: str = "_BRAHMA._tcp.local."
+    service_name: str = "_NEXUS._tcp.local."
     _zeroconf: Any = None
     _service_info: Any = None
 
@@ -32,7 +32,7 @@ class GatewayDiscovery:
             self._zeroconf = Zeroconf(ip_version=IPVersion.All)
             info = ServiceInfo(
                 type_=self.service_name,
-                name=f"Brahma Connect.{self.service_name}",
+                name=f"Nexus Connect.{self.service_name}",
                 addresses=[socket.inet_aton(host if host and host != "0.0.0.0" else local_ip())],
                 port=int(port),
                 properties={k.encode("utf-8"): v.encode("utf-8") for k, v in (properties or {}).items()},
