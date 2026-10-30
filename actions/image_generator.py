@@ -79,6 +79,21 @@ def _get_output_directory(custom_path: Optional[str] = None) -> Path:
     return out
 
 
+def _open_generated_image(image_file: Path) -> None:
+    """Open a generated image with the platform's default image viewer."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(image_file))
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", str(image_file)])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", str(image_file)])
+    except Exception as exc:
+        logger.debug("Could not open generated image: %s", exc)
+
+
 def _build_enhanced_prompt(prompt: str, style: str = "photorealistic") -> str:
     cleaned = re.sub(r"\s+", " ", prompt.strip())
     style_key = style.lower().strip().replace(" ", "_").replace("-", "_")
@@ -174,11 +189,8 @@ def generate_image(
         if player and hasattr(player, "write_log"):
             player.write_log(f"✅ [ImageGen] Image rendered successfully ({kb_size} KB in {elapsed}s).\nSaved to: {image_file}")
 
-        # Automatically open in Windows Photos
-        try:
-            os.startfile(str(image_file.resolve()))
-        except Exception:
-            pass
+        # Open with the default image viewer on the current platform.
+        _open_generated_image(image_file.resolve())
 
         if speak:
             speak("Your image has been generated and saved to your desktop, sir.")
