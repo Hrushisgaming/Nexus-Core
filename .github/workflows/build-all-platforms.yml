@@ -1,6 +1,7 @@
 name: Build Multi-Platform Installers
 
 on:
+  pull_request:
   workflow_dispatch:
   push:
     tags:
