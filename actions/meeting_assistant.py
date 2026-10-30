@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import threading
 import time
 import wave
@@ -232,7 +233,7 @@ class MeetingAssistant:
             prompt,
         ]
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.8-flash",
             contents=contents,
             config={"temperature": 0.0},
         )
@@ -382,7 +383,7 @@ Answer: ...
                     prompt,
                 ]
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=contents,
                     config={"temperature": 0.2},
                 )

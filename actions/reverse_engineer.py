@@ -247,7 +247,7 @@ def _synthesize_web_remake(
             from google import genai
             client = genai.Client(api_key=api_key)
             resp = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=prompt,
                 config={"temperature": 0.4},
             )

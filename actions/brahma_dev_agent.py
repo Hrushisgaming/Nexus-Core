@@ -338,7 +338,7 @@ class BrahmaDevAgent:
                         ))
 
                 # Attempt primary model and fallback model with retries
-                models_to_try = ["gemini-2.5-flash", "gemini-3.6-flash"]
+                models_to_try = ["gemini-3.8-flash", "gemini-3.5-flash"]
                 last_err = None
 
                 for model_name in models_to_try:

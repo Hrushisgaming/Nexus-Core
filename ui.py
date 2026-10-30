@@ -12742,7 +12742,7 @@ class SystemConnectivityPage(QWidget):
         self._gemini_row, self._gemini_status, self._gemini_key = self._provider_row(
             "Google Gemini",
             self._api_defaults.get("gemini_api_key", ""),
-            "gemini-2.5-flash",
+            "gemini-3.8-flash",
             "gemini",
         )
         self._or_row, self._or_status, self._or_key = self._provider_row(

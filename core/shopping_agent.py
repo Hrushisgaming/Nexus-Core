@@ -408,7 +408,7 @@ class ShoppingAgent:
                 raise RuntimeError("Gemini Client not available for synthesis.")
 
             resp = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=f"User Search: {query}\n\nRetrieved Products:\n{json.dumps(items_payload, indent=2)}",
                 config={
                     "system_instruction": system_instruction,

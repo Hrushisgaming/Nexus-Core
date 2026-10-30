@@ -190,7 +190,7 @@ def _analyze_food_multimodal(image_b64: Optional[str], query: str) -> dict:
             contents.append(f"{system_prompt}\n\nUser request: {query}")
 
             resp = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=contents,
             )
             text = (resp.text or "").strip()

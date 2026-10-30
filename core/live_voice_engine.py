@@ -542,7 +542,7 @@ class LiveVoiceEngine:
             pass
         return os.environ.get("GEMINI_API_KEY", "")
 
-    def _build_live_config(self) -> Any:
+    def _build_live_config(self, model: str = "") -> Any:
         from google.genai import types
 
         sys_prompt = (
@@ -557,17 +557,22 @@ class LiveVoiceEngine:
             "- Stay silent on initial connection until the user speaks to you."
         )
 
-        # Use TEXT response mode for transcribe-only models (gemini-3.5-transcribe-live).
-        # The TTS provider (ElevenLabs/Groq/Fish Audio) handles speaking the response.
-        response_modalities = ["TEXT"]
-
-        return types.LiveConnectConfig(
-            response_modalities=response_modalities,
+        # Native-audio Live models respond in AUDIO (streamed to the clients).
+        _cfg = dict(
+            response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction=sys_prompt,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),  # Zero latency thinking budget
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Charon")
+                )
+            ),
         )
+        # thinking_budget is a 2.x setting; skip it for Gemini 3.x Live models.
+        if "gemini-3" not in (model or ""):
+            _cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=0)  # Zero latency
+        return types.LiveConnectConfig(**_cfg)
 
     async def send_text_turn(self, text: str):
         """Sends a text utterance to Gemini Live session."""
@@ -808,9 +813,12 @@ class LiveVoiceEngine:
 
         client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
         model_candidates = [
-            "models/gemini-3.5-flash-lite",
-            "models/gemini-3.5-transcribe-live",
+            "models/gemini-2.5-flash-native-audio-preview-12-2025",
+            "models/gemini-3.1-flash-live-preview",
         ]
+        _env_model = os.environ.get("NEXUS_LIVE_MODEL", "").strip()
+        if _env_model:
+            model_candidates = [_env_model] + [m for m in model_candidates if m != _env_model]
 
         while self._running:
             connected = False
@@ -818,7 +826,7 @@ class LiveVoiceEngine:
                 try:
                     logger.info(f"[LiveVoice] Connecting to {target_model}...")
                     self.set_state("CONNECTING")
-                    config = self._build_live_config()
+                    config = self._build_live_config(target_model)
 
                     connect_cm = client.aio.live.connect(model=target_model, config=config)
                     session = await asyncio.wait_for(connect_cm.__aenter__(), timeout=8.0)

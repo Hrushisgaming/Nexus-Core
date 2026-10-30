@@ -360,7 +360,7 @@ class UnifiedAIClient:
                 response_mime_type="application/json" if json_mode else None
             )
             resp = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=contents,
                 config=config
             )
@@ -615,7 +615,7 @@ class UnifiedAIClient:
                     from google.genai import types
                     image_bytes = base64.b64decode(image_b64)
                     resp = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini-3.8-flash",
                         contents=[
                             types.Part.from_bytes(data=image_bytes, mime_type=mime),
                             prompt

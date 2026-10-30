@@ -96,7 +96,7 @@ def analyze_error(
 
     genai.configure(api_key=_get_api_key())
     model = genai.GenerativeModel(
-        model_name="gemini-3.1-flash-lite",
+        model_name="gemini-3.5-flash-lite",
         system_instruction=ERROR_ANALYST_PROMPT
     )
 
@@ -158,7 +158,7 @@ def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
         import google.generativeai as genai
 
     genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(model_name="gemini-2.5-flash")
+    model = genai.GenerativeModel(model_name="gemini-3.8-flash")
 
     prompt = f"""A task step failed. Generate a replacement step.
 

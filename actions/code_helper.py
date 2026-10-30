@@ -16,7 +16,7 @@ BASE_DIR           = get_base_dir()
 API_CONFIG_PATH    = get_user_data_dir() / "config" / "api_keys.json"
 DESKTOP            = Path.home() / "Desktop"
 MAX_BUILD_ATTEMPTS = 3
-GEMINI_MODEL       = "gemini-flash-latest"
+GEMINI_MODEL       = "gemini-3.8-flash"
 
 
 def _get_api_key() -> str:
@@ -489,7 +489,7 @@ Be specific and actionable. If you see an error message, quote it exactly."""
         ]
 
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemini-3.8-flash",
             contents=contents,
         )
 

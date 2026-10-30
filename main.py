@@ -138,13 +138,50 @@ APP_SETTINGS_FILE = get_user_data_dir() / "config" / "app_settings.json"
 logger = logging.getLogger("NexusCore")
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Nexus Core" / "startup.log"
-LIVE_MODEL          = "models/gemini-3.5-flash-lite"
+# Live (bidiGenerateContent) needs a native-audio Live model; text models such as
+# gemini-3.5-flash-lite are rejected with a 1008 error. Order = preference.
+# Override the first choice with:  NEXUS_LIVE_MODEL=models/gemini-3.1-flash-live-preview
+LIVE_MODEL_FALLBACKS = (
+    "models/gemini-2.5-flash-native-audio-preview-12-2025",
+    "models/gemini-3.1-flash-live-preview",
+)
+LIVE_MODEL          = os.environ.get("NEXUS_LIVE_MODEL", "").strip() or LIVE_MODEL_FALLBACKS[0]
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
 LIVE_CONNECT_TIMEOUT = 12
 _SINGLE_INSTANCE_MUTEX = None
+
+
+def _live_model_candidates() -> list:
+    """LIVE_MODEL first, then the fallbacks, without duplicates."""
+    out = []
+    for m in (LIVE_MODEL, *LIVE_MODEL_FALLBACKS):
+        if m and m not in out:
+            out.append(m)
+    return out
+
+
+async def _connect_live_with_fallback(client, build_config, models, timeout):
+    """Try each Live model in order. Returns (connect_cm, session, model).
+
+    build_config(model) -> LiveConnectConfig. If every model fails, the last
+    error is re-raised so the caller's reconnect loop still applies.
+    """
+    last_exc = None
+    for model in models:
+        connect_cm = None
+        try:
+            connect_cm = client.aio.live.connect(model=model, config=build_config(model))
+            session = await asyncio.wait_for(connect_cm.__aenter__(), timeout=timeout)
+            return connect_cm, session, model
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            print(f"[BRAHMA EVO] ⚠️ Live model {model} unavailable: {str(exc)[:160]}")
+    raise last_exc if last_exc is not None else RuntimeError("No Live models configured")
 
 
 def _get_api_key() -> str:
@@ -5411,7 +5448,7 @@ class BrahmaLive:
             pass
         return message
 
-    def _build_config(self) -> types.LiveConnectConfig:
+    def _build_config(self, model: str = ""):
         from datetime import datetime
 
         memory     = load_memory()
@@ -5509,17 +5546,25 @@ class BrahmaLive:
             print(f"[MCPRegistry] MCP tools unavailable: {exc}")
 
 
-        # Use TEXT response mode for transcribe-only models (gemini-3.5-transcribe-live).
-        # The TTS provider (ElevenLabs/Groq/Fish Audio) handles speaking the response.
-        return types.LiveConnectConfig(
-            response_modalities=["TEXT"],
+        # Native-audio Live models answer in AUDIO (played by _play_audio); the
+        # transcription options feed the subtitles/log.
+        _cfg = dict(
+            response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
             tools=[{"function_declarations": tool_declarations}],
             session_resumption=types.SessionResumptionConfig(handle=getattr(self, '_resume_handle', None)),
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Charon")
+                )
+            ),
         )
+        # thinking_budget is a 2.x setting; Gemini 3.x Live models use a different knob.
+        if "gemini-3" not in (model or ""):
+            _cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        return types.LiveConnectConfig(**_cfg)
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         self._in_live_tool = True
@@ -6782,10 +6827,10 @@ class BrahmaLive:
             try:
                 print("[BRAHMA EVO] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
-                config = self._build_config()
-
-                connect_cm = client.aio.live.connect(model=LIVE_MODEL, config=config)
-                session = await asyncio.wait_for(connect_cm.__aenter__(), timeout=LIVE_CONNECT_TIMEOUT)
+                connect_cm, session, _live_model_used = await _connect_live_with_fallback(
+                    client, self._build_config, _live_model_candidates(), LIVE_CONNECT_TIMEOUT
+                )
+                print(f"[BRAHMA EVO] Live model: {_live_model_used}")
                 try:
                     async with asyncio.TaskGroup() as tg:
                         self.session        = session

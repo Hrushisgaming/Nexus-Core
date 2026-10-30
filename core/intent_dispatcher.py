@@ -920,7 +920,7 @@ class IntentDispatcher:
             f"Active Foreground Window: {active_window or 'Desktop'}"
         )
 
-        candidates = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]
+        candidates = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
         for model in candidates:
             try:
                 resp = client.models.generate_content(

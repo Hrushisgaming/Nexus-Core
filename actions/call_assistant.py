@@ -466,7 +466,7 @@ class CallAssistant:
             from google.genai import types
             client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
             response = client.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model="gemini-3.5-flash-lite",
                 contents=[
                     types.Part.from_bytes(data=wav_bytes, mime_type="audio/wav"),
                     "Transcribe the spoken audio verbatim. Return only the transcribed text, nothing else.",
@@ -502,7 +502,7 @@ Guidelines:
                 from google import genai
                 client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
                 resp = client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     contents=prompt,
                 )
                 txt = (getattr(resp, "text", "") or "").strip()
@@ -532,7 +532,7 @@ Rules:
                 from google import genai
                 client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
                 resp = client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     contents=prompt,
                 )
                 txt = (getattr(resp, "text", "") or "").strip().strip('"')
@@ -576,7 +576,7 @@ Output a clean JSON object:
 }}
 """
                 resp = client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     contents=sum_prompt,
                     config={"response_mime_type": "application/json"}
                 )

@@ -42,7 +42,7 @@ def mobile_autopilot(parameters: dict, response=None, player=None, session_memor
         import google.generativeai as genai
         from agent.planner import _get_api_key
         genai.configure(api_key=_get_api_key())
-        model = genai.GenerativeModel("gemini-3.1-flash-lite")
+        model = genai.GenerativeModel("gemini-3.5-flash-lite")
     except Exception as e:
         return json.dumps({"success": False, "error": f"Failed to initialize Gemini: {e}"})
 

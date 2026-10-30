@@ -400,7 +400,7 @@ def _structured_blocks(parameters: dict) -> list[dict]:
 def synthesize_deep_report(goal_or_topic: str, title: str, research_notes: str = "") -> str:
     """
     Synthesizes an exhaustive, 10-chapter technical research monograph
-    using high-speed Gemini-3.1-flash-lite in two cohesive passes.
+    using Gemini 3.8 Flash in two cohesive passes.
     """
     api_key = _get_api_key()
     if not api_key:
@@ -409,7 +409,7 @@ def synthesize_deep_report(goal_or_topic: str, title: str, research_notes: str =
     import google.generativeai as genai
     genai.configure(api_key=api_key)
 
-    model_names = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+    model_names = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
     model = None
     for name in model_names:
         try:
