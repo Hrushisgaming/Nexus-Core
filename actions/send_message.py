@@ -7,11 +7,19 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pyautogui
-import pyperclip
+def _get_pyautogui():
+    """Import desktop automation only when a desktop action is requested.
 
-pyautogui.FAILSAFE = True
-pyautogui.PAUSE = 0.08
+    Importing pyautogui at module load time probes the X11 display on Linux,
+    which breaks headless CI and prevents unrelated Nexus features from loading.
+    """
+    import pyautogui
+
+    pyautogui.FAILSAFE = True
+    pyautogui.PAUSE = 0.08
+    return pyautogui
+
+
 
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -29,6 +37,7 @@ def _normalize_path(value: str) -> Path | None:
 def _open_app(app_name: str) -> bool:
     """Opens an app via Windows search."""
     try:
+        pyautogui = _get_pyautogui()
         pyautogui.press("win")
         time.sleep(0.4)
         pyautogui.write(app_name, interval=0.04)
@@ -43,6 +52,7 @@ def _open_app(app_name: str) -> bool:
 
 def _send_whatsapp(receiver: str, message: str) -> str:
     try:
+        pyautogui = _get_pyautogui()
         if not _open_app("WhatsApp"):
             return "Could not open WhatsApp."
 
@@ -76,6 +86,7 @@ def _open_instagram_post_dialog() -> None:
     """
     import webbrowser
 
+    pyautogui = _get_pyautogui()
     webbrowser.open("https://www.instagram.com/create/select/")
     time.sleep(6.0)
 
@@ -132,6 +143,7 @@ def _upload_instagram_media(media_path: str, caption: str = "", mode: str = "pos
 def _send_telegram(receiver: str, message: str) -> str:
     """Sends a Telegram message via Windows desktop app."""
     try:
+        pyautogui = _get_pyautogui()
         if not _open_app("Telegram"):
             return "Could not open Telegram."
 
@@ -210,6 +222,7 @@ def _send_email_via_browser(platform: str, receiver: str, message: str) -> str:
 
 def _send_generic(platform: str, receiver: str, message: str) -> str:
     try:
+        pyautogui = _get_pyautogui()
         if not _open_app(platform):
             return f"Could not open {platform}."
 
