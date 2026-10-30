@@ -1,6 +1,6 @@
 """
-brahma_connect/gateway/mobile_portal.py
-Zero-Install Mobile Companion Web Portal for Brahma AI.
+nexus_connect/gateway/mobile_portal.py
+Zero-Install Mobile Companion Web Portal for Nexus AI.
 Provides instant lock-screen notifications, Web Audio chimes, live WebSocket mesh syncing,
 and bidirectional voice & remote controls on Android and iOS devices without installing an app.
 """
@@ -14,7 +14,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
 <meta name="theme-color" content="#030712">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>⚡ Brahma AI • Mobile Companion</title>
+<title>⚡ Nexus AI • Mobile Companion</title>
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }}
   body {{
@@ -206,7 +206,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
 <body>
 <div class="container">
   <div class="header">
-    <div class="title">⚡ BRAHMA AI</div>
+    <div class="title">⚡ NEXUS AI</div>
     <div class="subtitle">Zero-Install Mobile Companion Node</div>
   </div>
 
@@ -229,7 +229,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
   <div class="card">
     <div class="card-title">Lock Screen & Push Alerts</div>
     <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">
-      Enable browser push notifications to receive real-time alerts whenever Brahma AI comes online or completes a task.
+      Enable browser push notifications to receive real-time alerts whenever Nexus AI comes online or completes a task.
     </p>
     <button id="btnNotif" class="btn btn-primary" onclick="enableNotifications()">
       🔔 Enable Lock Screen Alerts
@@ -259,11 +259,11 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
 
   <div class="card">
     <div class="card-title">Event Telemetry Log</div>
-    <div id="eventLog" class="log-box">Connecting to Brahma Mesh Gateway...</div>
+    <div id="eventLog" class="log-box">Connecting to Nexus Mesh Gateway...</div>
   </div>
 
   <div class="footer">
-    Brahma AI NetSentinel • Zero-Install Local Transport Layer
+    Nexus AI NetSentinel • Zero-Install Local Transport Layer
   </div>
 </div>
 
@@ -330,7 +330,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
         new Notification(title, {{
           body: body,
           icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%2300e5ff"/></svg>',
-          tag: 'brahma-alert',
+          tag: 'nexus-alert',
           vibrate: [200, 100, 200],
         }});
       }} catch (e) {{}}
@@ -346,7 +346,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
     if (perm === 'granted') {{
       btnNotif.className = 'btn btn-active';
       btnNotif.innerText = '✅ Lock Screen Alerts Active';
-      showLocalNotification('⚡ BRAHMA AI ONLINE', 'Phone Linked! You will receive live alerts from Desktop.');
+      showLocalNotification('⚡ NEXUS AI ONLINE', 'Phone Linked! You will receive live alerts from Desktop.');
       log('Web Notification permission granted.');
     }} else {{
       log('Notification permission denied or dismissed.');
@@ -359,7 +359,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
   }}
 
   function triggerTestChime() {{
-    showLocalNotification('⚡ BRAHMA AI TEST', 'Alert beacon successfully synchronized with mobile node.');
+    showLocalNotification('⚡ NEXUS AI TEST', 'Alert beacon successfully synchronized with mobile node.');
   }}
 
   // 4. WebSocket Gateway Connection
@@ -369,7 +369,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {{
-      log('Connected to Brahma Gateway WebSocket.');
+      log('Connected to Nexus Gateway WebSocket.');
       document.getElementById('meshStatus').innerText = 'CONNECTED';
       // Register device
       ws.send(JSON.stringify({{
@@ -391,8 +391,8 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
         log(`Received event: ${{mtype}}`);
 
         if (mtype === 'notification' || mtype === 'broadcast' || mtype === 'device_online' || mtype === 'alert') {{
-          const text = msg.payload?.message || msg.payload?.text || 'Brahma AI Online // Node Linked';
-          showLocalNotification('⚡ BRAHMA AI', text);
+          const text = msg.payload?.message || msg.payload?.text || 'Nexus AI Online // Node Linked';
+          showLocalNotification('⚡ NEXUS AI', text);
         }}
       }} catch (e) {{}}
     }};
@@ -439,7 +439,7 @@ def get_mobile_portal_html(host_ip: str = "127.0.0.1", port: int = 8765) -> str:
       timestamp: new Date().toISOString(),
       payload: {{ text: txt }}
     }}));
-    log(`Sent prompt to Brahma: "${{txt}}"`);
+    log(`Sent prompt to Nexus: "${{txt}}"`);
     document.getElementById('txtVoice').value = '';
     showLocalNotification('⚡ COMMAND SENT', `Sent: "${{txt}}"`);
   }}
