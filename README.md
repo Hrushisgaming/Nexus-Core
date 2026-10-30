@@ -34,7 +34,7 @@
 
 ### 2. 🧬 Project Ultron — Self-Evolving Autonomous Skill Crucible
 - **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Nexus identifies the capability gap, writes a brand-new Python tool directly into `features/`, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
-- **Persistent Vault**: All forged skills are saved in your `features/` directory and hot-reloaded automatically.
+- **Persistent Vault**: All forged skills are saved in the writable per-user Nexus Core skills vault (`%LOCALAPPDATA%/NexusCore/skills` on Windows or `~/Library/Application Support/NexusCore/skills` on macOS) and hot-reloaded automatically.
 
 ### 3. 🛡️ Proactive Auto-Heal Engine
 - **Self-Repairing Codebase**: Background sentry catches runtime exceptions, analyzes tracebacks using LLM root-cause reasoning, applies dynamic patches to the faulty code, and presents an interactive HUD repair telemetry card without crashing the assistant.
@@ -122,12 +122,12 @@
    ```
 
 3. **Launch:**
-   - **Windows:** `python setup.py` or `start_brahma.bat`
+   - **Windows:** `python setup.py` or `start_nexus.bat`
    - **macOS:** `python3 main.py`
 
    On first launch Nexus creates its data folder at:
    - Windows: `%LOCALAPPDATA%\BrahmaAI`
-   - macOS: `~/Library/Application Support/BrahmaAI`
+   - macOS: `~/Library/Application Support/NexusCore`
 
 4. **Configure API Keys:**
    - Launch Nexus Core Evo.
@@ -198,15 +198,9 @@ Nexus Core Evo/
 
 ## 📄 License
 
-**Personal & Private Local Use Only — No Distribution.**
+The original upstream **Brahma AI Evo Source-Available Personal Use License** and its copyright attribution are preserved verbatim in [LICENSE-BRAHMA-AI-EVO](LICENSE-BRAHMA-AI-EVO). The root [LICENSE](LICENSE) file points to those retained terms; it does not replace or expand them.
 
-This project is licensed under the **Nexus Core Evo Source-Available Personal Use License**.
-
-- ✅ **Allowed:** You may download, clone, inspect, build, and run the software locally strictly on your own personal device for private, personal, educational, and research use.
-- 🚫 **Strictly Prohibited (No Distribution):** You may **NOT** distribute, redistribute, re-upload, mirror, share, transmit, sublicense, or publish this software, repository, binaries, or derivative works anywhere (including other Git hosts, public repositories, or cloud platforms). The only official distribution source is this repository.
-- 🚫 **Strictly Prohibited (No Commercial Use):** You may **NOT** sell, rent, monetize, bundle, commercialize, or host this software as a paid SaaS/cloud service.
-
-For full terms and legal conditions, see the [LICENSE](LICENSE) file. For commercial licensing inquiries, reach out via [Discord](https://discord.gg/gEYmJKKtq3).
+Any separate permission from the original copyright holders to continue this fork is governed by the terms of that permission and is not represented as a new open-source license here.
 
 <div align="center">
 <b>Nexus Core Evo</b> • Built with intelligence, precision, and autonomy.
