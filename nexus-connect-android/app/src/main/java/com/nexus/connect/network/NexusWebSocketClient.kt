@@ -1,17 +1,17 @@
-package com.brahma.connect.network
+package com.nexus.connect.network
 
 import android.content.Context
 import android.os.SystemClock
-import com.brahma.connect.commands.DeviceCommandHandler
-import com.brahma.connect.core.AgentStateStore
-import com.brahma.connect.core.BrahmaProtocol
-import com.brahma.connect.core.ChatMessage
-import com.brahma.connect.core.ConnectionState
-import com.brahma.connect.core.DeviceCredential
-import com.brahma.connect.core.DeviceSnapshot
-import com.brahma.connect.core.GatewayEndpoint
-import com.brahma.connect.core.PairingOffer
-import com.brahma.connect.pairing.PairingStorage
+import com.nexus.connect.commands.DeviceCommandHandler
+import com.nexus.connect.core.AgentStateStore
+import com.nexus.connect.core.NexusProtocol
+import com.nexus.connect.core.ChatMessage
+import com.nexus.connect.core.ConnectionState
+import com.nexus.connect.core.DeviceCredential
+import com.nexus.connect.core.DeviceSnapshot
+import com.nexus.connect.core.GatewayEndpoint
+import com.nexus.connect.core.PairingOffer
+import com.nexus.connect.pairing.PairingStorage
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
@@ -22,7 +22,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
-class BrahmaWebSocketClient(
+class NexusWebSocketClient(
     private val context: Context,
     private val storage: PairingStorage,
     private val commandHandler: DeviceCommandHandler,
@@ -60,7 +60,7 @@ class BrahmaWebSocketClient(
         socket?.close(1000, "Reconnecting")
         socket = client.newWebSocket(
             Request.Builder().url("ws://${endpoint.host}:${endpoint.port}/ws").build(),
-            BrahmaSocketListener(),
+            NexusSocketListener(),
         )
     }
 
@@ -128,7 +128,7 @@ class BrahmaWebSocketClient(
     }
 
     private fun sendHello() {
-        send(BrahmaProtocol.hello(buildSnapshot()))
+        send(NexusProtocol.hello(buildSnapshot()))
         AgentStateStore.setStatus("Awaiting approval")
     }
 
@@ -140,7 +140,7 @@ class BrahmaWebSocketClient(
         val snapshot = buildSnapshot().toJson()
             .put("pairing_token", offer.pairingToken)
             .put("pairing_code", offer.pairingCode)
-        send(BrahmaProtocol.envelope(BrahmaProtocol.PAIR_REQUEST, snapshot))
+        send(NexusProtocol.envelope(NexusProtocol.PAIR_REQUEST, snapshot))
         AgentStateStore.setStatus("Pairing request sent")
     }
 
@@ -151,7 +151,7 @@ class BrahmaWebSocketClient(
             return
         }
         currentCredential = credential
-        send(BrahmaProtocol.authenticate(credential))
+        send(NexusProtocol.authenticate(credential))
         AgentStateStore.setStatus("Authenticating")
     }
 
@@ -166,8 +166,8 @@ class BrahmaWebSocketClient(
             }
         }
         val result = commandHandler.handle(action, parameterMap)
-        val response = BrahmaProtocol.envelope(
-            BrahmaProtocol.RESULT,
+        val response = NexusProtocol.envelope(
+            NexusProtocol.RESULT,
             result.toJson(),
             requestId = requestId,
         )
@@ -194,7 +194,7 @@ class BrahmaWebSocketClient(
         sendAuthenticate()
     }
 
-    private inner class BrahmaSocketListener : WebSocketListener() {
+    private inner class NexusSocketListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
             socket = webSocket
             reconnectAttempt = 0
@@ -213,25 +213,25 @@ class BrahmaWebSocketClient(
                 val root = JSONObject(text)
                 val type = root.optString("type")
                 when (type) {
-                    BrahmaProtocol.PAIR_REQUEST -> {
+                    NexusProtocol.PAIR_REQUEST -> {
                         AgentStateStore.setStatus("Waiting for approval")
                     }
-                    BrahmaProtocol.PAIR_APPROVED -> handlePairApproved(root)
-                    BrahmaProtocol.DEVICE_ONLINE -> {
+                    NexusProtocol.PAIR_APPROVED -> handlePairApproved(root)
+                    NexusProtocol.DEVICE_ONLINE -> {
                         AgentStateStore.setConnectionState(ConnectionState.CONNECTED)
                         AgentStateStore.setStatus("Connected")
                     }
-                    BrahmaProtocol.CAPABILITIES -> {
+                    NexusProtocol.CAPABILITIES -> {
                         AgentStateStore.addLog("Capabilities synced")
                     }
-                    BrahmaProtocol.EXECUTE -> handleCommandMessage(root)
-                    BrahmaProtocol.PING -> {
-                        send(BrahmaProtocol.envelope(BrahmaProtocol.PONG, JSONObject().put("status", "ok"), requestId = root.optString("request_id")))
+                    NexusProtocol.EXECUTE -> handleCommandMessage(root)
+                    NexusProtocol.PING -> {
+                        send(NexusProtocol.envelope(NexusProtocol.PONG, JSONObject().put("status", "ok"), requestId = root.optString("request_id")))
                     }
-                    BrahmaProtocol.ERROR -> {
+                    NexusProtocol.ERROR -> {
                         AgentStateStore.setError(root.optJSONObject("payload")?.optString("error"))
                     }
-                    BrahmaProtocol.CHAT_MESSAGE -> {
+                    NexusProtocol.CHAT_MESSAGE -> {
                         val payload = root.optJSONObject("payload") ?: return
                         val role = payload.optString("role", "system")
                         val text = payload.optString("text", "")
@@ -268,7 +268,7 @@ class BrahmaWebSocketClient(
     }
 
     fun sendChatMessage(text: String) {
-        val payload = BrahmaProtocol.chatMessage(text)
+        val payload = NexusProtocol.chatMessage(text)
         val msgId = payload.getString("request_id")
         val timestamp = System.currentTimeMillis()
         val pending = ChatMessage(msgId, "user", text, timestamp, "Sending...")
