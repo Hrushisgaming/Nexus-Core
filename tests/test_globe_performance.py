@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 import pytest
 from core.globe_window import GlobeBridge
@@ -39,7 +40,12 @@ def test_chromium_gpu_flags():
     assert "--ignore-gpu-blocklist" in flags
     assert "--disable-frame-rate-limit" in flags
     assert "--disable-gpu-vsync" in flags
-    assert "--use-angle=d3d11" in flags
+    if sys.platform == "win32":
+        assert "--use-angle=d3d11" in flags
+    elif sys.platform == "darwin":
+        assert "--use-angle=metal" in flags or "--use-angle=default" in flags
+    else:
+        assert "--use-angle=egl" in flags
 
 def test_globe_bridge_signals():
     bridge = GlobeBridge()
