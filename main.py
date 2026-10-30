@@ -150,7 +150,8 @@ def _get_api_key() -> str:
             data = json.load(f)
         return data.get("gemini_api_key", "")
     except (FileNotFoundError, json.JSONDecodeError):
-        return ""
+        pass
+    return ""
 
 
 def _is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
@@ -6764,8 +6765,8 @@ class BrahmaLive:
         if not api_key:
             logger.error("[LiveVoice] No Gemini API key configured. Voice features disabled.")
             self.ui.set_live_subtitles("NEXUS", "Please set your Gemini API key in Settings → AI Providers.", True)
-            while self._running:
-                await asyncio.sleep(5.0)
+            # Don't block - return control to UI event loop so user can configure keys
+            self._voice_enabled = False
             return
 
         client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})

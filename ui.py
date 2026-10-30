@@ -14420,6 +14420,7 @@ class SystemConnectivityPage(QWidget):
                     new_data = dialog.get_settings()
                     with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
                         json.dump(new_data, f, indent=4)
+                    API_FILE.write_text(json.dumps(new_data, indent=4), encoding="utf-8")
                     if self._ctrl() and hasattr(self._ctrl(), "write_log"):
                         self._ctrl().write_log("SYS: API keys updated.")
                     self.refresh()
