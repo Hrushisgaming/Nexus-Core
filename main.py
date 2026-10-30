@@ -876,6 +876,16 @@ def main():
     ui.root.mainloop()
 
 
+def __getattr__(name: str):
+    """Lazily expose the extracted runtime class for legacy imports."""
+    if name == "BrahmaLive":
+        from core.live_runtime import BrahmaLive, bind_runtime_globals
+        bind_runtime_globals(globals())
+        globals()["BrahmaLive"] = BrahmaLive
+        return BrahmaLive
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 if __name__ == "__main__":
     import sys
     import os
