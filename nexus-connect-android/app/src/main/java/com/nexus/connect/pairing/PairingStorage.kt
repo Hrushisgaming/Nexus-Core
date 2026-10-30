@@ -1,9 +1,9 @@
-package com.brahma.connect.pairing
+package com.nexus.connect.pairing
 
 import android.content.Context
 import android.os.Build
-import com.brahma.connect.core.DeviceCredential
-import com.brahma.connect.core.PairingOffer
+import com.nexus.connect.core.DeviceCredential
+import com.nexus.connect.core.PairingOffer
 import org.json.JSONObject
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -11,7 +11,7 @@ import androidx.security.crypto.MasterKey
 class PairingStorage(context: Context) {
     private val prefs = EncryptedSharedPreferences.create(
         context,
-        "brahma_connect_secure",
+        "nexus_connect_secure",
         MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
