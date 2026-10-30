@@ -1,4 +1,4 @@
-package com.brahma.connect.device
+package com.nexus.connect.device
 
 import android.content.Context
 import android.content.Intent
