@@ -25,15 +25,15 @@
 ## ⚡ What's New in Nexus Core Evo
 
 ### 1. 🔌 Holographic Hardware Assembler & Circuit HUD
-- **Screen & Voice Part Recognition**: Brahma scans your screen via computer vision or parses voice commands (`"Brahma, how to connect DHT11 to Arduino Pro Mini"`) to recognize microcontrollers (Arduino Uno, Pro Mini, ESP32), sensors (DHT11, HC-SR04 ultrasonic, servos), and passive components.
-- **In-App Interactive Pop-up**: Opens a compact, dark glassmorphic popup overlay directly inside Brahma showing:
+- **Screen & Voice Part Recognition**: Nexus scans your screen via computer vision or parses voice commands (`"Nexus, how to connect DHT11 to Arduino Pro Mini"`) to recognize microcontrollers (Arduino Uno, Pro Mini, ESP32), sensors (DHT11, HC-SR04 ultrasonic, servos), and passive components.
+- **In-App Interactive Pop-up**: Opens a compact, dark glassmorphic popup overlay directly inside Nexus showing:
   - Component cards with pinout labels (`VCC`, `DATA`, `GND`, `2`, `p8`, `p9`).
   - **Animated glowing neon SVG wires** with real-time flowing white electron pulse dots.
   - Numbered pin bubbles (`①`, `②`, `③`, `④`, `⑤`).
   - Operating voltage safety callouts and ready-to-flash Arduino C++ firmware.
 
 ### 2. 🧬 Project Ultron — Self-Evolving Autonomous Skill Crucible
-- **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Brahma identifies the capability gap, writes a brand-new Python tool directly into `features/`, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
+- **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Nexus identifies the capability gap, writes a brand-new Python tool directly into `features/`, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
 - **Persistent Vault**: All forged skills are saved in your `features/` directory and hot-reloaded automatically.
 
 ### 3. 🛡️ Proactive Auto-Heal Engine
@@ -44,7 +44,7 @@
 - **Dynamic State Glow States**:
   - 🟡 **Gold**: Standby / Listening
   - 🔵 **Cyan / Blue**: Capturing Voice (Live Energy Wave)
-  - 🟣 **Purple**: Brahma Reasoning / Thinking
+  - 🟣 **Purple**: Nexus Reasoning / Thinking
   - 🟢 **Green**: Executing Tool / System Action
   - 🔴 **Red**: Muted
 
@@ -88,7 +88,7 @@
 - **PDF Suite**: Convert, merge, extract, and assemble PDF deliverables.
 
 ### 📱 Brahma Connect (Android Companion)
-- **AI Phone Call Proxy**: Brahma screens incoming phone calls, talks to the caller, takes meeting notes, and delivers immediate desktop transcripts and summaries.
+- **AI Phone Call Proxy**: Nexus screens incoming phone calls, talks to the caller, takes meeting notes, and delivers immediate desktop transcripts and summaries.
 - **Ecosystem Sync**: Device geolocation, SMS notifications, and battery status.
 
 ### 🏡 Smart Home Hub
@@ -112,8 +112,8 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Hrushisgaming/Brahma-Ai-Evo.git
-   cd Brahma-Ai-Evo
+   git clone https://github.com/Hrushisgaming/Nexus-Core.git
+   cd Nexus-Core
    ```
 
 2. **Install dependencies:**
@@ -125,7 +125,7 @@
    - **Windows:** `python setup.py` or `start_brahma.bat`
    - **macOS:** `python3 main.py`
 
-   On first launch Brahma creates its data folder at:
+   On first launch Nexus creates its data folder at:
    - Windows: `%LOCALAPPDATA%\BrahmaAI`
    - macOS: `~/Library/Application Support/BrahmaAI`
 
@@ -147,9 +147,9 @@
 
 | Intent | Sample Voice / Text Command |
 | :--- | :--- |
-| **Hardware Circuit** | *"Brahma, how to connect DHT11 to Arduino Pro Mini"* |
+| **Hardware Circuit** | *"Nexus, how to connect DHT11 to Arduino Pro Mini"* |
 | **Circuit Vision** | *"See the Arduino parts on my screen and tell me how to assemble them"* |
-| **Self-Evolution** | *"Brahma, learn a new skill to track International Space Station coordinates"* |
+| **Self-Evolution** | *"Nexus, learn a new skill to track International Space Station coordinates"* |
 | **Flight Radar** | *"Show flight route from Mumbai to London"* |
 | **Nearby Amenities** | *"Find nearby hospitals on the map"* |
 | **Music Playback** | *"Play Starboy on Spotify"* |

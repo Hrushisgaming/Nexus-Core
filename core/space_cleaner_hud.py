@@ -1,7 +1,7 @@
 """
 core/space_cleaner_hud.py
 =========================
-Brahma AI - Storage Sentinel PySide6 QWebEngine HUD Window.
+Nexus Core - Storage Sentinel PySide6 QWebEngine HUD Window.
 
 Provides a frameless, glassmorphic HUD displaying the interactive
 Concentric Sunburst Disk Map, live telemetry, and safe purging controls.
@@ -158,7 +158,7 @@ class SpaceCleanerBridge(QObject):
 class SpaceCleanerPopupOverlay(QWidget):
     """
     Sleek, glassmorphic Storage Sentinel HUD overlay that mounts
-    inside the Brahma AI central interface or as a standalone dialog.
+    inside the Nexus Core central interface or as a standalone dialog.
     """
     closed = Signal()
 
@@ -302,7 +302,7 @@ _GLOBAL_HUD_WINDOW: Optional[QWidget] = None
 
 def show_space_cleaner_hud(parent: Optional[QWidget] = None) -> Optional[QWidget]:
     """
-    Displays the Storage Sentinel HUD inside the active Brahma AI window,
+    Displays the Storage Sentinel HUD inside the active Nexus Core window,
     or opens a standalone frameless HUD dialog if no main window is available.
     """
     global _GLOBAL_HUD_WINDOW

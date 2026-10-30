@@ -1,7 +1,7 @@
 """
 core/claude_tools.py
 ====================
-Brahma AI - Universal Claude Code & OpenAI Codex Tooling Suite.
+Nexus Core - Universal Claude Code & OpenAI Codex Tooling Suite.
 
 Provides enterprise-grade, surgical software engineering and computation tools:
 1. bash / powershell: Unconstrained terminal execution with timeout and output truncation.
@@ -554,7 +554,7 @@ except Exception as _exc:
         elif act in ("add", "stage"):
             cmd = "git add -A"
         elif act == "commit":
-            msg = message or "chore: automated update by Brahma Dev Agent"
+            msg = message or "chore: automated update by Nexus Dev Agent"
             # Escape quotes
             safe_msg = msg.replace('"', '\\"')
             cmd = f'git add -A && git commit -m "{safe_msg}"'

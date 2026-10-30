@@ -1,7 +1,7 @@
 from core.user_paths import get_user_data_dir
 # actions/daily_briefing.py
 """
-Unified Morning Intelligence Briefing for Brahma AI.
+Unified Morning Intelligence Briefing for Nexus Core.
 
 Compiles a comprehensive, executive daily intelligence report:
 1. Live Weather (Temperature, conditions, humidity, outdoor feel)

@@ -17,9 +17,9 @@ VSVersionInfo(
         [StringStruct('CompanyName', 'User'),
         StringStruct('FileDescription', 'Nexus Core Installer'),
         StringStruct('FileVersion', '1.0.0'),
-        StringStruct('InternalName', 'BrahmaEvoSetup'),
+        StringStruct('InternalName', 'NexusCoreSetup'),
         StringStruct('LegalCopyright', '© User. All rights reserved.'),
-        StringStruct('OriginalFilename', 'BrahmaEvo_Setup.exe'),
+        StringStruct('OriginalFilename', 'NexusCore_Setup.exe'),
         StringStruct('ProductName', 'Nexus Core'),
         StringStruct('ProductVersion', '1.0.0')])
       ]), 

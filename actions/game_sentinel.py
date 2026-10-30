@@ -1,6 +1,6 @@
 """
 actions/game_sentinel.py
-Brahma AI - Game Sentinel & Hardware Turbo Boost Action.
+Nexus Core - Game Sentinel & Hardware Turbo Boost Action.
 Provides high-performance hardware tuning, Mem Reduct RAM purging, process priority elevation,
 and automatic Windows power scheme switching for gaming.
 """

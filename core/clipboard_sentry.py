@@ -1,11 +1,11 @@
 """
-Clipboard Sentry for Brahma AI.
+Clipboard Sentry for Nexus Core.
 Monitors the Windows clipboard in the background for actionable technical content:
 - Tracebacks / Exceptions
 - JSON structures
 - URLs or SQL queries
 - Code snippets
-Notifies Brahma so it can offer quick contextual assistance.
+Notifies Nexus so it can offer quick contextual assistance.
 """
 
 import time

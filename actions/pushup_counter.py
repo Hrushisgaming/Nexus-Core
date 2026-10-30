@@ -1,11 +1,11 @@
 from core.user_paths import get_user_data_dir
 """
-Brahma AI — Workout & Exercise Tracker.
+Nexus Core — Workout & Exercise Tracker.
 
 Tracks repetitions, posture, pace, and caloric burn for pushups, squats,
 and other bodyweight exercises. Uses computer vision (MediaPipe pose tracking
 with CV motion-flow fallback) via the webcam, displaying live rep counters
-and form feedback on the Brahma HUD.
+and form feedback on the Nexus HUD.
 
 Logs workout sessions to memory/workout_history.json.
 """
@@ -61,9 +61,9 @@ PLUGIN = {
     },
 }
 
-# Brahma UI Colors (BGR for OpenCV)
-_COLOR_CYAN   = (255, 200, 50)     # Brahma Cyan/Electric Blue
-_COLOR_GOLD   = (50, 215, 255)     # Brahma Gold/Amber
+# Nexus UI Colors (BGR for OpenCV)
+_COLOR_CYAN   = (255, 200, 50)     # Nexus Cyan/Electric Blue
+_COLOR_GOLD   = (50, 215, 255)     # Nexus Gold/Amber
 _COLOR_WHITE  = (255, 255, 255)
 _COLOR_DARK   = (15, 12, 10)
 _COLOR_GREEN  = (80, 220, 100)
@@ -201,7 +201,7 @@ def _create_optical_tracker():
 
 def _render_hud_overlay(frame: np.ndarray, reps: int, target: int, exercise: str,
                         state: str, flash_until: float, countdown: Optional[int] = None) -> np.ndarray:
-    """Renders a sleek, high-tech Brahma HUD overlay with exercise name, reps, and target."""
+    """Renders a sleek, high-tech Nexus HUD overlay with exercise name, reps, and target."""
     h, w = frame.shape[:2]
     out = frame.copy()
 
@@ -286,7 +286,7 @@ def _record_session(exercise: str, reps: int, seconds: float, calories: float) -
     return entry
 
 def run(parameters: dict, player=None, speak=None, session_memory=None) -> str:
-    """Main execution function for Brahma Workout Tracker."""
+    """Main execution function for Nexus Workout Tracker."""
     query = (parameters.get("query") or "").strip()
     q_lower = query.lower()
 

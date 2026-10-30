@@ -1,10 +1,10 @@
 """
 core/mcp_manager.py
 ===================
-Brahma AI - Universal Model Context Protocol (MCP) Manager.
+Nexus Core - Universal Model Context Protocol (MCP) Manager.
 
 Standard: JSON-RPC 2.0 over stdio (compatible with Claude Desktop & Claude Code).
-Connects Brahma to any MCP server published on the internet:
+Connects Nexus to any MCP server published on the internet:
 - GitHub, GitLab, Jira, Linear
 - PostgreSQL, MySQL, SQLite, Redis, MongoDB
 - Playwright, Puppeteer (dynamic web browsing)
@@ -12,7 +12,7 @@ Connects Brahma to any MCP server published on the internet:
 - Filesystem, Memory, Brave Search, Fetch, Slack, Notion
 
 Reads config from `config/mcp_servers.json` and hot-exposes all discovered tools
-directly to Gemini Live, OpenRouter, and the Brahma Omni-Planner.
+directly to Gemini Live, OpenRouter, and the Nexus Omni-Planner.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ class MCPServerInstance:
                     {
                         "protocolVersion": "2024-11-05",
                         "capabilities": {},
-                        "clientInfo": {"name": "Brahma-AI", "version": "2.0.0"}
+                        "clientInfo": {"name": "Nexus-AI", "version": "2.0.0"}
                     },
                     timeout=timeout
                 )

@@ -1,6 +1,6 @@
 """
 actions/net_sentinel.py
-Brahma AI - Ultron NetSentinel & Network Bridge Action.
+Nexus Core - Ultron NetSentinel & Network Bridge Action.
 Provides local network omniscience, router inspection, connected device discovery,
 Wake-on-LAN power control, port scanning, and public internet diagnostics.
 """

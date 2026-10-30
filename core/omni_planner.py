@@ -1,7 +1,7 @@
 """
 core/omni_planner.py
 ====================
-Brahma AI - Autonomous Multi-Step Goal Planner & DAG Orchestrator.
+Nexus Core - Autonomous Multi-Step Goal Planner & DAG Orchestrator.
 
 Enables the AI to break down composite, high-level user commands into
 coordinated sub-actions across all system domains:

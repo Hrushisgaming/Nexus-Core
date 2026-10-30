@@ -1,5 +1,5 @@
 """
-Active Window & Foreground Application Context for Brahma AI.
+Active Window & Foreground Application Context for Nexus Core.
 Cross-platform: delegates to core.platform_api so the same call works on
 Windows (Win32), macOS (AppleScript/System Events), and Linux.
 """

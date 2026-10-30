@@ -1,6 +1,6 @@
 """
 actions/reverse_engineer.py
-Reverse Engineering, API Extraction, and App Remaking Engine for Brahma AI.
+Reverse Engineering, API Extraction, and App Remaking Engine for Nexus Core.
 Powered by morluto/rea and Playwright MCP.
 
 Supports:

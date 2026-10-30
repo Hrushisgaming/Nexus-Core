@@ -1,5 +1,5 @@
 """
-Test script for Brahma Local Brain Engine (v2)
+Test script for Nexus Local Brain Engine (v2)
 Verifies local LLM server availability, models listing, and test completion.
 """
 
@@ -7,7 +7,7 @@ import sys
 from core.local_brain import local_brain
 
 print("=" * 60)
-print("  BRAHMA EVO v2: LOCAL BRAIN TEST")
+print("  NEXUS CORE v2: LOCAL BRAIN TEST")
 print("=" * 60)
 
 available = local_brain.is_available()

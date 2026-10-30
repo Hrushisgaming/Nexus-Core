@@ -9,7 +9,7 @@ Features:
   headless browser fallback (Playwright) for 100% free, zero-config reliability.
 - Cross-Platform Comparison: Compares Amazon vs Flipkart prices, delivery, and deals.
 - Rufus-Style Review Synthesis: AI extraction of real customer pros, cons, and value-for-money.
-- Interactive HUD Card: Generates dark-themed cyber HUD cards for Brahma Deliverables.
+- Interactive HUD Card: Generates dark-themed cyber HUD cards for Nexus Deliverables.
 - 1-Click Cart / Buy Action: Routes to PC browser or Mobile Phone (via Brahma Connect).
 """
 
@@ -77,7 +77,7 @@ class ShoppingAgent:
         }
 
     def _get_llm_client(self):
-        """Initializes Gemini API client using Brahma's configured API key."""
+        """Initializes Gemini API client using Nexus's configured API key."""
         try:
             key_file = self.user_data_dir / "config" / "api_keys.json"
             if key_file.exists():
@@ -388,7 +388,7 @@ class ShoppingAgent:
             })
 
         system_instruction = (
-            "You are Brahma Shopping Agent, an elite AI e-commerce advisor (like Amazon Rufus, but cross-platform). "
+            "You are Nexus Shopping Agent, an elite AI e-commerce advisor (like Amazon Rufus, but cross-platform). "
             "Analyze the retrieved product options across Amazon India and Flipkart.\n\n"
             "CRITICAL CURRENCY & PRICING RULES:\n"
             "- The currency is strictly INDIAN RUPEES (INR / rupees), NOT US Dollars ($).\n"
@@ -500,7 +500,7 @@ class ShoppingAgent:
     ) -> str:
         """
         Generates an HTML Cyber-Dark Shopping Deliverable card.
-        Saved to Brahma deliverables directory.
+        Saved to Nexus deliverables directory.
         """
         deliverables_dir = get_user_data_dir() / "deliverables"
         deliverables_dir.mkdir(parents=True, exist_ok=True)
@@ -566,7 +566,7 @@ class ShoppingAgent:
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Brahma Shopping: {query}</title>
+<title>Nexus Shopping: {query}</title>
 <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
     body {{ background: #07090E; color: #E2E8F0; padding: 24px; }}
@@ -607,7 +607,7 @@ class ShoppingAgent:
 </head>
 <body>
     <div class="header">
-        <h1>🛒 Brahma Shopping Intelligence: {query}</h1>
+        <h1>🛒 Nexus Shopping Intelligence: {query}</h1>
         <div class="verdict-box">
             <strong>Agent Summary:</strong> {synthesis.get("verdict", "")}
         </div>

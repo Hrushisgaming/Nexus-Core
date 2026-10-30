@@ -1,14 +1,14 @@
-# Privacy Policy for Brahma AI
+# Privacy Policy for Nexus Core
 
 **Last updated:** October 27, 2026
 
-Brahma AI ("we", "our", or "us") provides the Brahma AI mobile and desktop assistant applications (the "Service"). This Privacy Policy explains how information is handled when you use our application.
+Nexus Core ("we", "our", or "us") provides the Nexus Core mobile and desktop assistant applications (the "Service"). This Privacy Policy explains how information is handled when you use our application.
 
 ---
 
 ### 1. Zero Tracking & Local-First Philosophy
-Brahma AI is designed with a privacy-first, local-first architecture:
-* **No Account Required:** You do not need to register an account or provide personal identity details to use Brahma AI.
+Nexus Core is designed with a privacy-first, local-first architecture:
+* **No Account Required:** You do not need to register an account or provide personal identity details to use Nexus Core.
 * **No Advertising or Analytics Tracking:** We do not sell your personal data, use third-party analytics trackers, or serve advertisements.
 * **On-Device Storage:** Your preferences, settings, and custom instructions are stored locally on your device.
 
@@ -25,7 +25,7 @@ Brahma AI is designed with a privacy-first, local-first architecture:
 * **Handling:** Images captured for visual reasoning are processed transiently and are not stored or shared for external purposes.
 
 #### C. Device Permissions
-Brahma AI requests device permissions (such as microphone, camera, notifications, and accessibility/automation tools) exclusively to execute commands and automations that you explicitly command.
+Nexus Core requests device permissions (such as microphone, camera, notifications, and accessibility/automation tools) exclusively to execute commands and automations that you explicitly command.
 
 #### D. API Keys & AI Providers
 * If you provide your own API key (such as Google Gemini or OpenRouter), it is stored securely on your device using encrypted Android Jetpack DataStore / KeyStore and communicated directly to the respective AI API endpoint over encrypted TLS (HTTPS).

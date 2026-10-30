@@ -1,5 +1,5 @@
 """
-core/audio_devices.py — pick which microphone and which speakers Brahma uses.
+core/audio_devices.py — pick which microphone and which speakers Nexus uses.
 
 WHY
     Both audio streams in main.py were opened without a `device=` argument, so

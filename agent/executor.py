@@ -417,7 +417,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None, player: Any 
         return request(
             "start-call-screening",
             "Answer this call as Nexus Core",
-            f"Brahma will answer {event['title']} in {event['app']} and prepare a transcript and summary.",
+            f"Nexus will answer {event['title']} in {event['app']} and prepare a transcript and summary.",
             lambda: (start_call_proxy(event, ui=player, speak_fn=speak) and "Call screening started."),
         )
 
@@ -428,7 +428,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None, player: Any 
             return "Installed skills: " + ", ".join(item["name"] for item in DynamicToolRegistry.list_skills())
         goal = str(p.get("goal", "")).strip()
         if not goal:
-            return "Describe the capability you want Brahma to learn."
+            return "Describe the capability you want Nexus to learn."
         return _run_skill_forge(
             goal=goal,
             skill_name=p.get("skill_name"),

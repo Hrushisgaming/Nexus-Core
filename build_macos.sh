@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Brahma Evo - macOS Build Script
-# Builds BrahmaEvo.app via PyInstaller, then packages it into a distributable .dmg
+# Nexus Core - macOS Build Script
+# Builds NexusCore.app via PyInstaller, then packages it into a distributable .dmg
 # ==============================================================================
 set -euo pipefail
 
 echo "=============================================="
-echo "  Brahma Evo - macOS App + DMG Build"
+echo "  Nexus Core - macOS App + DMG Build"
 echo "=============================================="
 
-APP_NAME="BrahmaEvo"
+APP_NAME="NexusCore"
 
 # Read only the numeric version, not the entire VSVersionInfo() blob
 VERSION=$(cat version.txt 2>/dev/null | tr -d '\r\n' | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "1.0.0")
 VERSION="${VERSION:-1.0.0}"
 
-DMG_NAME="BrahmaEvo-${VERSION}-macOS.dmg"
+DMG_NAME="NexusCore-${VERSION}-macOS.dmg"
 
 # ── 1. Clean previous builds ──────────────────────────────────────────
 echo "[1/5] Cleaning previous builds..."
@@ -23,7 +23,7 @@ rm -rf dist build "${APP_NAME}.app"
 mkdir -p dist
 
 # ── 2. Build the .app with PyInstaller ────────────────────────────────
-echo "[2/5] Building BrahmaEvo.app with PyInstaller..."
+echo "[2/5] Building NexusCore.app with PyInstaller..."
 
 ARGS=(--noconfirm --clean --windowed --name "$APP_NAME")
 
@@ -71,7 +71,7 @@ echo "[3/5] Finalizing .app bundle..."
 # Ensure Info.plist has a proper identifier (PyInstaller sets one, but we tighten it)
 PLIST="${APP_PATH}/Contents/Info.plist"
 if [ -f "$PLIST" ]; then
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.titech.brahmaevo" "$PLIST" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.titech.nexuscore" "$PLIST" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$PLIST" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 12.0" "$PLIST" 2>/dev/null || true
 
@@ -107,7 +107,7 @@ ln -s /Applications "$STAGING/Applications"
 
 # Create a read-only DMG
 hdiutil create "dist/${DMG_NAME}" \
-  -volname "Brahma Evo ${VERSION}" \
+  -volname "Nexus Core ${VERSION}" \
   -srcfolder "$STAGING" \
   -ov -format UDZO
 

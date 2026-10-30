@@ -1,7 +1,7 @@
 """
-Brahma AI - Native Features & Autonomous Evolutionary Capabilities.
+Nexus Core - Native Features & Autonomous Evolutionary Capabilities.
 All features placed in this directory are first-class, hot-reloadable,
-self-evolving capabilities of the Brahma AI platform.
+self-evolving capabilities of the Nexus Core platform.
 """
 
 from . import spotify_mcp

@@ -1,5 +1,5 @@
 """
-Brahma 3D HoloGlobe Window Controller.
+Nexus 3D HoloGlobe Window Controller.
 Hosts the WebGL 3D Earth, Great-Circle route visualizer, and live flight radar inside a modern PyQt6 window.
 """
 

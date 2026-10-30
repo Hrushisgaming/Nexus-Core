@@ -1,7 +1,7 @@
 """
 core/anticipatory_watcher.py
 ============================
-Brahma AI - Proactive Anticipatory Intelligence & Autonomous Watcher.
+Nexus Core - Proactive Anticipatory Intelligence & Autonomous Watcher.
 
 Continuously monitors system health, network telemetry, and user rhythms:
 1. RAM Pressure Watcher: Auto-purges standby cache or alerts if RAM surges past 88%.

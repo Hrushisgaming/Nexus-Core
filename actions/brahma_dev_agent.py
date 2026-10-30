@@ -212,7 +212,7 @@ class NativeTools:
 # CLAUDE-CODE LEAKED SYSTEM PROMPT (REBRANDED FOR BRAHMA DEV)
 # ==============================================================================
 
-BRAHMA_DEV_SYSTEM_PROMPT = """You are Brahma Dev, the expert software engineering autonomous agent built natively into Brahma AI.
+BRAHMA_DEV_SYSTEM_PROMPT = """You are Nexus Dev, the expert software engineering autonomous agent built natively into Nexus Core.
 You operate on the local user machine inside the user's project workspace.
 You have native access to developer tools to inspect codebases, execute terminal commands, edit existing files, write new code, and verify project functionality.
 
@@ -402,7 +402,7 @@ class BrahmaDevAgent:
             except Exception as e:
                 err_msg = f"LLM error: {e}"
                 logger.error(err_msg)
-                return f"Brahma Dev encountered an error during inference: {err_msg}"
+                return f"Nexus Dev encountered an error during inference: {err_msg}"
 
             self.history.append({"role": "assistant", "content": reply})
 

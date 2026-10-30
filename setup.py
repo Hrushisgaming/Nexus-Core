@@ -144,7 +144,7 @@ def write_config(api_keys: dict):
 
 
 def main():
-    print("Brahma AI Evo - Setup")
+    print("Nexus Core - Setup")
     print("=" * 40)
 
     # 1. Install requirements

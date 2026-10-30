@@ -1,7 +1,7 @@
 """
 core/space_cleaner.py
 =====================
-Brahma AI - Storage Sentinel & Cross-Platform Disk Cleaner Engine.
+Nexus Core - Storage Sentinel & Cross-Platform Disk Cleaner Engine.
 
 Provides safe, multi-threaded disk storage categorization, multi-drive switching,
 Windows Storage Sense integration, and non-blocking purging:

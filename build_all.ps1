@@ -6,8 +6,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "2. Building Brahma Evo Main Application..." -ForegroundColor Cyan
-.\.venv\Scripts\pyinstaller.exe installer\BrahmaEvo.spec --noconfirm
+Write-Host "2. Building Nexus Core Main Application..." -ForegroundColor Cyan
+.\.venv\Scripts\pyinstaller.exe installer\NexusCore.spec --noconfirm
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Failed to build main application!" -ForegroundColor Red
@@ -16,14 +16,14 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Bundling uninstaller into application bundle..." -ForegroundColor Cyan
 if (Test-Path "dist\Uninstall.exe") {
-    Copy-Item "dist\Uninstall.exe" -Destination "dist\BrahmaEvo\Uninstall.exe" -Force
+    Copy-Item "dist\Uninstall.exe" -Destination "dist\NexusCore\Uninstall.exe" -Force
 }
 if (Test-Path "installer\uninstall.cmd") {
-    Copy-Item "installer\uninstall.cmd" -Destination "dist\BrahmaEvo\uninstall.cmd" -Force
+    Copy-Item "installer\uninstall.cmd" -Destination "dist\NexusCore\uninstall.cmd" -Force
 }
 
-Write-Host "3. Building Setup Wizard (BrahmaEvo_Setup.exe)..." -ForegroundColor Cyan
-.\.venv\Scripts\pyinstaller.exe installer\BrahmaEvo_Setup.spec --noconfirm
+Write-Host "3. Building Setup Wizard (NexusCore_Setup.exe)..." -ForegroundColor Cyan
+.\.venv\Scripts\pyinstaller.exe installer\NexusCore_Setup.spec --noconfirm
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Failed to build setup wizard!" -ForegroundColor Red
@@ -31,5 +31,5 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host " Build complete! Setup is located at: dist\BrahmaEvo_Setup.exe" -ForegroundColor Green
+Write-Host " Build complete! Setup is located at: dist\NexusCore_Setup.exe" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green

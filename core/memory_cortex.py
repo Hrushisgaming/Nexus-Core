@@ -1,7 +1,7 @@
 """
 core/memory_cortex.py
 =====================
-Brahma AI - Long-Term Episodic Semantic Memory & Habit Cortex.
+Nexus Core - Long-Term Episodic Semantic Memory & Habit Cortex.
 
 Provides JARVIS-level continuity across sessions:
 1. Persistent episodic & factual memory (stored in SQLite with WAL mode).

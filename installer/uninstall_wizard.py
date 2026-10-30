@@ -19,12 +19,12 @@ def get_default_install_dir() -> str:
     if hasattr(sys, '_MEIPASS'):
         # If running as compiled exe inside install folder
         exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-        if os.path.exists(os.path.join(exe_dir, "BrahmaEvo.exe")):
+        if os.path.exists(os.path.join(exe_dir, "NexusCore.exe")):
             return exe_dir
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     # Check registry first
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall\BrahmaEvo") as k:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusCore") as k:
             loc, _ = winreg.QueryValueEx(k, "InstallLocation")
             if loc and os.path.exists(loc):
                 return loc
@@ -57,7 +57,7 @@ class UninstallThread(QThread):
             # Kill running processes
             try:
                 subprocess.run(
-                    ["taskkill", "/F", "/IM", "BrahmaEvo.exe", "/T"],
+                    ["taskkill", "/F", "/IM", "NexusCore.exe", "/T"],
                     capture_output=True,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
                 )
@@ -92,7 +92,7 @@ class UninstallThread(QThread):
             self.status.emit("Unregistering from Windows Installed Apps...")
             self.progress.emit(55)
             try:
-                key_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\BrahmaEvo"
+                key_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusCore"
                 winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
             except Exception as e:
                 print(f"Registry unregister error: {e}")
@@ -238,7 +238,7 @@ class UninstallWizard(QWidget):
 
         # Title bar
         header_bar = QHBoxLayout()
-        logo_label = QLabel("⚡ BRAHMA EVO - UNINSTALLER")
+        logo_label = QLabel("⚡ NEXUS CORE - UNINSTALLER")
         logo_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         logo_label.setStyleSheet("color: #f87171; letter-spacing: 2px;")
         header_bar.addWidget(logo_label)

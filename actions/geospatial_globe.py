@@ -1,5 +1,5 @@
 """
-Brahma Geospatial Globe Engine.
+Nexus Geospatial Globe Engine.
 Provides real-time 3D Earth tracking, great-circle distance/route calculation,
 live flight radar integration, and geographic inspection.
 """

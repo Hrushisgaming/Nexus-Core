@@ -1,6 +1,6 @@
 """
-Auto-Heal & Self-Patching Engine for Brahma AI
-Enables Brahma to detect its own bugs, tracebacks, and tool exceptions,
+Auto-Heal & Self-Patching Engine for Nexus Core
+Enables Nexus to detect its own bugs, tracebacks, and tool exceptions,
 synthesize minimal surgical hotfixes, verify syntax in an isolated sandbox,
 safely apply patches with atomic rollback guarantees, and record changelogs.
 """
@@ -57,7 +57,7 @@ PROTECTED_CORE_FILES = {
 # ── Terminal & Scope Context Helpers ───────────────────────────────────────
 
 def bring_terminal_to_front(player: Any = None) -> None:
-    """Brings the console/terminal window and Brahma app into focus."""
+    """Brings the console/terminal window and Nexus app into focus."""
     try:
         if os.name == "nt":
             import ctypes
@@ -79,7 +79,7 @@ def bring_terminal_to_front(player: Any = None) -> None:
                         buf = ctypes.create_unicode_buffer(length + 1)
                         user32.GetWindowTextW(w_hwnd, buf, length + 1)
                         title = buf.value.lower()
-                        if any(t in title for t in ("powershell", "cmd.exe", "terminal", "console", "brahma")):
+                        if any(t in title for t in ("powershell", "cmd.exe", "terminal", "console", "brahma", "nexus")):
                             user32.ShowWindow(w_hwnd, 9)
                             user32.SetForegroundWindow(w_hwnd)
                 return True
@@ -89,7 +89,7 @@ def bring_terminal_to_front(player: Any = None) -> None:
     except Exception as exc:
         logger.debug(f"[AutoHeal] Could not foreground terminal: {exc}")
 
-    # 3. Bring Brahma UI to front
+    # 3. Bring Nexus UI to front
     if player and hasattr(player, "show_app"):
         try:
             player.show_app()
@@ -376,14 +376,14 @@ class AutoHealEngine:
     ) -> Dict[str, Any]:
         """
         Autonomous Ultron Self-Repair:
-        1. Pulls terminal and Brahma UI to front immediately.
+        1. Pulls terminal and Nexus UI to front immediately.
         2. Speaks malfunction detection announcement.
         3. Visualizes diagnosis, problem, planned fix, and patch diff on the UI workspace.
         4. Synthesizes surgical patch with AST-level context scope.
         5. Validates AST in memory sandbox and applies resiliently.
         6. Commits atomic patch, updates HUD deliverable, and confirms success.
         """
-        # 1. Bring Terminal & Brahma UI to front
+        # 1. Bring Terminal & Nexus UI to front
         bring_terminal_to_front(player=player)
 
         parsed = TracebackAnalyzer.parse(traceback_text)
@@ -512,7 +512,7 @@ class AutoHealEngine:
         replacement_chunk = patch_spec["replacement_chunk"]
         explanation = patch_spec.get("explanation", "Bug hotfix.")
 
-        # 6. Display Problem, Fix, and How it patches in the Brahma UI workspace & Ultron popup!
+        # 6. Display Problem, Fix, and How it patches in the Nexus UI workspace & Ultron popup!
         diag_output = (
             f"🚨 MALFUNCTION DETECTED:\n"
             f"• Component: {target_path.name} (line {line_num})"

@@ -1,9 +1,9 @@
 """
 core/subagent_orchestrator.py
 =============================
-Brahma AI - Autonomous Subagent Swarms & Parallel Workspace Orchestrator.
+Nexus Core - Autonomous Subagent Swarms & Parallel Workspace Orchestrator.
 
-Enables Brahma to delegate complex multi-step objectives to specialized child subagents:
+Enables Nexus to delegate complex multi-step objectives to specialized child subagents:
 1. ResearchSubagent: Surveys files, searches documentation, gathers requirements.
 2. CoderSubagent: Writes, edits, and compiles implementations in a clean workspace.
 3. TestSubagent: Runs test suites, verifies benchmarks, and reports errors for self-healing.

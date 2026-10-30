@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Brahma Evo - macOS & Linux Uninstaller
+# Nexus Core - macOS & Linux Uninstaller
 # ==============================================================================
 set -e
 
@@ -12,7 +12,7 @@ NC='\033[0m'
 
 echo -e "${RED}"
 echo "==============================================================="
-echo "               BRAHMA EVO - UNINSTALL WIZARD                   "
+echo "               NEXUS CORE - UNINSTALL WIZARD                   "
 echo "==============================================================="
 echo -e "${NC}"
 
@@ -20,14 +20,14 @@ OS_TYPE="$(uname -s)"
 INSTALL_DIR="$HOME/.brahma-evo"
 
 # 1. Terminate running instances
-echo -e "${YELLOW}[1/4] Stopping active Brahma Evo processes...${NC}"
+echo -e "${YELLOW}[1/4] Stopping active Nexus Core processes...${NC}"
 pkill -f "main.py" 2>/dev/null || true
-pkill -f "BrahmaEvo" 2>/dev/null || true
+pkill -f "NexusCore" 2>/dev/null || true
 
 # 2. Remove Shortcuts / Application Bundles
 echo -e "${YELLOW}[2/4] Removing system launchers & shortcuts...${NC}"
 if [ "$OS_TYPE" = "Darwin" ]; then
-    rm -rf "$HOME/Applications/Brahma Evo.app" 2>/dev/null || true
+    rm -rf "$HOME/Applications/Nexus Core.app" 2>/dev/null || true
     echo "Removed macOS Application bundle."
 else
     rm -f "$HOME/.local/share/applications/brahma-evo.desktop" 2>/dev/null || true
@@ -57,6 +57,6 @@ fi
 
 echo ""
 echo -e "${GREEN}===============================================================${NC}"
-echo -e "${GREEN}       Brahma Evo has been cleanly uninstalled!               ${NC}"
+echo -e "${GREEN}       Nexus Core has been cleanly uninstalled!               ${NC}"
 echo -e "${GREEN}===============================================================${NC}"
 echo ""

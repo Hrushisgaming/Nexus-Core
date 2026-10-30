@@ -1,10 +1,10 @@
 """
 core/skills_engine.py
 =====================
-Brahma AI - Universal Community & Markdown Skills Engine.
+Nexus Core - Universal Community & Markdown Skills Engine.
 
 Compatible with Antigravity, Claude Code, and Codex Skill specifications.
-Enables Brahma to load, discover, install, and execute any markdown-based
+Enables Nexus to load, discover, install, and execute any markdown-based
 SKILL.md definition from the internet, workspace, or community repositories.
 
 Directory Structure:
@@ -61,7 +61,7 @@ class SkillDefinition:
 
 
 class UniversalSkillsEngine:
-    """Discovers, parses, and activates markdown and internet skills for Brahma."""
+    """Discovers, parses, and activates markdown and internet skills for Nexus."""
 
     _instance: Optional[UniversalSkillsEngine] = None
 

@@ -1,6 +1,6 @@
 """
 core/mem_reduct.py
-Brahma AI - Native Windows NT RAM Reducer & Standby List Purger.
+Nexus Core - Native Windows NT RAM Reducer & Standby List Purger.
 Functions identically and efficiently to Mem Reduct:
 1. Flushes process working sets via K32EmptyWorkingSet / SetProcessWorkingSetSize
 2. Purges system working sets via NtSetSystemInformation (MemoryEmptyWorkingSets = 2)

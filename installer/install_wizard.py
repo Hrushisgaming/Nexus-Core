@@ -65,7 +65,7 @@ class InstallThread(QThread):
             self.progress.emit(85)
             self.status.emit("Configuring application shortcuts and permissions...")
             
-            exe_path = os.path.join(self.target_dir, 'BrahmaEvo.exe')
+            exe_path = os.path.join(self.target_dir, 'NexusCore.exe')
             ico_path = os.path.join(self.target_dir, 'assets', 'nexus_app_icon.ico')
             if not os.path.exists(ico_path):
                 # Fallback to any ico in assets
@@ -143,11 +143,11 @@ class InstallThread(QThread):
             # Certified Windows Uninstaller Registry Entry
             try:
                 import winreg
-                reg_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\BrahmaEvo"
+                reg_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusCore"
                 with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE) as reg_key:
                     winreg.SetValueEx(reg_key, "DisplayName", 0, winreg.REG_SZ, "Nexus Core")
                     winreg.SetValueEx(reg_key, "DisplayVersion", 0, winreg.REG_SZ, "1.0.0")
-                    winreg.SetValueEx(reg_key, "Publisher", 0, winreg.REG_SZ, "Brahma AI")
+                    winreg.SetValueEx(reg_key, "Publisher", 0, winreg.REG_SZ, "Nexus Core")
                     winreg.SetValueEx(reg_key, "InstallLocation", 0, winreg.REG_SZ, self.target_dir)
                     if os.path.exists(ico_path):
                         winreg.SetValueEx(reg_key, "DisplayIcon", 0, winreg.REG_SZ, ico_path)
@@ -312,7 +312,7 @@ class InstallWizard(QWidget):
         header_bar = QHBoxLayout()
         header_bar.setContentsMargins(0, 0, 0, 6)
         
-        logo_label = QLabel("⚡ BRAHMA EVO")
+        logo_label = QLabel("⚡ NEXUS CORE")
         logo_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         logo_label.setStyleSheet("color: #00e5ff; letter-spacing: 2px;")
         header_bar.addWidget(logo_label)
@@ -696,10 +696,10 @@ class InstallWizard(QWidget):
     # ── Installation Execution ───────────────────────────────────────────────
     def start_installation(self):
         self.stacked_widget.setCurrentIndex(3)
-        source_dir = os.path.join(self.base_dir, 'BrahmaEvo')
+        source_dir = os.path.join(self.base_dir, 'NexusCore')
         if not os.path.exists(source_dir):
-            # Check dist/BrahmaEvo or payload
-            dist_cand = os.path.join(self.base_dir, 'dist', 'BrahmaEvo')
+            # Check dist/NexusCore or payload
+            dist_cand = os.path.join(self.base_dir, 'dist', 'NexusCore')
             if os.path.exists(dist_cand):
                 source_dir = dist_cand
             else:
@@ -729,7 +729,7 @@ class InstallWizard(QWidget):
 
     def _on_finish_clicked(self):
         if self.chk_launch.isChecked():
-            exe_path = os.path.join(self.install_path, 'BrahmaEvo.exe')
+            exe_path = os.path.join(self.install_path, 'NexusCore.exe')
             if os.path.exists(exe_path):
                 os.startfile(exe_path)
         self.close()

@@ -1,6 +1,6 @@
 """
 Interactive Sensorium Test Harness (v2)
-Runs a real-time terminal monitor that shows how Brahma passively observes your actions
+Runs a real-time terminal monitor that shows how Nexus passively observes your actions
 and triggers autonomous interjections without you saying or prompting a single word.
 """
 
@@ -21,7 +21,7 @@ def speak_proactive(text: str):
     import threading
     def _speak():
         try:
-            # 1. Official Brahma Unified Neural Voice (Edge TTS GuyNeural)
+            # 1. Official Nexus Unified Neural Voice (Edge TTS GuyNeural)
             from actions.attention_monitor import _speak_edge_native
             _speak_edge_native(text)
             return
@@ -55,7 +55,7 @@ def on_interjection(alert_type, meta):
 
 if __name__ == "__main__":
     print("=" * 65)
-    print("  BRAHMA EVO v2: PASSIVE SENSORIUM LIVE TEST")
+    print("  NEXUS CORE v2: PASSIVE SENSORIUM LIVE TEST")
     print("=" * 65)
     print("Instructions:")
     print("1. Switch between different windows (Browser, Explorer, Terminal, etc.)")

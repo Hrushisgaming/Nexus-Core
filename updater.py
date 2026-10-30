@@ -1,4 +1,4 @@
-"""Check for and apply fast-forward updates from the Brahma GitHub repository."""
+"""Check for and apply fast-forward updates from the Nexus GitHub repository."""
 
 from __future__ import annotations
 

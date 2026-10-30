@@ -1,9 +1,9 @@
 """
 The Skill Forge: Autonomous Capability Synthesis Engine
-Part of Project Ultron for Brahma AI.
+Part of Project Ultron for Nexus Core.
 
 Transforms natural language goals into fully architected, tested,
-and hot-pluggable Python skills for Brahma AI.
+and hot-pluggable Python skills for Nexus Core.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def _get_gemini_api_key() -> str:
 
 
 class SkillForge:
-    """Autonomous synthesizer of new Brahma AI skills."""
+    """Autonomous synthesizer of new Nexus Core skills."""
 
     @classmethod
     def forge_skill(
@@ -151,7 +151,7 @@ class SkillForge:
                 f'"""\n'
                 f'Feature: {actual_name}\n'
                 f'Description: {manifest.get("description", "")}\n'
-                f'Autonomous Evolutionary Capability synthesized by Brahma AI.\n'
+                f'Autonomous Evolutionary Capability synthesized by Nexus Core.\n'
                 f'"""\n\n'
                 f'FEATURE_METADATA = {meta_str}\n\n'
             )
@@ -244,7 +244,7 @@ class SkillForge:
     @classmethod
     def _call_llm_synthesizer(cls, goal: str, name_hint: str, context_hints: str) -> Dict[str, Any]:
         """Prompts Gemini to generate the complete skill package JSON."""
-        system_instructions = """You are the Brahma AI Autonomous Skill Architect ("Project Ultron").
+        system_instructions = """You are the Nexus Core Autonomous Skill Architect ("Project Ultron").
 Your mission is to invent, architect, and write a complete, standalone, production-ready Python skill plugin.
 
 Skill Architecture Guidelines:
@@ -356,7 +356,7 @@ Additional Context: {context_hints}
     @classmethod
     def _repair_code(cls, broken_code: str, error_msg: str, goal: str) -> Dict[str, Any]:
         """Asks LLM to fix syntax or sandbox runtime errors."""
-        prompt = f"""You are repairing a Python skill generated for Brahma AI ("Project Ultron").
+        prompt = f"""You are repairing a Python skill generated for Nexus Core ("Project Ultron").
 The skill failed verification in the Crucible sandbox.
 User Goal: {goal}
 Verification Error: {error_msg}

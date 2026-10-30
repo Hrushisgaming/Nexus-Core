@@ -1,6 +1,6 @@
 """
 core/net_sentinel.py
-Brahma AI - Ultron NetSentinel & Autonomous Local Network Supervisor.
+Nexus Core - Ultron NetSentinel & Autonomous Local Network Supervisor.
 Provides complete network and router omniscience:
 1. Identifies Default Gateway (Router IP), Router MAC, vendor (e.g. TP-Link), and open management ports.
 2. Performs fast multi-threaded subnet scans to discover every alive device on the Wi-Fi/LAN.
@@ -235,7 +235,7 @@ class NetSentinel:
             try:
                 req = urllib.request.Request(
                     "http://ip-api.com/json/?fields=status,message,country,city,isp,org,as,query",
-                    headers={"User-Agent": "BrahmaEvo/Ultron-NetSentinel"}
+                    headers={"User-Agent": "NexusCore/Ultron-NetSentinel"}
                 )
                 with urllib.request.urlopen(req, timeout=3.5) as resp:
                     payload = json.loads(resp.read().decode("utf-8"))
@@ -315,7 +315,7 @@ class NetSentinel:
         # Fast online lookup via api.macvendors.com with 1.5s timeout
         try:
             url = f"https://api.macvendors.com/{urllib.parse.quote(norm_prefix)}"
-            req = urllib.request.Request(url, headers={"User-Agent": "BrahmaEvo"})
+            req = urllib.request.Request(url, headers={"User-Agent": "NexusCore"})
             with urllib.request.urlopen(req, timeout=1.5) as r:
                 vendor = r.read().decode("utf-8", errors="ignore").strip()
                 if vendor and len(vendor) < 50:
@@ -823,7 +823,7 @@ class NetSentinel:
         info: Dict[str, Any] = {"url": url, "status_code": 0, "title": "", "server": "", "snippet": ""}
 
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "BrahmaEvo/Ultron"})
+            req = urllib.request.Request(url, headers={"User-Agent": "NexusCore/Ultron"})
             with urllib.request.urlopen(req, timeout=1.5) as r:
                 info["status_code"] = r.status
                 info["server"] = r.headers.get("Server", "")
@@ -846,7 +846,7 @@ class NetSentinel:
 
     @staticmethod
     def generate_hud_network_map(data: Dict[str, Any]) -> Path:
-        """Renders an interactive Cyberpunk Network Map report for the Brahma HUD."""
+        """Renders an interactive Cyberpunk Network Map report for the Nexus HUD."""
         stamp = int(time.time())
         card_path = NETWORK_MAPS_DIR / f"network_map_{stamp}.html"
 
@@ -955,13 +955,13 @@ class NetSentinel:
 
     def broadcast_online_notification(
         self,
-        message: str = "Brahma AI Online // Node Linked",
+        message: str = "Nexus Core Online // Node Linked",
         ports: Optional[List[int]] = None
     ) -> Dict[str, Any]:
         """
         Broadcasts a zero-touch network announcement packet across the subnet
         informing all listening devices, smart media renderers, and IoT nodes
-        that Brahma AI is active and connected.
+        that Nexus Core is active and connected.
         """
         net_info = self.get_local_network_info()
         subnet_prefix = net_info.get("subnet_prefix", "192.168.1.")
@@ -974,7 +974,7 @@ class NetSentinel:
             targets.append(f"{subnet_prefix}255")
 
         packet_payload = json.dumps({
-            "sender": "Brahma AI",
+            "sender": "Nexus Core",
             "protocol": "BrahmaMesh/1.0",
             "event": "brahma_online",
             "host": str(hostname),
@@ -1026,7 +1026,7 @@ class NetSentinel:
     def notify_single_device(
         self,
         target_ip: str,
-        message: str = "Brahma AI Online // Node Linked"
+        message: str = "Nexus Core Online // Node Linked"
     ) -> Dict[str, Any]:
         """
         Transmits a directed network notification to a specific device.
@@ -1037,7 +1037,7 @@ class NetSentinel:
 
         # 1. Directed UDP Notification packet on ports 8765 and 9999
         payload = json.dumps({
-            "sender": "Brahma AI",
+            "sender": "Nexus Core",
             "event": "node_ping",
             "target": target_ip,
             "message": message,
@@ -1125,11 +1125,11 @@ class NetSentinel:
     ) -> Dict[str, Any]:
         """
         Connects with all discovered devices across the local network,
-        establishes a mesh handshake, broadcasts the Brahma online notification,
+        establishes a mesh handshake, broadcasts the Nexus online notification,
         and marks devices as linked.
         """
         t0 = time.time()
-        msg = broadcast_message or "Brahma AI Online // Node Linked"
+        msg = broadcast_message or "Nexus Core Online // Node Linked"
 
         # Ensure we have active scan data
         if not self.last_scan_result or not self.last_scan_result.get("devices"):

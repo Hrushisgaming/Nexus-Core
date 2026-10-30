@@ -206,7 +206,7 @@ auto_heal
   rule_text: string (optional, for learn_rule)
   category: string (optional, for learn_rule: general, formatting, workflow, habit)
   patch_id: string (optional, for rollback)
-  Use whenever user asks to fix an error/bug, heal/patch Brahma, undo/rollback a patch, view patch history, or remember a permanent rule/behavioral preference.
+  Use whenever user asks to fix an error/bug, heal/patch Nexus, undo/rollback a patch, view patch history, or remember a permanent rule/behavioral preference.
 
 circuit_assembler
   action: "assemble_components" | "analyze_screen" | "show_schematic" (required)

@@ -1,9 +1,9 @@
 from core.user_paths import get_user_data_dir
 # actions/instagram_chat.py
 """
-Instagram Chat Integration for Brahma AI.
+Instagram Chat Integration for Nexus Core.
 
-Listens for incoming DMs on Instagram and replies using Brahma's core generation.
+Listens for incoming DMs on Instagram and replies using Nexus's core generation.
 """
 
 import threading

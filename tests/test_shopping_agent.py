@@ -125,7 +125,7 @@ def test_shopping_card_html_generation(tmp_path: Path):
     card_file = agent.generate_hud_shopping_card("65W GaN Charger", synthesis, [amz_item], [flp_item])
     assert Path(card_file).exists()
     content = Path(card_file).read_text(encoding="utf-8")
-    assert "Brahma Shopping Intelligence" in content
+    assert "Nexus Shopping Intelligence" in content
     assert "Amz GaN 65W" in content
     assert "Flp GaN 65W" in content
     assert "TOP CHOICE" in content

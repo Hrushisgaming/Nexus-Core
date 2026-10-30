@@ -1,6 +1,6 @@
 """
 core/live_voice_engine.py
-Ultra-low-latency real-time live voice engine for Brahma.
+Ultra-low-latency real-time live voice engine for Nexus.
 Designed to feel as responsive as ChatGPT's Advanced Voice Mode.
 
 Key capabilities:

@@ -1,6 +1,6 @@
 """
 core/radar_hud.py
-Brahma AI - Ultron Tactical Net-Radar & Plan Position Indicator (PPI) HUD.
+Nexus Core - Ultron Tactical Net-Radar & Plan Position Indicator (PPI) HUD.
 Provides a minimal, sleek, non-AI-slop holographic radar popup overlay that displays
 live subnet sweeps, discovered LAN devices, and hardware controls in real time.
 """
@@ -135,7 +135,7 @@ class RadarBridge(QObject):
 
     @pyqtSlot()
     def connectAllDevices(self) -> None:
-        """Connects to all devices on local network and broadcasts Brahma Online beacon."""
+        """Connects to all devices on local network and broadcasts Nexus Online beacon."""
         threading.Thread(target=self._run_connect_all_worker, daemon=True).start()
 
     def _run_connect_all_worker(self) -> None:
@@ -161,7 +161,7 @@ class RadarBridge(QObject):
 class RadarPopupOverlay(QWidget):
     """
     Sleek, minimalist tactical radar overlay that floats directly inside
-    the Brahma AI interface or as a standalone dialog.
+    the Nexus Core interface or as a standalone dialog.
     """
     closed = pyqtSignal()
 
@@ -303,7 +303,7 @@ class RadarPopupOverlay(QWidget):
 
 def show_radar_hud(radar_data: Optional[Dict[str, Any]] = None, parent: Optional[QWidget] = None) -> Optional[QWidget]:
     """
-    Displays the Ultron Net-Radar popup overlay inside the active Brahma AI window,
+    Displays the Ultron Net-Radar popup overlay inside the active Nexus Core window,
     or opens a standalone frameless modal dialog if no main window exists.
     """
     app = QApplication.instance()

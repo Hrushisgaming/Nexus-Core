@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Brahma Evo Remote</title>
+  <title>Nexus Core Remote</title>
   <script src="/static/crypto.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -600,7 +600,7 @@
           <button class="action-btn" onclick="sendSystem('desktop')">🖥️ Show Desktop</button>
           <button class="action-btn" onclick="sendSystem('browser')">🌐 Open Browser</button>
           <button class="action-btn" onclick="sendSystem('taskmgr')">📊 Task Manager</button>
-          <button class="action-btn" onclick="doWake()">⚡ Wake Brahma</button>
+          <button class="action-btn" onclick="doWake()">⚡ Wake Nexus</button>
         </div>
       </div>
     </div>
@@ -608,7 +608,7 @@
     <!-- TAB 3: CHAT & VOICE -->
     <div id="view-chat" class="tab-view">
       <div id="feed">
-        <div class="chat-bubble sys">Remote connection to Brahma Evo established.</div>
+        <div class="chat-bubble sys">Remote connection to Nexus Core established.</div>
       </div>
 
       <div class="quick-prompts">
@@ -622,7 +622,7 @@
       <div class="chat-input-bar">
         <button class="btn-wake-sm" onclick="doWake()">WAKE</button>
         <button id="mic-btn" class="btn-voice" onclick="toggleVoiceDictation()" title="Voice Dictation">🎤</button>
-        <input id="chat-inp" placeholder="Message Brahma Evo..." autocomplete="off">
+        <input id="chat-inp" placeholder="Message Nexus Core..." autocomplete="off">
         <button class="btn-send-chat" onclick="sendChatMessage()">➔</button>
       </div>
     </div>
@@ -632,7 +632,7 @@
       <label class="upload-box" for="file-upload-input">
         <div class="icon">📤</div>
         <div class="text">Tap to Send Files to PC</div>
-        <div class="subtext">Photos, videos, and documents will be saved to your PC's Brahma Uploads folder.</div>
+        <div class="subtext">Photos, videos, and documents will be saved to your PC's Nexus Uploads folder.</div>
         <input type="file" id="file-upload-input" multiple style="display:none;" onchange="handleFileUpload(this)">
       </label>
 
@@ -657,7 +657,7 @@
     </button>
     <button class="nav-btn" onclick="switchTab('chat')">
       <span class="icon">💬</span>
-      <span class="label">Brahma</span>
+      <span class="label">Nexus</span>
     </button>
     <button class="nav-btn" onclick="switchTab('files')">
       <span class="icon">📁</span>
@@ -753,7 +753,7 @@
 
         ws.onopen = () => {
           updateStatus('online', 'Connected');
-          toast('Connected to Brahma Evo');
+          toast('Connected to Nexus Core');
           if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
         };
 
@@ -770,7 +770,7 @@
         ws.onmessage = (e) => {
           try {
             const m = JSON.parse(e.data);
-            if (m.type === 'log') appendChat(m.speaker || 'Brahma', m.text);
+            if (m.type === 'log') appendChat(m.speaker || 'Nexus', m.text);
             else if (m.type === 'sys') appendSys(m.text);
             else if (m.type === 'file_received') {
               toast(`Received: ${m.name}`);
@@ -928,7 +928,7 @@
 
     function doWake() {
       _authFetch('/api/wake', { method: 'POST' });
-      toast('⚡ Brahma Wake command sent!');
+      toast('⚡ Nexus Wake command sent!');
     }
 
     // ── AI Chat & Voice Dictation ──────────────────────────────────────────

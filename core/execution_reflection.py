@@ -1,7 +1,7 @@
 """
 core/execution_reflection.py
 ============================
-Brahma AI - Self-Correction & Execution Reflection Engine.
+Nexus Core - Self-Correction & Execution Reflection Engine.
 
 Provides autonomous verification and diagnostic self-healing for tool executions:
 1. Verifies physical state changes after actions execute (e.g., RAM dropped, process spawned, port open).
@@ -118,10 +118,10 @@ class ExecutionReflectionEngine:
             err_low = error_msg.lower()
             if any(term in err_low for term in ("access is denied", "permission denied", "privilege", "winerror 5")):
                 diagnosis = "Insufficient security privilege to execute system-level modification."
-                fix = "Relaunch Brahma AI with Administrator / sudo privileges to modify kernel or hardware parameters."
+                fix = "Relaunch Nexus Core with Administrator / sudo privileges to modify kernel or hardware parameters."
             elif any(term in err_low for term in ("not found", "no such file", "command not found")):
                 diagnosis = "Executable binary or target file does not exist in standard system PATH."
-                fix = "Check installation path or re-register executable in Brahma tool registry."
+                fix = "Check installation path or re-register executable in Nexus tool registry."
             elif any(term in err_low for term in ("connection refused", "timeout", "timed out", "unreachable")):
                 diagnosis = "Network endpoint rejected connection or dropped TCP handshake."
                 fix = "Ensure device is online and port is open on target firewall."

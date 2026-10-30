@@ -1,6 +1,6 @@
 """
 actions/rea_mcp_client.py
-Reverse Engineer Anything (REA) MCP Client for Brahma AI.
+Reverse Engineer Anything (REA) MCP Client for Nexus Core.
 
 Manages connection to the morluto/rea MCP server over stdio JSON-RPC 2.0.
 Supports:

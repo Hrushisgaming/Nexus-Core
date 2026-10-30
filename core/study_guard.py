@@ -1,5 +1,5 @@
 """
-Brahma AI - StudyGuard & Focus Sentinel (Smart Study Monitor).
+Nexus Core - StudyGuard & Focus Sentinel (Smart Study Monitor).
 Real-time AI study session supervisor using MediaPipe Face Mesh and OpenCV.
 Tracks:
 1. Drowsiness / Sleep (Prolonged Eye Closure via Eye Aspect Ratio - EAR)

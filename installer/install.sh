@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Brahma Evo - Universal macOS & Linux Installer
+# Nexus Core - Universal macOS & Linux Installer
 # ==============================================================================
 set -e
 
@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}"
 echo "==============================================================="
-echo "               BRAHMA EVO - AI ASSISTANT SETUP                 "
+echo "               NEXUS CORE - AI ASSISTANT SETUP                 "
 echo "                macOS & Linux Universal Installer              "
 echo "==============================================================="
 echo -e "${NC}"
@@ -77,7 +77,7 @@ echo -e "${YELLOW}[4/5] Configuring system shortcuts & launchers...${NC}"
 
 if [ "$OS_TYPE" = "Darwin" ]; then
     # --- macOS Setup ---
-    APP_BUNDLE="$HOME/Applications/Brahma Evo.app"
+    APP_BUNDLE="$HOME/Applications/Nexus Core.app"
     mkdir -p "$HOME/Applications"
     mkdir -p "$APP_BUNDLE/Contents/MacOS"
     mkdir -p "$APP_BUNDLE/Contents/Resources"
@@ -89,15 +89,15 @@ if [ "$OS_TYPE" = "Darwin" ]; then
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>Brahma Evo</string>
+    <string>Nexus Core</string>
     <key>CFBundleExecutable</key>
-    <string>BrahmaEvo</string>
+    <string>NexusCore</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.titech.brahmaevo</string>
     <key>CFBundleName</key>
-    <string>Brahma Evo</string>
+    <string>Nexus Core</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -111,13 +111,13 @@ if [ "$OS_TYPE" = "Darwin" ]; then
 EOF
 
     # Launcher wrapper
-    cat <<EOF > "$APP_BUNDLE/Contents/MacOS/BrahmaEvo"
+    cat <<EOF > "$APP_BUNDLE/Contents/MacOS/NexusCore"
 #!/bin/bash
 export PATH="/usr/local/bin:/opt/homebrew/bin:\$PATH"
 cd "$INSTALL_DIR"
 exec "$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/main.py" "\$@"
 EOF
-    chmod +x "$APP_BUNDLE/Contents/MacOS/BrahmaEvo"
+    chmod +x "$APP_BUNDLE/Contents/MacOS/NexusCore"
 
     # Copy Icon if available
     if [ -f "$INSTALL_DIR/assets/nexus_app_icon.icns" ]; then
@@ -142,7 +142,7 @@ else
     cat <<EOF > "$APPS_DIR/brahma-evo.desktop"
 [Desktop Entry]
 Type=Application
-Name=Brahma Evo
+Name=Nexus Core
 Comment=Autonomous AI Desktop Assistant
 Exec=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/main.py
 Icon=$ICONS_DIR/brahma-evo.ico
@@ -167,15 +167,15 @@ chmod +x "$BIN_DIR/brahma"
 echo -e "${YELLOW}[5/5] Finalizing installation...${NC}"
 echo ""
 echo -e "${GREEN}===============================================================${NC}"
-echo -e "${GREEN}       Brahma Evo has been successfully installed!             ${NC}"
+echo -e "${GREEN}       Nexus Core has been successfully installed!             ${NC}"
 echo -e "${GREEN}===============================================================${NC}"
 echo ""
-echo -e "You can launch Brahma Evo by:"
+echo -e "You can launch Nexus Core by:"
 if [ "$OS_TYPE" = "Darwin" ]; then
-    echo -e "  1. Opening ${CYAN}Brahma Evo${NC} in your Applications folder."
+    echo -e "  1. Opening ${CYAN}Nexus Core${NC} in your Applications folder."
     echo -e "  2. Running ${CYAN}brahma${NC} in your terminal (ensure ~/.local/bin is in PATH)."
 else
-    echo -e "  1. Launching ${CYAN}Brahma Evo${NC} from your Application Menu / Dash."
+    echo -e "  1. Launching ${CYAN}Nexus Core${NC} from your Application Menu / Dash."
     echo -e "  2. Running ${CYAN}brahma${NC} in your terminal (ensure ~/.local/bin is in PATH)."
 fi
 echo -e "To uninstall anytime, run: ${CYAN}bash $INSTALL_DIR/installer/uninstall.sh${NC}"

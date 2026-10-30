@@ -1,12 +1,12 @@
 """
 core/game_sentinel.py
-Brahma AI - Game Sentinel & Hardware Turbo Boost Supervisor.
+Nexus Core - Game Sentinel & Hardware Turbo Boost Supervisor.
 Monitors system for running games (Steam, Epic, Riot, EA, Battle.net, standalone games):
 1. Detects game launch in real time.
 2. Elevates process priority to HIGH_PRIORITY_CLASS.
 3. Automatically triggers Mem Reduct engine to purge standby memory and process working sets.
 4. Switches Windows Power Plan to Ultimate Performance / High Performance.
-5. Silences non-critical Brahma interventions (such as StudyGuard absence alerts) during gameplay.
+5. Silences non-critical Nexus interventions (such as StudyGuard absence alerts) during gameplay.
 6. Automatically restores balanced power plan and normal desktop profile upon game exit.
 """
 

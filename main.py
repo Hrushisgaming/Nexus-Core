@@ -180,7 +180,7 @@ async def _connect_live_with_fallback(client, build_config, models, timeout):
             raise
         except Exception as exc:
             last_exc = exc
-            print(f"[BRAHMA EVO] ⚠️ Live model {model} unavailable: {str(exc)[:160]}")
+            print(f"[NEXUS CORE] ⚠️ Live model {model} unavailable: {str(exc)[:160]}")
     raise last_exc if last_exc is not None else RuntimeError("No Live models configured")
 
 
@@ -2807,10 +2807,10 @@ class BrahmaLive:
             devices = self._smart_home.list_devices()
             routed_text_home = sd_mgr.route_command(text, devices)
             if routed_text_home != text:
-                print(f"[BRAHMA EVO] Redirection: '{text}' -> '{routed_text_home}'")
+                print(f"[NEXUS CORE] Redirection: '{text}' -> '{routed_text_home}'")
                 text = routed_text_home
         except Exception as e:
-            print(f"[BRAHMA EVO] Redirection error: {e}")
+            print(f"[NEXUS CORE] Redirection error: {e}")
 
         # =========================================================================
         # 3-TIER INTELLIGENT INTENT DISPATCHER
@@ -4153,7 +4153,7 @@ class BrahmaLive:
                     content = types.Content(role="user", parts=[types.Part.from_text(text=text)])
                     await self.session.send_client_content(turns=[content], turn_complete=True)
                 except Exception as exc:
-                    print(f"[BRAHMA EVO] Live stream turn error, falling back: {exc}")
+                    print(f"[NEXUS CORE] Live stream turn error, falling back: {exc}")
                     threading.Thread(target=self._fallback_reply, args=(text, memory_ctx), daemon=True).start()
             asyncio.run_coroutine_threadsafe(_send_live_text(), self._loop)
             return
@@ -4336,7 +4336,7 @@ class BrahmaLive:
             devices = []
 
         if not devices:
-            msg = "No phone is currently connected to Brahma. Please pair or connect your phone via Nexus Connect or the Mobile Connect dashboard, sir."
+            msg = "No phone is currently connected to Nexus. Please pair or connect your phone via Nexus Connect or the Mobile Connect dashboard, sir."
             try:
                 self.ui.update_task_workspace(
                     title=f"Nexus Connect: {action}",
@@ -5085,9 +5085,9 @@ class BrahmaLive:
                         percent=50,
                     )
                     reply = _gemini_text_reply(request_text)
-                    print("[BRAHMA EVO] 🌐 Google Gemini answered successfully!")
+                    print("[NEXUS CORE] 🌐 Google Gemini answered successfully!")
                 except Exception as e_gem:
-                    print(f"[BRAHMA EVO] ⚠️ Gemini failed: {e_gem}")
+                    print(f"[NEXUS CORE] ⚠️ Gemini failed: {e_gem}")
                     if _is_gemini_limit_error(e_gem):
                         self._use_openrouter_first = True
 
@@ -5106,12 +5106,12 @@ class BrahmaLive:
                             "Reply naturally and briefly. Do not mention internal implementation details."
                         ),
                     )
-                    print("[BRAHMA EVO] 🌐 OpenRouter answered successfully!")
+                    print("[NEXUS CORE] 🌐 OpenRouter answered successfully!")
                 except PermissionError as e_key:
-                    print(f"[BRAHMA EVO] ⚠️ OpenRouter key error: {e_key}")
+                    print(f"[NEXUS CORE] ⚠️ OpenRouter key error: {e_key}")
                     reply = "Sir, your OpenRouter API key is missing or invalid. Please configure your key in Settings."
                 except Exception as e_or:
-                    print(f"[BRAHMA EVO] ⚠️ OpenRouter failed: {e_or}")
+                    print(f"[NEXUS CORE] ⚠️ OpenRouter failed: {e_or}")
                     err_s = str(e_or)
                     if "API key is missing" in err_s or "401" in err_s:
                         reply = "Sir, please add your OpenRouter API key in Settings to use OpenRouter."
@@ -5171,7 +5171,7 @@ class BrahmaLive:
                             else:
                                 fn_args = fn_args_raw or {}
 
-                            print(f"[BRAHMA EVO] 🔒 Local Brain executing tool: {fn_name}({fn_args})")
+                            print(f"[NEXUS CORE] 🔒 Local Brain executing tool: {fn_name}({fn_args})")
                             self.ui.update_task_workspace(
                                 status=f"Executing {fn_name}",
                                 output=f"Running action: {fn_name} on local machine...",
@@ -5196,13 +5196,13 @@ class BrahmaLive:
                                 if followup_reply:
                                     reply = followup_reply
                             except Exception as e_fu:
-                                print(f"[BRAHMA EVO] ⚠️ Local Brain follow-up failed: {e_fu}")
+                                print(f"[NEXUS CORE] ⚠️ Local Brain follow-up failed: {e_fu}")
                                 reply = str(tool_result) if tool_result else f"{fn_name.replace('_', ' ').capitalize()} completed."
                     else:
                         reply = msg.get("content", "").strip()
-                    print(f"[BRAHMA EVO] 🔒 Local Brain ({local_model_target}) answered successfully!")
+                    print(f"[NEXUS CORE] 🔒 Local Brain ({local_model_target}) answered successfully!")
                 except Exception as e_loc:
-                    print(f"[BRAHMA EVO] ⚠️ Local Brain failed: {e_loc}")
+                    print(f"[NEXUS CORE] ⚠️ Local Brain failed: {e_loc}")
 
             # 4. Fallback cascading: if primary cloud choice failed, try secondary cloud choice
             if not reply and not is_offline_mode:
@@ -5240,9 +5240,9 @@ class BrahmaLive:
                         reply = self._execute_tool_sync(fn_name, fn_args, call_id)
                     else:
                         reply = msg_net.get("content", "").strip()
-                    print(f"[BRAHMA EVO] 🔒 Local Brain offline safety net answered ({local_model_target})!")
+                    print(f"[NEXUS CORE] 🔒 Local Brain offline safety net answered ({local_model_target})!")
                 except Exception as e_net:
-                    print(f"[BRAHMA EVO] ⚠️ Offline Local Brain fallback failed: {e_net}")
+                    print(f"[NEXUS CORE] ⚠️ Offline Local Brain fallback failed: {e_net}")
             reply = (reply or "").strip()
             if not reply:
                 if is_cloud_openrouter:
@@ -5264,7 +5264,7 @@ class BrahmaLive:
                 self.ui.set_state("LISTENING")
         except Exception as e:
             msg = f"Fallback reply failed: {e}"
-            print(f"[BRAHMA EVO] ⚠️ {msg}")
+            print(f"[NEXUS CORE] ⚠️ {msg}")
             self.ui.write_log(f"ERR: {msg}")
             try:
                 self.ui.finish_task_workspace(msg, "Reply failed.", 100)
@@ -5353,14 +5353,14 @@ class BrahmaLive:
                     content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
                     await self.session.send_client_content(turns=[content], turn_complete=True)
                 except Exception as e:
-                    print(f"[BRAHMA EVO] Charon speech send err: {e}")
+                    print(f"[NEXUS CORE] Charon speech send err: {e}")
                     def _fallback():
                         try:
                             self.set_speaking(True)
                             from actions.attention_monitor import _speak_edge_native
                             _speak_edge_native(text)
                         except Exception as exc:
-                            print(f"[Brahma Speak] Fallback speech failed: {exc}")
+                            print(f"[Nexus Speak] Fallback speech failed: {exc}")
                         finally:
                             self.set_speaking(False)
                     threading.Thread(target=_fallback, daemon=True).start()
@@ -5372,7 +5372,7 @@ class BrahmaLive:
                     from actions.attention_monitor import _speak_edge_native
                     _speak_edge_native(text)
                 except Exception as exc:
-                    print(f"[Brahma Speak] Offline speech failed: {exc}")
+                    print(f"[Nexus Speak] Offline speech failed: {exc}")
                 finally:
                     self.set_speaking(False)
             threading.Thread(target=_speak_thread, daemon=True, name="brahma-offline-speak").start()
@@ -5571,10 +5571,10 @@ class BrahmaLive:
         name = fc.name
         args = dict(fc.args or {})
 
-        print(f"[BRAHMA EVO] 🔧 {name}  {args}")
+        print(f"[NEXUS CORE] 🔧 {name}  {args}")
         self.ui.set_state("THINKING")
 
-        # Trigger Brahma Right Wing: Live Operations & Sources Telemetry
+        # Trigger Nexus Right Wing: Live Operations & Sources Telemetry
         tool_title = name.replace("_", " ").title()
         brief_query = (
             args.get("query")
@@ -6118,7 +6118,7 @@ class BrahmaLive:
                 from core.skills_engine import UniversalSkillsEngine
                 skills = UniversalSkillsEngine.get_instance().list_skills()
                 lines = [f"• {s['name']}: {s['description']}" for s in skills]
-                result = "Installed Brahma Skills:\n" + ("\n".join(lines) if lines else "None")
+                result = "Installed Nexus Skills:\n" + ("\n".join(lines) if lines else "None")
 
             elif name == "todo_write":
                 from core.claude_tools import ClaudeCodeTools
@@ -6181,7 +6181,7 @@ class BrahmaLive:
                 location = args.get("location") or "current"
                 if action == "open":
                     globe.open_globe(location if args.get("location") else None)
-                    result = "Opened the interactive Brahma map."
+                    result = "Opened the interactive Nexus map."
                 elif action == "route":
                     r = await loop.run_in_executor(None, lambda: globe.show_route(args.get("origin", ""), args.get("destination", "")))
                     result = f"Flight route: {r.get('origin')} to {r.get('destination')}, {r.get('distance_km')} km, about {r.get('flight_time')}."
@@ -6227,7 +6227,7 @@ class BrahmaLive:
                     result = request(
                         "start-call-screening",
                         "Answer this call as Nexus Core",
-                        f"Brahma will answer {event['title']} in {event['app']}, listen to the caller, and prepare a transcript and summary.",
+                        f"Nexus will answer {event['title']} in {event['app']}, listen to the caller, and prepare a transcript and summary.",
                         lambda: (start_call_proxy(event, ui=self.ui, speak_fn=self.speak) and "Call screening started.")
                     )
                     self.ui.set_state("LISTENING")
@@ -6243,7 +6243,7 @@ class BrahmaLive:
                 elif action == "forge":
                     goal = (args.get("goal") or "").strip()
                     if not goal:
-                        result = "Describe the capability you want Brahma to learn."
+                        result = "Describe the capability you want Nexus to learn."
                     else:
                         threading.Thread(
                             target=self._forge_skill,
@@ -6419,7 +6419,7 @@ class BrahmaLive:
         except Exception:
             pass
 
-        # Trigger Brahma Left Wing: Final Deliverables & Results
+        # Trigger Nexus Left Wing: Final Deliverables & Results
         try:
             import re
             file_match = re.search(r'([A-Za-z]:\\[^\s"\'<>`\r\n]+\.(?:pdf|docx|xlsx|pptx|png|jpg|mp4|py|html|json|txt))', str(result))
@@ -6458,7 +6458,7 @@ class BrahmaLive:
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
 
-        print(f"[BRAHMA EVO] 📤 {name} → {str(result)[:80]}")
+        print(f"[NEXUS CORE] 📤 {name} → {str(result)[:80]}")
         self._in_live_tool = False
 
         return types.FunctionResponse(
@@ -6513,7 +6513,7 @@ class BrahmaLive:
                 pass
 
     async def _listen_audio(self):
-        print("[BRAHMA EVO] 🎤 Mic started")
+        print("[NEXUS CORE] 🎤 Mic started")
         loop = asyncio.get_event_loop()
         import numpy as np
 
@@ -6571,7 +6571,7 @@ class BrahmaLive:
                             except Exception:
                                 pass
 
-                # 2. If Brahma is actively speaking: check ONLY for deliberate user barge-in!
+                # 2. If Nexus is actively speaking: check ONLY for deliberate user barge-in!
                 if brahma_speaking:
                     norm_lvl = lvl / 32767.0
                     user_speaking = False
@@ -6615,15 +6615,15 @@ class BrahmaLive:
                 device=_mic_dev,
                 callback=callback,
             ):
-                print(f"[BRAHMA EVO] 🎤 Mic stream open ({_mic_name or 'Default'})")
+                print(f"[NEXUS CORE] 🎤 Mic stream open ({_mic_name or 'Default'})")
                 while True:
                     await asyncio.sleep(0.1)
         except Exception as e:
-            print(f"[BRAHMA EVO] ❌ Mic: {e}")
+            print(f"[NEXUS CORE] ❌ Mic: {e}")
             raise
 
     async def _receive_audio(self):
-        print("[BRAHMA EVO] 👂 Recv started")
+        print("[NEXUS CORE] 👂 Recv started")
         out_buf, in_buf = [], []
 
         try:
@@ -6711,7 +6711,7 @@ class BrahmaLive:
                         self.ui.set_state("EXECUTING")
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
-                            print(f"[BRAHMA EVO] 📞 {fc.name}")
+                            print(f"[NEXUS CORE] 📞 {fc.name}")
                             fr = await self._execute_tool(fc)
                             fn_responses.append(fr)
                         self.ui.set_state("THINKING")
@@ -6720,12 +6720,12 @@ class BrahmaLive:
                         )
 
         except Exception as e:
-            print(f"[BRAHMA EVO] ❌ Recv: {e}")
+            print(f"[NEXUS CORE] ❌ Recv: {e}")
             traceback.print_exc()
             raise
 
     async def _play_audio(self):
-        print("[BRAHMA EVO] 🔊 Play started")
+        print("[NEXUS CORE] 🔊 Play started")
         loop = asyncio.get_event_loop()
         import numpy as np
 
@@ -6771,7 +6771,7 @@ class BrahmaLive:
                     pass
                 await asyncio.to_thread(stream.write, chunk)
         except Exception as e:
-            print(f"[BRAHMA EVO] ❌ Play: {e}")
+            print(f"[NEXUS CORE] ❌ Play: {e}")
             raise
         finally:
             self.set_speaking(False)
@@ -6825,12 +6825,12 @@ class BrahmaLive:
 
         while True:
             try:
-                print("[BRAHMA EVO] 🔌 Connecting...")
+                print("[NEXUS CORE] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
                 connect_cm, session, _live_model_used = await _connect_live_with_fallback(
                     client, self._build_config, _live_model_candidates(), LIVE_CONNECT_TIMEOUT
                 )
-                print(f"[BRAHMA EVO] Live model: {_live_model_used}")
+                print(f"[NEXUS CORE] Live model: {_live_model_used}")
                 try:
                     async with asyncio.TaskGroup() as tg:
                         self.session        = session
@@ -6838,7 +6838,7 @@ class BrahmaLive:
                         self.audio_in_queue = asyncio.Queue()
                         self.out_queue      = asyncio.Queue()  # Fix: removed maxsize=10 to prevent dropping packets
                         
-                        print("[BRAHMA EVO] ✅ Connected.")
+                        print("[NEXUS CORE] ✅ Connected.")
                         try:
                             self.ui.boot_set_step_status("Connect AI backend", "done")
                             self.ui.boot_set_progress(75, "AI backend connected")
@@ -6878,7 +6878,7 @@ class BrahmaLive:
                         pass
                     
             except Exception as e:
-                print(f"[BRAHMA EVO] ⚠️ {e}")
+                print(f"[NEXUS CORE] ⚠️ {e}")
                 traceback.print_exc()
                 if _is_gemini_limit_error(e):
                     self._use_openrouter_first = True
@@ -6886,7 +6886,7 @@ class BrahmaLive:
                 self._loop = None
             self.set_speaking(False)
             self.ui.set_state("LISTENING")
-            print("[BRAHMA EVO] 🔄 Reconnecting in 5s...")
+            print("[NEXUS CORE] 🔄 Reconnecting in 5s...")
             await asyncio.sleep(5)
 
 def main():
@@ -6896,11 +6896,11 @@ def main():
         try:
             import ctypes
             from ctypes import wintypes
-            _MUTEX_NAME = "Global\\BrahmaEvo_SingleInstance_AppMutex"
+            _MUTEX_NAME = "Global\\NexusCore_SingleInstance_AppMutex"
             _SINGLE_INSTANCE_MUTEX = ctypes.windll.kernel32.CreateMutexW(None, wintypes.BOOL(True), _MUTEX_NAME)
             if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-                _startup_log("Exiting duplicate Brahma instance (already running).")
-                print("[BRAHMA EVO] Another instance of Nexus Core is already running. Exiting.")
+                _startup_log("Exiting duplicate Nexus instance (already running).")
+                print("[NEXUS CORE] Another instance of Nexus Core is already running. Exiting.")
                 return
         except Exception as _mex:
             _startup_log(f"Mutex check skipped: {_mex}")
@@ -6985,7 +6985,7 @@ def main():
     ui.show_main()
     _startup_log("ui shown")
 
-    # Start Brahma Passive Sensorium Engine (v2)
+    # Start Nexus Passive Sensorium Engine (v2)
     try:
         def _on_sensorium_alert(alert_type: str, meta: dict):
             msg = meta.get("message", "System state change detected.")

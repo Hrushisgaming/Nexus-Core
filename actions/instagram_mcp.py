@@ -1,7 +1,7 @@
 from core.user_paths import get_user_data_dir
 """
 actions/instagram_mcp.py
-Instagram Model Context Protocol (MCP) & Background Social Engine for Brahma AI.
+Instagram Model Context Protocol (MCP) & Background Social Engine for Nexus Core.
 
 Features:
 - Direct API posting (Photos & Reels) without browser clicking.

@@ -1,6 +1,6 @@
 """
 actions/study_guard.py
-Brahma AI - StudyGuard & Focus Sentinel Action.
+Nexus Core - StudyGuard & Focus Sentinel Action.
 Wraps real-time webcam computer vision for study focus monitoring, drowsiness detection,
 phone doomscroll prevention, and Pomodoro study flow tracking.
 """

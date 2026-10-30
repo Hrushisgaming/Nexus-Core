@@ -2,7 +2,7 @@
 core/platform_api.py
 ====================
 
-Cross-platform desktop API layer for Brahma AI Evo.
+Cross-platform desktop API layer for Nexus Core.
 
 Replaces scattered Win32 ctypes / winreg / os.startfile / platform-specific
 subprocess calls with a single, platform-agnostic interface:

@@ -1,6 +1,6 @@
 """
 actions/image_generator.py
-Neural AI Image Generation Engine for Brahma AI.
+Neural AI Image Generation Engine for Nexus Core.
 Powered by Pollinations AI & FLUX / SDXL Neural Diffusion.
 
 Generates high-resolution digital art, photorealistic portraits,
