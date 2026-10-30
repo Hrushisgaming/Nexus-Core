@@ -24,34 +24,34 @@ from .mobile_portal import get_mobile_portal_html
 
 
 def _default_config_path(base_dir: Path) -> Path:
-    return Path(base_dir) / "config" / "brahma_connect.json"
+    return Path(base_dir) / "config" / "nexus_connect.json"
 
 
 def _default_registry_path(base_dir: Path) -> Path:
-    return Path(base_dir) / "config" / "brahma_connect" / "devices.json"
+    return Path(base_dir) / "config" / "nexus_connect" / "devices.json"
 
 
 @dataclass(slots=True)
-class BrahmaGatewayConfig:
+class NexusGatewayConfig:
     host: str = "0.0.0.0"
     port: int = 8765
     enabled: bool = True
     advertise: bool = True
-    service_name: str = "_BRAHMA._tcp.local."
+    service_name: str = "_NEXUS._tcp.local."
     pairing_ttl_seconds: int = 300
     request_timeout_seconds: int = 30
     config_path: Path | None = None
     registry_path: Path | None = None
 
     @classmethod
-    def load(cls, base_dir: Path, override: dict[str, Any] | None = None) -> "BrahmaGatewayConfig":
+    def load(cls, base_dir: Path, override: dict[str, Any] | None = None) -> "NexusGatewayConfig":
         base_dir = Path(base_dir)
         data: dict[str, Any] = {
             "host": "0.0.0.0",
             "port": 8765,
             "enabled": True,
             "advertise": True,
-            "service_name": "_BRAHMA._tcp.local.",
+            "service_name": "_NEXUS._tcp.local.",
             "pairing_ttl_seconds": 300,
             "request_timeout_seconds": 30,
         }
@@ -68,7 +68,7 @@ class BrahmaGatewayConfig:
             port=int(data.get("port", 8765)),
             enabled=bool(data.get("enabled", True)),
             advertise=bool(data.get("advertise", True)),
-            service_name=str(data.get("service_name", "_BRAHMA._tcp.local.")),
+            service_name=str(data.get("service_name", "_NEXUS._tcp.local.")),
             pairing_ttl_seconds=int(data.get("pairing_ttl_seconds", 300)),
             request_timeout_seconds=int(data.get("request_timeout_seconds", 30)),
             config_path=config_path,
@@ -93,10 +93,10 @@ class BrahmaGatewayConfig:
         self.config_path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
 
 
-class BrahmaGateway:
-    def __init__(self, base_dir: Path, config: BrahmaGatewayConfig | None = None):
+class NexusGateway:
+    def __init__(self, base_dir: Path, config: NexusGatewayConfig | None = None):
         self.base_dir = Path(base_dir)
-        self.config = config or BrahmaGatewayConfig.load(self.base_dir)
+        self.config = config or NexusGatewayConfig.load(self.base_dir)
         self.device_manager = DeviceManager(self.config.registry_path or _default_registry_path(self.base_dir))
         self.capability_manager = CapabilityManager()
         self.hub = ConnectionHub()
@@ -187,7 +187,7 @@ class BrahmaGateway:
             "permissions": list(record.permissions),
         }
 
-    async def disconnect_device(self, device_or_target: str, *, reason: str = "Disconnected by Brahma") -> dict[str, Any]:
+    async def disconnect_device(self, device_or_target: str, *, reason: str = "Disconnected by Nexus") -> dict[str, Any]:
         query = str(device_or_target or "").strip()
         matches = self.device_manager.resolve(query)
         record = None
@@ -371,7 +371,7 @@ class BrahmaGateway:
         async def info():
             return {
                 "ok": True,
-                "service": "Brahma Connect",
+                "service": "Nexus Connect",
                 "host": self.config.host,
                 "port": self.config.port,
                 "advertise": self.config.advertise,
@@ -582,7 +582,7 @@ class BrahmaGateway:
             self._loop = None
         advertised = False
         if self.config.advertise:
-            advertised = self.discovery.start(host=self.config.host, port=self.config.port, properties={"service": "brahma", "version": "1"})
+            advertised = self.discovery.start(host=self.config.host, port=self.config.port, properties={"service": "nexus", "version": "1"})
         self._append_log("GATEWAY_STARTING", host=self.config.host, port=self.config.port, advertised=advertised)
         try:
             cfg = uvicorn.Config(
