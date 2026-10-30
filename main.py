@@ -157,7 +157,8 @@ LIVE_MODEL_FALLBACKS = (
     "models/gemini-2.5-flash-native-audio-preview-12-2025",
     "models/gemini-3.1-flash-live-preview",
 )
-LIVE_MODEL          = os.environ.get("NEXUS_LIVE_MODEL", "").strip() or LIVE_MODEL_FALLBACKS[0]
+LIVE_MODEL_OVERRIDE = os.environ.get("NEXUS_LIVE_MODEL", "").strip()
+LIVE_MODEL          = LIVE_MODEL_OVERRIDE or LIVE_MODEL_FALLBACKS[0]
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -193,7 +194,8 @@ def _live_model_candidates(client=None) -> list:
             _startup_log(f"Gemini model discovery unavailable; using fallbacks: {exc}")
 
     out = []
-    for model in (LIVE_MODEL, *discovered, *LIVE_MODEL_FALLBACKS):
+    preferred = (LIVE_MODEL_OVERRIDE,) if LIVE_MODEL_OVERRIDE else ()
+    for model in (*preferred, *discovered, *LIVE_MODEL_FALLBACKS):
         if model and model not in out:
             out.append(model)
     _startup_log(f"Gemini Live model candidates: {', '.join(out)}")
@@ -217,6 +219,7 @@ async def _connect_live_with_fallback(client, build_config, models, timeout):
             raise
         except Exception as exc:
             last_exc = exc
+            _startup_log(f"Gemini Live model {model} failed: {exc}")
             print(f"[NEXUS CORE] ⚠️ Live model {model} unavailable: {str(exc)[:160]}")
     raise last_exc if last_exc is not None else RuntimeError("No Live models configured")
 
@@ -6703,6 +6706,7 @@ class BrahmaLive:
                         pass
                     
             except Exception as e:
+                _startup_log(f"Gemini Live connection failed: {e}")
                 print(f"[NEXUS CORE] ⚠️ {e}")
                 traceback.print_exc()
                 if _is_gemini_limit_error(e):
