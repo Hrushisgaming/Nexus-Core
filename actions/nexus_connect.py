@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from brahma_connect.service import get_service
+from nexus_connect.service import get_service
 
 
 def _base_dir() -> Path:
