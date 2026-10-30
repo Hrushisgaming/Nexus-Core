@@ -1,13 +1,15 @@
 name: Python tests
 
 on:
-  push:
-    branches: [main, "refactor/**"]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: pytest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pytest:
