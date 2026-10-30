@@ -1,10 +1,10 @@
-# Brahma Connect Android
+# Nexus Connect Android
 
-Android agent for Brahma Connect.
+Android agent for Nexus Connect.
 
 What this project is:
 - Native Android agent
-- WebSocket client for the existing Brahma Gateway
+- WebSocket client for the existing Nexus Gateway
 - Minimal pairing and reconnect flow
 - First command set only
 
