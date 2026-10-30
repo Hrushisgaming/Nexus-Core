@@ -2855,9 +2855,9 @@ class _RootShim:
 
 
 from ui_popup_components import (BackgroundWidget, RemoteKeyOverlay, DailyBriefingOverlay, ConfirmationOverlay, MemoryInspectorOverlay)
-from ui_gestures import _SysMetrics, _GestureRenderCanvas, GestureCameraPreview
+from ui_gestures import _SysMetrics, _GestureRenderCanvas, GestureCameraPreview, _camera_available, _active_net_label
 from ui_workspace import TaskDock, WorkspaceSidebar, InlineChatWorkspace
-from ui_overlays import (VoiceWaveformVisualizer, CommandBar, OmniCommandPalette, DeveloperModeDialog, ScanningOverlay, BootSequenceOverlay, IncomingAlertDialog, UltronMalfunctionDialog, MeetingOverlay, FloatingLauncher, FloatingGestureCard)
+from ui_overlays import (VoiceWaveformVisualizer, CommandBar, OmniCommandPalette, DeveloperModeDialog, ScanningOverlay, BootSequenceOverlay, IncomingAlertDialog, UltronMalfunctionDialog, MeetingOverlay, FloatingLauncher, FloatingGestureCard, _ease_out_expo, _ease_in_out_sine)
 from ui_settings_pages import (
     SystemConnectivitySidebar, SettingsHubPage, SystemConnectivityPage,
     SmartDevicesSection, _ConnectDeviceCard, NexusConnectDevicesPage,
