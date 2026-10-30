@@ -663,7 +663,7 @@ def test_mobile_companion_portal():
     """Verifies that the zero-install mobile companion portal HTML is generated with correct endpoints."""
     from nexus_connect.gateway.mobile_portal import get_mobile_portal_html
     html = get_mobile_portal_html(host_ip="192.168.0.112", port=8765)
-    assert "BRAHMA AI" in html
+    assert "NEXUS AI" in html
     assert "Mobile Companion Node" in html
     assert "192.168.0.112:8765" in html
     assert "Notification.requestPermission" in html
