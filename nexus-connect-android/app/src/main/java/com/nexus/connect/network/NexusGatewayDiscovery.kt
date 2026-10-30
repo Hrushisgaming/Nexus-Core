@@ -1,12 +1,12 @@
-package com.brahma.connect.network
+package com.nexus.connect.network
 
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import com.brahma.connect.core.AgentStateStore
-import com.brahma.connect.core.GatewayEndpoint
+import com.nexus.connect.core.AgentStateStore
+import com.nexus.connect.core.GatewayEndpoint
 
-class BrahmaGatewayDiscovery(private val context: Context) {
+class NexusGatewayDiscovery(private val context: Context) {
     private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var resolveListener: NsdManager.ResolveListener? = null
@@ -23,7 +23,7 @@ class BrahmaGatewayDiscovery(private val context: Context) {
                 val port = serviceInfo.port
                 if (host.isNotBlank() && port > 0) {
                     val endpoint = GatewayEndpoint(
-                        name = serviceInfo.serviceName ?: "Brahma PC",
+                        name = serviceInfo.serviceName ?: "Nexus PC",
                         host = host,
                         port = port,
                     )
@@ -47,7 +47,7 @@ class BrahmaGatewayDiscovery(private val context: Context) {
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                 val serviceType = serviceInfo.serviceType ?: return
-                if (!serviceType.contains("_BRAHMA._tcp", ignoreCase = true)) return
+                if (!serviceType.contains("_NEXUS._tcp", ignoreCase = true)) return
                 resolveListener?.let { nsdManager.resolveService(serviceInfo, it) }
             }
 
@@ -55,7 +55,7 @@ class BrahmaGatewayDiscovery(private val context: Context) {
         }
 
         runCatching {
-            nsdManager.discoverServices("_BRAHMA._tcp.", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+            nsdManager.discoverServices("_NEXUS._tcp.", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
         }.onFailure {
             onError(it.message ?: "Discovery unavailable.")
         }
