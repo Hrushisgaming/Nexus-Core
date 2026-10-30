@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Brahma Evo Connect</string>
-    <string name="accessibility_service_description">Brahma Evo Connect accessibility bridge for device control setup.</string>
+    <string name="app_name">Nexus Evo Connect</string>
+    <string name="accessibility_service_description">Nexus Evo Connect accessibility bridge for device control setup.</string>
 </resources>
