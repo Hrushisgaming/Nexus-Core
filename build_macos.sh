@@ -74,11 +74,22 @@ if [ -f "$PLIST" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.titech.brahmaevo" "$PLIST" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$PLIST" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 12.0" "$PLIST" 2>/dev/null || true
+
+  # macOS will NOT show the microphone/camera permission prompt for a bundled app
+  # unless these usage strings exist, so Gemini Live would silently hear nothing.
+  set_plist_string() {
+    /usr/libexec/PlistBuddy -c "Set :$1 $2" "$PLIST" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$PLIST"
+  }
+  set_plist_string NSMicrophoneUsageDescription "Nexus needs the microphone so you can talk to it by voice."
+  set_plist_string NSCameraUsageDescription "Nexus uses the camera for vision and gesture features."
+  set_plist_string NSAppleEventsUsageDescription "Nexus uses automation to control apps on your behalf."
 fi
 
-# Remove code signing requirements so the unsigned app can run locally
-# (Users will Gatekeeper-click-through on first launch)
-codesign --remove-sign "$APP_PATH" 2>/dev/null || true
+# Ad-hoc sign (no Developer ID needed) so the edited Info.plist is sealed and
+# macOS can attach microphone permission to the app. Users still right-click > Open
+# on first launch because it is not notarized.
+codesign --force --deep --sign - "$APP_PATH"
 
 # ── 4. Build the DMG ──────────────────────────────────────────────────
 echo "[4/5] Creating ${DMG_NAME}..."
