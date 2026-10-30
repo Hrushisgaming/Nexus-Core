@@ -3,6 +3,9 @@ from core.user_paths import get_user_data_dir
 
 import asyncio
 import json
+import shutil
+import subprocess
+import traceback
 import html as html_lib
 import math
 import os
@@ -27,6 +30,7 @@ import sys
 import threading
 import time
 from collections import deque
+from typing import Any
 from pathlib import Path
 
 import psutil
@@ -6029,7 +6033,7 @@ class APIKeySettingsDialog(QDialog):
         lay.setSpacing(18)
 
         title = QLabel("API Provider Keys")
-        title.setFont(QFont("Segoo UI", 18, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         title.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
         lay.addWidget(title)
 
@@ -6068,7 +6072,7 @@ class APIKeySettingsDialog(QDialog):
             row.setSpacing(10)
 
             lbl = QLabel(label)
-            lbl.setFont(QFont("Segoo UI", 11, QFont.Weight.Bold))
+            lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
             lbl.setStyleSheet("color: #e8eef5; background: transparent; border: none;")
             lbl.setMinimumWidth(150)
             row.addWidget(lbl)
@@ -8027,6 +8031,8 @@ class ScanningOverlay(QWidget):
         
         if pixmap is not None:
             try:
+                import cv2
+                import numpy as np
                 # Convert QPixmap to CV2
                 qimg = pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
                 width = qimg.width()
@@ -11993,7 +11999,7 @@ class SystemConnectivitySidebar(QFrame):
         s_lay = QVBoxLayout(self._status_card)
         s_lay.setContentsMargins(16, 14, 16, 14)
         s_lay.setSpacing(10)
-        self._online_lbl = QLabel("ΓùÅ System Online")
+        self._online_lbl = QLabel("● System Online")
         self._online_lbl.setStyleSheet("color: #35ff75; font-weight: 700;")
         self._desc_lbl = QLabel("All systems are operational.")
         self._desc_lbl.setStyleSheet(f"color: {C.TEXT_MED};")
@@ -12006,7 +12012,7 @@ class SystemConnectivitySidebar(QFrame):
             row = QHBoxLayout()
             row.setContentsMargins(0, 4, 0, 4)
             row.setSpacing(10)
-            icon = QLabel("Γùî")
+            icon = QLabel("◌")
             icon.setFixedWidth(18)
             icon.setStyleSheet(f"color: {C.WHITE};")
             key_lbl = QLabel(label)
@@ -12029,11 +12035,11 @@ class SystemConnectivitySidebar(QFrame):
         self._quick_actions = QVBoxLayout()
         self._quick_actions.setSpacing(10)
         lay.addLayout(self._quick_actions)
-        self._mk_quick_action("Γå╗ Restart Nexus Core", QStyle.StandardPixmap.SP_BrowserReload, self._restart)
-        self._mk_quick_action("Γƒ│ Reload Configuration", QStyle.StandardPixmap.SP_BrowserReload, self._reload)
+        self._mk_quick_action("↻ Restart Nexus Core", QStyle.StandardPixmap.SP_BrowserReload, self._restart)
+        self._mk_quick_action("⟳ Reload Configuration", QStyle.StandardPixmap.SP_BrowserReload, self._reload)
         self._mk_quick_action("≡ƒôü Open Data Folder", QStyle.StandardPixmap.SP_DirOpenIcon, self._open_data_folder)
         self._mk_quick_action("≡ƒôä View Logs", QStyle.StandardPixmap.SP_FileDialogDetailedView, self._view_logs)
-        self._mk_quick_action("Γ¼ç Check for Updates", QStyle.StandardPixmap.SP_ArrowDown, self._check_updates)
+        self._mk_quick_action("⬇ Check for Updates", QStyle.StandardPixmap.SP_ArrowDown, self._check_updates)
 
         tip = QFrame()
         tip.setStyleSheet("QFrame { background: rgba(24, 18, 8, 0.85); border: 1px solid rgba(255, 191, 0, 0.22); border-radius: 14px; }")
@@ -15138,7 +15144,7 @@ class SmartDevicesSection(QFrame):
         )
         header.addWidget(self._count_chip)
 
-        self._refresh_btn = QPushButton("Γå╗")
+        self._refresh_btn = QPushButton("↻")
         self._refresh_btn.setFixedSize(32, 32)
         self._refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._refresh_btn.setStyleSheet(f"""
@@ -15788,7 +15794,7 @@ class BrahmaConnectDevicesPage(QFrame):
         status_wrap.setSpacing(4)
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
-        self._gateway_pill = QLabel("ΓùÅ Gateway Online")
+        self._gateway_pill = QLabel("● Gateway Online")
         self._gateway_pill.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self._gateway_pill.setStyleSheet("color: #35ff75; background: rgba(53,255,117,0.06); border: 1px solid rgba(53,255,117,0.16); border-radius: 12px; padding: 5px 10px;")
         top_row.addWidget(self._gateway_pill)
@@ -15824,9 +15830,9 @@ class BrahmaConnectDevicesPage(QFrame):
         self._main_stack = QStackedWidget()
         self._main_stack.setStyleSheet("background: transparent;")
         
-        # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-        # PAGE 0 ΓÇö OVERVIEW (GRID / EMPTY)
-        # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # ───────────────────────────────────────────────
+        # PAGE 0 — OVERVIEW (GRID / EMPTY)
+        # ───────────────────────────────────────────────
         self._overview_page = QWidget()
         ov_lay = QVBoxLayout(self._overview_page)
         ov_lay.setContentsMargins(0, 10, 0, 0)
@@ -15889,15 +15895,15 @@ class BrahmaConnectDevicesPage(QFrame):
         ov_lay.addWidget(self._overview_stack)
         self._main_stack.addWidget(self._overview_page)
         
-        # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-        # PAGE 1 ΓÇö DETAIL VIEW
-        # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # ───────────────────────────────────────────────
+        # PAGE 1 — DETAIL VIEW
+        # ───────────────────────────────────────────────
         self._detail_page = QWidget()
         det_lay = QVBoxLayout(self._detail_page)
         det_lay.setContentsMargins(0, 10, 0, 0)
         det_lay.setSpacing(16)
         
-        back_btn = QPushButton("ΓåÉ Back to Devices")
+        back_btn = QPushButton("← Back to Devices")
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         back_btn.setFixedSize(140, 32)
         back_btn.setFont(QFont("Segoe UI", 9))
@@ -15997,14 +16003,14 @@ class BrahmaConnectDevicesPage(QFrame):
         
         self._main_stack.addWidget(self._detail_page)
         
-        # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-        # PAGE 2 ΓÇö ADD DEVICE (QR WIZARD)
-        # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # ───────────────────────────────────────────────
+        # PAGE 2 — ADD DEVICE (QR WIZARD)
+        # ───────────────────────────────────────────────
         self._add_device_page = QWidget()
         add_lay = QVBoxLayout(self._add_device_page)
         add_lay.setContentsMargins(0, 10, 0, 0)
         
-        add_back_btn = QPushButton("ΓåÉ Cancel")
+        add_back_btn = QPushButton("← Cancel")
         add_back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_back_btn.setFixedSize(140, 32)
         add_back_btn.setFont(QFont("Segoe UI", 9))

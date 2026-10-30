@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QObject, QUrl
+from PyQt6.QtCore import QCoreApplication, QObject, QUrl
 from PyQt6.QtMultimedia import QSoundEffect
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -161,7 +161,16 @@ class SoundManager(QObject):
         self._telemetry_cooldown = 0.22  # Minimum 220ms between telemetry chirps
         self._effects: dict[str, QSoundEffect] = {}
 
+        self._audio_ready = False
         self._load_settings()
+        # QSoundEffect needs a running QCoreApplication; this module is imported
+        # before one exists, so audio is set up on first use if it isn't ready yet.
+        self._ensure_audio()
+
+    def _ensure_audio(self):
+        if self._audio_ready or QCoreApplication.instance() is None:
+            return
+        self._audio_ready = True
         self._init_audio()
 
     def _load_settings(self):
@@ -246,6 +255,7 @@ class SoundManager(QObject):
     def _play(self, name: str):
         if not self._enabled:
             return
+        self._ensure_audio()
         eff = self._effects.get(name)
         if eff:
             try:
