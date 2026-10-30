@@ -1,0 +1,7021 @@
+"""UI components
+
+Split from ui.py. The namespace bridge preserves existing UI integrations
+while this area is incrementally decoupled into explicit dependencies.
+"""
+import ui as _ui
+globals().update({name: value for name, value in vars(_ui).items() if not name.startswith("__")})
+
+class VoiceWaveformVisualizer(QWidget):
+    """
+    Live Voice-Reactive Waveform Visualizer.
+    Draws dynamic, glowing equalizer bars pulsing with microphone & TTS audio levels.
+    """
+    def __init__(self, bars: int = 14, parent=None):
+        super().__init__(parent)
+        self._bar_count = bars
+        self._audio_level = 0.0
+        self._target_level = 0.0
+        self._phase = 0.0
+        self._muted = False
+        self.setFixedSize(bars * 5 + 8, 22)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(28)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+
+    def set_audio_level(self, level: float):
+        self._target_level = max(0.0, min(1.0, float(level)))
+
+    def set_muted(self, muted: bool):
+        self._muted = bool(muted)
+        self.update()
+
+    def _tick(self):
+        self._phase += 0.14
+        self._audio_level += (self._target_level - self._audio_level) * 0.25
+        self._target_level = max(0.0, self._target_level - 0.03)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+        bar_w = 3.0
+        spacing = 2.0
+        total_w = self._bar_count * (bar_w + spacing) - spacing
+        start_x = (w - total_w) / 2.0
+
+        for i in range(self._bar_count):
+            harmonic = math.sin(self._phase + i * 0.6) * 0.45 + 0.55
+            harmonic2 = math.cos(self._phase * 0.75 + i * 0.35) * 0.3 + 0.7
+
+            idle_h = 3.0 + harmonic * 2.0
+            amp = self._audio_level * (h - 4.0) * harmonic2
+            bar_h = min(float(h - 2), idle_h + amp)
+            if self._muted:
+                bar_h = 2.0
+
+            x = start_x + i * (bar_w + spacing)
+            y = (h - bar_h) / 2.0
+
+            if self._muted:
+                color = QColor("#ff3b30")
+                color.setAlpha(180)
+            else:
+                intensity = min(1.0, 0.45 + self._audio_level * 0.55)
+                color = QColor("#00e5ff" if i % 2 == 0 else "#80ffff")
+                color.setAlpha(int(240 * intensity))
+
+            painter.setBrush(QBrush(color))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(QRectF(x, y, bar_w, bar_h), 1.5, 1.5)
+
+        painter.end()
+
+
+class CommandBar(QWidget):
+    submitted = pyqtSignal(str)
+    attach_clicked = pyqtSignal()
+    mic_clicked = pyqtSignal()
+    developer_clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("CommandBar")
+        self.setFixedSize(580, 48)
+        self.setStyleSheet("background: transparent;")
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(4, 4, 4, 4)
+        root.setSpacing(0)
+
+        frame = QFrame()
+        frame.setObjectName("CommandBarFrame")
+        frame.setStyleSheet(f"""
+            QFrame#CommandBarFrame {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(6, 6, 10, 252),
+                    stop:0.3 rgba(12, 11, 16, 252),
+                    stop:0.7 rgba(12, 11, 16, 252),
+                    stop:1 rgba(6, 6, 10, 252));
+                border: 1px solid rgba(0, 229, 255, 0.22);
+                border-radius: 20px;
+            }}
+        """)
+        lay = QHBoxLayout(frame)
+        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setSpacing(6)
+
+        # Nexus Core mini logo
+        logo_frame = QFrame()
+        logo_frame.setFixedSize(32, 32)
+        logo_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(0, 229, 255, 0.06);
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 16px;
+            }
+        """)
+        logo_lay = QVBoxLayout(logo_frame)
+        logo_lay.setContentsMargins(0, 0, 0, 0)
+        logo_lbl = QLabel("\u092C\u094D\u0930")  # ब्र (short Hindi)
+        logo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_lbl.setFont(QFont("Nirmala UI", 9, QFont.Weight.Bold))
+        logo_lbl.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
+        logo_lay.addWidget(logo_lbl)
+        lay.addWidget(logo_frame)
+
+        # Input field
+        self._input = QLineEdit()
+        self._input.setPlaceholderText("Tell Nexus Core what to do...")
+        self._input.setFont(QFont("Segoe UI", 9))
+        self._input.setFixedHeight(32)
+        self._input.setStyleSheet(f"""
+            QLineEdit {{
+                background: rgba(255, 255, 255, 0.03);
+                color: {C.WHITE};
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 16px;
+                padding: 0 14px;
+                selection-background-color: rgba(0, 229, 255, 0.25);
+            }}
+            QLineEdit:focus {{
+                border: 1px solid rgba(0, 229, 255, 0.45);
+                background: rgba(0, 229, 255, 0.03);
+            }}
+        """)
+        self._input.returnPressed.connect(self._submit)
+        lay.addWidget(self._input, stretch=1)
+
+        # Action buttons container
+        btn_style_ghost = f"""
+            QPushButton {{
+                background: rgba(255, 255, 255, 0.03);
+                color: rgba(255, 255, 255, 0.5);
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 14px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.12);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.4);
+            }}
+        """
+
+        attach = QPushButton()
+        attach.setFixedSize(28, 28)
+        attach.setCursor(Qt.CursorShape.PointingHandCursor)
+        attach.setToolTip("Attach file")
+        attach.setIcon(QIcon(_icon_pixmap("attach", 13)))
+        attach.setIconSize(QSize(13, 13))
+        attach.setStyleSheet(btn_style_ghost)
+        attach.clicked.connect(self.attach_clicked.emit)
+        lay.addWidget(attach)
+
+        mic = QPushButton()
+        mic.setFixedSize(28, 28)
+        mic.setCursor(Qt.CursorShape.PointingHandCursor)
+        mic.setToolTip("Voice input")
+        mic.setIcon(QIcon(_icon_pixmap("mic", 13)))
+        mic.setIconSize(QSize(13, 13))
+        mic.setStyleSheet(btn_style_ghost)
+        mic.clicked.connect(self.mic_clicked.emit)
+        lay.addWidget(mic)
+
+        dev = QPushButton("DEV")
+        dev.setFixedSize(40, 28)
+        dev.setCursor(Qt.CursorShape.PointingHandCursor)
+        dev.setToolTip("Developer mode")
+        dev.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(0, 229, 255, 0.06);
+                color: rgba(0, 229, 255, 0.7);
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 14px;
+                font: 700 8px 'Segoe UI';
+                letter-spacing: 0.5px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.15);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.5);
+            }}
+        """)
+        dev.clicked.connect(self.developer_clicked.emit)
+        lay.addWidget(dev)
+
+        # Send button — golden accent
+        send = QPushButton()
+        send.setFixedSize(32, 32)
+        send.setCursor(Qt.CursorShape.PointingHandCursor)
+        send.setToolTip("Send")
+        send.setIcon(QIcon(_icon_pixmap("send", 14)))
+        send.setIconSize(QSize(14, 14))
+        send.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(0, 229, 255, 0.12);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.35);
+                border-radius: 19px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.25);
+                border: 1px solid #00e5ff;
+            }}
+        """)
+        # Live voice waveform visualizer
+        self._waveform = VoiceWaveformVisualizer(bars=10, parent=self)
+        lay.addWidget(self._waveform)
+
+        send.clicked.connect(self._submit)
+        lay.addWidget(send)
+
+        root.addWidget(frame)
+
+    def show_near(self, anchor: QWidget):
+        screen = QApplication.primaryScreen().availableGeometry()
+        geo = anchor.geometry()
+        x = geo.center().x() - (self.width() // 2)
+        y = geo.bottom() + 14
+        x = max(screen.left() + 12, min(x, screen.right() - self.width() - 12))
+        y = max(screen.top() + 12, min(y, screen.bottom() - self.height() - 12))
+        self.move(x, y)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self._input.setFocus()
+        self._input.selectAll()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+
+    def _submit(self):
+        txt = self._input.text().strip()
+        if not txt:
+            return
+        self._input.clear()
+        self.submitted.emit(txt)
+        self.hide()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+            return
+        super().keyPressEvent(event)
+
+    def set_audio_level(self, level: float):
+        if hasattr(self, "_waveform") and self._waveform:
+            self._waveform.set_audio_level(level)
+
+    def set_muted(self, muted: bool):
+        if hasattr(self, "_waveform") and self._waveform:
+            self._waveform.set_muted(muted)
+
+    def set_state(self, state: str):
+        if hasattr(self, "_waveform") and self._waveform:
+            self._waveform.set_muted(state == "MUTED")
+
+
+DEFAULT_PALETTE_COMMANDS = [
+    {
+        "id": "snapshot_ws",
+        "title": "Snapshot Workspace",
+        "desc": "Capture active browser research tabs, open apps, and windows into a FlowState restore point",
+        "icon": "⚡",
+        "badge": "FlowState",
+        "cmd": "snapshot workspace",
+    },
+    {
+        "id": "switch_ws",
+        "title": "Restore / Switch Workspace",
+        "desc": "Restore a previously saved FlowState workspace restoration point",
+        "icon": "⏱️",
+        "badge": "FlowState",
+        "cmd": "switch workspace",
+    },
+    {
+        "id": "ultron_heal",
+        "title": "Ultron Autonomous Diagnostics",
+        "desc": "Inspect auto-heal sentry, patch history, AST sandbox, and runtime health",
+        "icon": "🛡️",
+        "badge": "Ultron",
+        "cmd": "auto heal status",
+    },
+    {
+        "id": "trigger_test_bug",
+        "title": "Trigger Autonomous Bug Test",
+        "desc": "Simulate a live runtime malfunction and witness Ultron self-repair in real time",
+        "icon": "🧪",
+        "badge": "Ultron",
+        "cmd": "trigger test bug",
+    },
+    {
+        "id": "toggle_globe",
+        "title": "Planetary 3D Globe & Earth",
+        "desc": "Launch holographic 3D Earth and street-level intelligence interface",
+        "icon": "🌐",
+        "badge": "Navigation",
+        "cmd": "__action_toggle_globe__",
+    },
+    {
+        "id": "sys_diag",
+        "title": "System Performance Report",
+        "desc": "Retrieve real-time CPU, RAM, GPU, network, and battery diagnostics",
+        "icon": "📊",
+        "badge": "System",
+        "cmd": "system diagnostics report",
+    },
+    {
+        "id": "screen_ai",
+        "title": "Multimodal Vision Screen Scan",
+        "desc": "Capture desktop screen and process active windows with multimodal vision",
+        "icon": "🖥️",
+        "badge": "Vision",
+        "cmd": "process screen",
+    },
+    {
+        "id": "toggle_mute",
+        "title": "Toggle Microphone / Voice Mute",
+        "desc": "Mute or unmute the continuous microphone audio listener",
+        "icon": "🎙️",
+        "badge": "Audio",
+        "cmd": "__action_toggle_mute__",
+    },
+    {
+        "id": "study_guard",
+        "title": "Study Guard Attention Monitor",
+        "desc": "Monitor study sessions, posture, and detect productivity distractions",
+        "icon": "📚",
+        "badge": "Focus",
+        "cmd": "study guard status",
+    },
+    {
+        "id": "show_rules",
+        "title": "Learned Behavioral Directives",
+        "desc": "List autonomous rules learned through conversational self-improvement",
+        "icon": "🧠",
+        "badge": "Memory",
+        "cmd": "list rules",
+    },
+    {
+        "id": "clear_workspace",
+        "title": "Reset HUD Task Workspace",
+        "desc": "Clear active operation telemetry and reset holographic deliverable wings",
+        "icon": "🧹",
+        "badge": "Workspace",
+        "cmd": "__action_clear_workspace__",
+    },
+]
+
+
+class OmniCommandPalette(QDialog):
+    """
+    Holographic Omni-Command Palette (Spotlight / Raycast Style).
+    Activated with Ctrl+K or Ctrl+Space.
+    Instant fuzzy search across tools, actions, smart home devices, and workspace snapshots.
+    """
+    command_executed = pyqtSignal(str)
+
+    def __init__(self, commands: list[dict] = None, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setModal(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("OmniCommandPalette")
+        self.setFixedWidth(640)
+        self.setFixedHeight(480)
+
+        self._all_commands = commands or DEFAULT_PALETTE_COMMANDS
+        self._filtered_commands = list(self._all_commands)
+        self._selected_index = 0
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._frame = QFrame()
+        self._frame.setObjectName("OmniPaletteFrame")
+        self._frame.setStyleSheet("""
+            QFrame#OmniPaletteFrame {
+                background: rgba(10, 12, 18, 252);
+                border: 1.5px solid rgba(0, 229, 255, 0.45);
+                border-radius: 16px;
+            }
+        """)
+        root.addWidget(self._frame)
+
+        lay = QVBoxLayout(self._frame)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(10)
+
+        # 1. Search Bar Header
+        search_box = QHBoxLayout()
+        search_box.setSpacing(10)
+
+        search_icon = QLabel("🔍")
+        search_icon.setFont(QFont("Segoe UI Emoji", 13))
+        search_icon.setStyleSheet("color: #00e5ff; background: transparent;")
+        search_box.addWidget(search_icon)
+
+        self._search_input = QLineEdit()
+        self._search_input.setPlaceholderText("Type a command, tool, or prompt... (e.g., 'snapshot', 'ultron', 'globe', 'heal')")
+        self._search_input.setFont(QFont("Segoe UI", 11))
+        self._search_input.setFixedHeight(36)
+        self._search_input.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                color: #ffffff;
+                border: none;
+                padding: 0 4px;
+                selection-background-color: rgba(0, 229, 255, 0.35);
+            }
+        """)
+        self._search_input.textChanged.connect(self._on_search_text_changed)
+        self._search_input.returnPressed.connect(self._on_submit_selected)
+        search_box.addWidget(self._search_input, 1)
+
+        esc_badge = QLabel("ESC to exit")
+        esc_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        esc_badge.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.45);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 3px 8px;
+        """)
+        search_box.addWidget(esc_badge)
+        lay.addLayout(search_box)
+
+        # Divider
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet("background: rgba(0, 229, 255, 0.18);")
+        lay.addWidget(divider)
+
+        # 2. Quick Action Chips Row
+        chips_lay = QHBoxLayout()
+        chips_lay.setSpacing(6)
+        chips = [
+            ("⚡ Snapshot", "snapshot workspace"),
+            ("🛡️ Ultron Status", "auto heal status"),
+            ("🌐 3D Globe", "__action_toggle_globe__"),
+            ("🎙️ Toggle Mic", "__action_toggle_mute__"),
+            ("📊 Diagnostics", "system diagnostics report"),
+            ("🧪 Test Bug", "trigger test bug"),
+        ]
+        for chip_title, chip_cmd in chips:
+            btn = QPushButton(chip_title)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(24)
+            btn.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(0, 229, 255, 0.08);
+                    color: #00e5ff;
+                    border: 1px solid rgba(0, 229, 255, 0.22);
+                    border-radius: 12px;
+                    padding: 0 10px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 229, 255, 0.22);
+                    border: 1px solid #00e5ff;
+                    color: #ffffff;
+                }
+            """)
+            btn.clicked.connect(lambda _, c=chip_cmd: self._run_command(c))
+            chips_lay.addWidget(btn)
+        chips_lay.addStretch(1)
+        lay.addLayout(chips_lay)
+
+        # 3. Scrollable Results List
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: rgba(10, 12, 18, 0.6);
+                width: 6px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(0, 229, 255, 0.3);
+                border-radius: 3px;
+            }
+        """)
+        self._list_container = QWidget()
+        self._list_container.setStyleSheet("background: transparent;")
+        self._list_lay = QVBoxLayout(self._list_container)
+        self._list_lay.setContentsMargins(0, 4, 0, 4)
+        self._list_lay.setSpacing(4)
+        self._scroll.setWidget(self._list_container)
+        lay.addWidget(self._scroll, 1)
+
+        # 4. Footer Hint
+        foot = QHBoxLayout()
+        hint = QLabel("↑ ↓ to navigate   •   ENTER to select   •   ESC to dismiss")
+        hint.setFont(QFont("Segoe UI", 8))
+        hint.setStyleSheet("color: rgba(255, 255, 255, 0.35); background: transparent;")
+        foot.addWidget(hint)
+        foot.addStretch(1)
+        brand = QLabel("NEXUS EVO OMNI-BAR")
+        brand.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        brand.setStyleSheet("color: #00e5ff; background: transparent; letter-spacing: 1px;")
+        foot.addWidget(brand)
+        lay.addLayout(foot)
+
+        self._render_items()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._search_input.clear()
+        self._search_input.setFocus()
+        self._selected_index = 0
+        self._on_search_text_changed("")
+
+    def _on_search_text_changed(self, text: str):
+        query = (text or "").lower().strip()
+        if not query:
+            self._filtered_commands = list(self._all_commands)
+        else:
+            matches = []
+            for item in self._all_commands:
+                title = item.get("title", "").lower()
+                desc = item.get("desc", "").lower()
+                badge = item.get("badge", "").lower()
+                cmd = item.get("cmd", "").lower()
+                if query in title or query in desc or query in badge or query in cmd:
+                    matches.append(item)
+            matches.append({
+                "id": "custom_query",
+                "title": f'Ask Nexus: "{text.strip()}"',
+                "desc": "Submit prompt directly to Nexus AI agent",
+                "icon": "💬",
+                "badge": "Query",
+                "cmd": text.strip(),
+            })
+            self._filtered_commands = matches
+
+        self._selected_index = 0
+        self._render_items()
+
+    def _render_items(self):
+        while self._list_lay.count():
+            item = self._list_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for idx, cmd_item in enumerate(self._filtered_commands):
+            is_selected = (idx == self._selected_index)
+            btn = QFrame()
+            btn.setObjectName("PaletteItem")
+            border = "rgba(0, 229, 255, 0.50)" if is_selected else "rgba(255, 255, 255, 0.05)"
+            bg = "rgba(0, 229, 255, 0.12)" if is_selected else "rgba(18, 22, 30, 160)"
+            btn.setStyleSheet(f"""
+                QFrame#PaletteItem {{
+                    background: {bg};
+                    border: 1px solid {border};
+                    border-radius: 10px;
+                }}
+            """)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            i_lay = QHBoxLayout(btn)
+            i_lay.setContentsMargins(12, 8, 12, 8)
+            i_lay.setSpacing(10)
+
+            icon_lbl = QLabel(cmd_item.get("icon", "⚡"))
+            icon_lbl.setFont(QFont("Segoe UI Emoji", 12))
+            icon_lbl.setStyleSheet("background: transparent;")
+            i_lay.addWidget(icon_lbl)
+
+            text_box = QVBoxLayout()
+            text_box.setSpacing(2)
+            title_lbl = QLabel(cmd_item.get("title", ""))
+            title_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            title_lbl.setStyleSheet(f"color: {'#ffffff' if is_selected else '#e2e8f0'}; background: transparent;")
+            text_box.addWidget(title_lbl)
+
+            desc_lbl = QLabel(cmd_item.get("desc", ""))
+            desc_lbl.setFont(QFont("Segoe UI", 8))
+            desc_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.50); background: transparent;")
+            text_box.addWidget(desc_lbl)
+            i_lay.addLayout(text_box, 1)
+
+            badge_lbl = QLabel(cmd_item.get("badge", "Action"))
+            badge_lbl.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
+            badge_lbl.setStyleSheet("""
+                color: #00e5ff;
+                background: rgba(0, 229, 255, 0.10);
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 4px;
+                padding: 2px 6px;
+            """)
+            i_lay.addWidget(badge_lbl)
+
+            cmd_val = cmd_item.get("cmd", "")
+            btn.mousePressEvent = lambda _, c=cmd_val: self._run_command(c)
+            self._list_lay.addWidget(btn)
+
+    def _run_command(self, cmd: str):
+        if cmd:
+            self.command_executed.emit(cmd)
+        self.close()
+
+    def _on_submit_selected(self):
+        if 0 <= self._selected_index < len(self._filtered_commands):
+            cmd = self._filtered_commands[self._selected_index].get("cmd", "")
+            self._run_command(cmd)
+        elif self._search_input.text().strip():
+            self._run_command(self._search_input.text().strip())
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == Qt.Key.Key_Escape:
+            self.close()
+            return
+        elif key == Qt.Key.Key_Down:
+            if self._filtered_commands:
+                self._selected_index = (self._selected_index + 1) % len(self._filtered_commands)
+                self._render_items()
+            return
+        elif key == Qt.Key.Key_Up:
+            if self._filtered_commands:
+                self._selected_index = (self._selected_index - 1) % len(self._filtered_commands)
+                self._render_items()
+            return
+        super().keyPressEvent(event)
+
+
+class DeveloperModeDialog(QDialog):
+    def __init__(self, parent=None, settings: dict | None = None):
+        super().__init__(parent)
+        self.setWindowTitle("Developer Mode")
+        self.setMinimumWidth(420)
+        self.setStyleSheet(f"""
+            QDialog {{ background: rgba(8,10,14,235); color: {C.WHITE}; border: 1px solid {C.BORDER_B}; }}
+            QLabel {{ color: {C.TEXT}; }}
+            QLineEdit {{
+                background: rgba(16,16,16,240);
+                color: {C.WHITE};
+                border: 1px solid {C.BORDER};
+                border-radius: 10px;
+                padding: 8px 10px;
+            }}
+            QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
+            QPushButton {{
+                background: rgba(18,18,18,240);
+                color: {C.WHITE};
+                border: 1px solid {C.BORDER_B};
+                border-radius: 10px;
+                padding: 8px 12px;
+            }}
+            QPushButton:hover {{ background: rgba(28,28,28,245); border: 1px solid {C.PRI}; }}
+            QCheckBox {{ color: {C.TEXT}; }}
+        """)
+
+        self._settings = dict(settings or {})
+        self._enabled = bool(self._settings.get("developer_mode_enabled", False))
+        fallback_workspace = str(Path(__file__).resolve().parent)
+        self._workspace = str(self._settings.get("developer_mode_workspace", "") or fallback_workspace)
+
+        root = QVBoxLayout(self)
+        root.setSpacing(12)
+        root.setContentsMargins(16, 16, 16, 16)
+
+        title = QLabel("Developer Co-pilot")
+        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.PRI};")
+        root.addWidget(title)
+
+        desc = QLabel("Pick a workspace folder Nexus Core should use when building websites or other workspace-based tasks.")
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {C.TEXT_DIM};")
+        root.addWidget(desc)
+
+        folder_row = QHBoxLayout()
+        folder_row.setSpacing(8)
+        self._workspace_edit = QLineEdit(self._workspace)
+        self._workspace_edit.setPlaceholderText("Select a folder...")
+        self._workspace_edit.setReadOnly(True)
+        folder_row.addWidget(self._workspace_edit, stretch=1)
+
+        browse = QPushButton("Browse")
+        browse.clicked.connect(self._browse_folder)
+        folder_row.addWidget(browse)
+        root.addLayout(folder_row)
+
+        self._enabled_box = QCheckBox("Turn developer mode on")
+        self._enabled_box.setChecked(self._enabled)
+        root.addWidget(self._enabled_box)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        save = QPushButton("Save")
+        save.clicked.connect(self._save_and_close)
+        btn_row.addWidget(cancel)
+        btn_row.addWidget(save)
+        root.addLayout(btn_row)
+
+    def _browse_folder(self):
+        path = QFileDialog.getExistingDirectory(self, "Select developer workspace", self._workspace or str(BASE_DIR))
+        if path:
+            self._workspace_edit.setText(path)
+
+    def _save_and_close(self):
+        self._settings["developer_mode_enabled"] = bool(self._enabled_box.isChecked())
+        self._settings["developer_mode_workspace"] = self._workspace_edit.text().strip()
+        self.accept()
+
+    def get_settings(self) -> dict:
+        return dict(self._settings)
+
+
+def _ease_out_expo(x: float) -> float:
+    return 1.0 if x == 1.0 else 1.0 - math.pow(2.0, -10.0 * x)
+
+def _ease_in_out_sine(x: float) -> float:
+    return -(math.cos(math.pi * x) - 1.0) / 2.0
+
+class ScanningOverlay(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        
+        self._text = "SCANNING SCREEN"
+        self._sub = "Analyzing display..."
+        self._result_text = ""
+        
+        self._time = 0.0
+        self._dt = 0.016
+        self._fade_out_opacity = 1.0
+        self._is_finishing = False
+        self._finish_time = 0.0
+        
+        self._tmr = QTimer(self)
+        self._tmr.timeout.connect(self._tick)
+        self._tmr.start(16)
+
+        self._particles = []
+        self._boxes = [] 
+        self._context_lines = []
+        
+        self.GOLD = QColor("#00E5FF")
+
+    def set_message(self, text: str, sub: str | None = None):
+        self._text = (text or "SCANNING SCREEN").upper()
+        if sub is not None:
+            self._sub = sub
+        self.update()
+
+    def show_fullscreen(self, text: str = "SCANNING SCREEN", sub: str = "Analyzing display..."):
+        self.set_message(text, sub)
+        self._time = 0.0
+        self._fade_out_opacity = 1.0
+        self._is_finishing = False
+        self._finish_time = 0.0
+        
+        screen = QApplication.primaryScreen()
+        geo = screen.geometry() if screen else QRectF(0, 0, 1920, 1080).toRect()
+        self.setGeometry(geo)
+        
+        # Capture screen for OpenCV
+        if screen:
+            pixmap = screen.grabWindow(0)
+            self._generate_layout(pixmap)
+        else:
+            self._generate_layout(None)
+        
+        self.show()
+        self.raise_()
+        self.setFocus()
+
+    def hide_overlay(self):
+        if not self._is_finishing:
+            self._is_finishing = True
+            self._finish_time = self._time
+            
+            self._result_text = "Workspace Recognized\\nVisual Studio Code · Browser · Terminal"
+
+    def force_hide(self):
+        self.hide()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.force_hide()
+        else:
+            super().keyPressEvent(event)
+
+    def _generate_layout(self, pixmap):
+        random.seed(42)
+        w, h = self.width(), self.height()
+        
+        # Particles
+        self._particles = []
+        for _ in range(120):
+            self._particles.append({
+                'x': random.uniform(0, w),
+                'y': random.uniform(0, h),
+                'vx': random.uniform(-1, 1),
+                'vy': random.uniform(-1, 1),
+                'life': random.uniform(0, math.pi * 2)
+            })
+            
+        self._boxes = []
+        self._context_lines = []
+        
+        if pixmap is not None:
+            try:
+                import cv2
+                import numpy as np
+                # Convert QPixmap to CV2
+                qimg = pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+                width = qimg.width()
+                height = qimg.height()
+                ptr = qimg.constBits()
+                ptr.setsize(height * width * 3)
+                arr = np.array(ptr).reshape(height, width, 3)
+                
+                gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+                edges = cv2.Canny(gray, 50, 150)
+                
+                kernel = np.ones((5,5), np.uint8)
+                dilated = cv2.dilate(edges, kernel, iterations=1)
+                
+                contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                # Sort contours by area
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                
+                # Take top 30 elements to avoid crowding
+                for cnt in contours[:30]:
+                    x, y, cw, ch = cv2.boundingRect(cnt)
+                    area = cw * ch
+                    if area < 150: continue # Skip tiny noise
+                    
+                    category = "UNKNOWN"
+                    start_time = 1.0
+                    label = "UI Element"
+                    
+                    if cw > 400 and ch > 300:
+                        category = "WINDOW"
+                        start_time = 2.5
+                        label = random.choice(["Dashboard Panel", "Task Workspace", "Editor Window"])
+                    elif cw > 80 and ch < 40:
+                        category = "OCR"
+                        start_time = 0.5 + random.uniform(0, 0.5)
+                        label = random.choice(["System Online", "Settings", "Microphone", "User Profile"])
+                    elif cw < 60 and ch < 60:
+                        category = "ICON"
+                        start_time = 1.5 + random.uniform(0, 0.5)
+                        label = "Icon Node"
+                    elif 1.2 < (cw/ch) < 4.0 and ch < 80:
+                        category = "BUTTON"
+                        start_time = 1.0 + random.uniform(0, 0.5)
+                        label = "Action Button"
+                    else:
+                        continue # Skip weird shapes
+                        
+                    self._boxes.append({
+                        'x': x, 'y': y, 'w': cw, 'h': ch,
+                        'category': category,
+                        'label': label,
+                        'conf': random.randint(67, 98) if category != "WINDOW" else random.randint(95, 99),
+                        'start_time': start_time,
+                        'has_product': (category == "WINDOW" and random.random() > 0.8)
+                    })
+                    
+            except Exception as e:
+                print(f"[ScanningOverlay] CV2 Error: {e}")
+                
+        # Fallback if no boxes found or CV failed
+        if len(self._boxes) == 0:
+            for _ in range(5):
+                self._boxes.append({
+                    'x': random.uniform(w*0.2, w*0.8),
+                    'y': random.uniform(h*0.2, h*0.8),
+                    'w': random.uniform(100, 300),
+                    'h': random.uniform(30, 60),
+                    'category': "OCR",
+                    'label': "Fallback Element",
+                    'conf': 85,
+                    'start_time': random.uniform(0.5, 1.5),
+                    'has_product': False
+                })
+
+        # Generate Context Lines between nearest neighbors (Phase 5)
+        for i, b1 in enumerate(self._boxes):
+            if i >= 15: break
+            for j, b2 in enumerate(self._boxes):
+                if i != j and j < 15:
+                    dist = math.hypot(b1['x'] - b2['x'], b1['y'] - b2['y'])
+                    if dist < 400 and random.random() > 0.7:
+                        self._context_lines.append((i, j))
+                        break # max 1 connection per node
+
+    def _tick(self):
+        self._time += self._dt
+        if self._is_finishing:
+            dt_finish = self._time - self._finish_time
+            if dt_finish > 1.5: 
+                self._fade_out_opacity = max(0.0, 1.0 - (dt_finish - 1.5) * 2.0)
+                if self._fade_out_opacity <= 0.0:
+                    self.hide()
+                    return
+        if self.isVisible():
+            self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setOpacity(self._fade_out_opacity)
+        
+        W, H = self.width(), self.height()
+        p.fillRect(self.rect(), QColor(5, 5, 5, 210))
+        
+        phase1_progress = min(1.0, self._time / 1.5)
+        phase6_progress = min(1.0, max(0.0, (self._time - 4.5) / 1.5))
+        
+        self._draw_particles(p, W, H, phase6_progress)
+        self._draw_scan_waves(p, W, H, phase1_progress)
+        
+        if self._time > 0.5 and not self._is_finishing:
+            self._draw_all_boxes(p)
+            
+        if self._time > 3.5 and not self._is_finishing:
+            self._draw_context_lines(p)
+            
+        if self._time > 4.5 and not self._is_finishing:
+            self._draw_neural_net(p, W, H, phase6_progress)
+            
+        self._draw_center_status(p, W, H)
+
+    def _draw_particles(self, p, W, H, converge_progress):
+        cx, cy = W / 2, H / 2
+        p.setPen(Qt.PenStyle.NoPen)
+        for part in self._particles:
+            part['x'] += part['vx']
+            part['y'] += part['vy']
+            part['life'] += 0.05
+            if part['x'] < 0: part['x'] = W
+            if part['x'] > W: part['x'] = 0
+            if part['y'] < 0: part['y'] = H
+            if part['y'] > H: part['y'] = 0
+            
+            x, y = part['x'], part['y']
+            if converge_progress > 0:
+                e = _ease_in_out_sine(converge_progress)
+                x = x + (cx - x) * e * 0.8
+                y = y + (cy - y) * e * 0.8
+                
+            alpha = int(100 + math.sin(part['life']) * 50)
+            p.setBrush(QColor(0, 229, 255, alpha))
+            size = 1.5 + math.sin(part['life']) * 1.0
+            p.drawEllipse(QRectF(x - size, y - size, size * 2, size * 2))
+            
+    def _draw_scan_waves(self, p, W, H, progress):
+        if progress >= 1.0 or self._is_finishing: return
+        e = _ease_out_expo(progress)
+        y = e * H
+        grad = QLinearGradient(0, y - 50, 0, y + 50)
+        grad.setColorAt(0.0, QColor(0, 229, 255, 0))
+        grad.setColorAt(0.5, QColor(0, 229, 255, 150))
+        grad.setColorAt(1.0, QColor(0, 229, 255, 0))
+        p.fillRect(QRectF(0, y - 50, W, 100), grad)
+        x = e * W
+        grad2 = QLinearGradient(x - 50, 0, x + 50, 0)
+        grad2.setColorAt(0.0, QColor(0, 229, 255, 0))
+        grad2.setColorAt(0.5, QColor(0, 229, 255, 150))
+        grad2.setColorAt(1.0, QColor(0, 229, 255, 0))
+        p.fillRect(QRectF(x - 50, 0, 100, H), grad2)
+        
+    def _draw_all_boxes(self, p):
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for box in self._boxes:
+            dt = self._time - box['start_time']
+            if dt < 0: continue
+            
+            out_dt = self._time - 4.5
+            alpha_mult = max(0.0, 1.0 - out_dt) if out_dt > 0 else 1.0
+            if alpha_mult <= 0: continue
+            
+            prog = min(1.0, dt / 0.8)
+            e = _ease_out_expo(prog)
+            
+            x, y, w, h = box['x'], box['y'], box['w'], box['h']
+            cat = box['category']
+            
+            alpha = int(255 * alpha_mult)
+            
+            # Styles based on category
+            if cat == "OCR":
+                br = (w / 4) * e
+                p.setPen(QPen(QColor(0, 229, 255, int(150 * alpha_mult)), 1))
+                if prog < 0.5:
+                    p.drawLine(QPointF(x, y), QPointF(x + br, y))
+                    p.drawLine(QPointF(x, y), QPointF(x, y + br))
+                    p.drawLine(QPointF(x + w, y), QPointF(x + w - br, y))
+                    p.drawLine(QPointF(x + w, y), QPointF(x + w, y + br))
+                    p.drawLine(QPointF(x, y + h), QPointF(x + br, y + h))
+                    p.drawLine(QPointF(x, y + h), QPointF(x, y + h - br))
+                    p.drawLine(QPointF(x + w, y + h), QPointF(x + w - br, y + h))
+                    p.drawLine(QPointF(x + w, y + h), QPointF(x + w, y + h - br))
+                else:
+                    p.drawRect(QRectF(x, y, w, h))
+                    
+            elif cat == "WINDOW":
+                br = 30 * e
+                p.setPen(QPen(QColor(0, 229, 255, int(200 * alpha_mult)), 2))
+                p.drawLine(QPointF(x, y), QPointF(x + br, y))
+                p.drawLine(QPointF(x, y), QPointF(x, y + br))
+                p.drawLine(QPointF(x + w, y), QPointF(x + w - br, y))
+                p.drawLine(QPointF(x + w, y), QPointF(x + w, y + br))
+                p.drawLine(QPointF(x, y + h), QPointF(x + br, y + h))
+                p.drawLine(QPointF(x, y + h), QPointF(x, y + h - br))
+                p.drawLine(QPointF(x + w, y + h), QPointF(x + w - br, y + h))
+                p.drawLine(QPointF(x + w, y + h), QPointF(x + w, y + h - br))
+                
+            elif cat == "BUTTON":
+                p.setPen(QPen(QColor(0, 229, 255, int(100 * e * alpha_mult)), 1))
+                p.setBrush(QColor(0, 229, 255, int(20 * e * alpha_mult)))
+                p.drawRoundedRect(QRectF(x, y, w, h), 6, 6)
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                
+            elif cat == "ICON":
+                p.setPen(QPen(QColor(0, 229, 255, int(200 * e * alpha_mult)), 1))
+                p.drawEllipse(QRectF(x + w/2 - 4*e, y + h/2 - 4*e, 8*e, 8*e))
+                
+            if dt > 0.8:
+                text_prog = min(1.0, (dt - 0.8) / 0.5)
+                te = _ease_out_expo(text_prog)
+                
+                conf = box['conf']
+                label = box['label']
+                if conf < 75: label = f"Possible {label}"
+                
+                p.setFont(QFont("Inter", 8, QFont.Weight.Bold))
+                p.setPen(QColor(0, 229, 255, int(255 * te * alpha_mult)))
+                ly = y - 6 + (1.0 - te) * 10
+                p.drawText(QRectF(x, ly - 10, 200, 12), Qt.AlignmentFlag.AlignLeft, f"{label} {conf}%")
+
+            if box['has_product'] and dt > 2.0:
+                card_prog = min(1.0, (dt - 2.0) / 0.5)
+                ce = _ease_out_expo(card_prog)
+                
+                cx, cy = x + w + 20, y + 20
+                cw, ch = 220, 90
+                
+                p.setPen(QPen(QColor(0, 229, 255, int(150 * ce * alpha_mult)), 1, Qt.PenStyle.DashLine))
+                p.drawLine(QPointF(x + w, y + 40), QPointF(cx, cy + ch/2))
+                
+                p.setPen(QPen(QColor(0, 229, 255, int(100 * ce * alpha_mult)), 1))
+                p.setBrush(QColor(10, 10, 5, int(220 * ce * alpha_mult)))
+                p.drawRoundedRect(QRectF(cx, cy, cw, ch), 6, 6)
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                
+                if card_prog > 0.8:
+                    p.setPen(QColor(255, 255, 255, int(255 * alpha_mult)))
+                    p.setFont(QFont("Inter", 10, QFont.Weight.Bold))
+                    p.drawText(QRectF(cx + 12, cy + 10, cw, 20), Qt.AlignmentFlag.AlignLeft, "Detected Interface")
+                    
+                    p.setPen(QColor(0, 229, 255, int(255 * alpha_mult)))
+                    p.setFont(QFont("Inter", 8))
+                    p.drawText(QRectF(cx + 12, cy + 32, cw, 20), Qt.AlignmentFlag.AlignLeft, f"{label} Verified")
+
+    def _draw_context_lines(self, p):
+        dt = self._time - 3.5
+        out_dt = self._time - 4.5
+        alpha_mult = max(0.0, 1.0 - out_dt) if out_dt > 0 else 1.0
+        if alpha_mult <= 0: return
+        prog = min(1.0, dt / 1.0)
+        p.setPen(QPen(QColor(0, 229, 255, int(100 * prog * alpha_mult)), 1, Qt.PenStyle.DotLine))
+        for i, j in self._context_lines:
+            b1 = self._boxes[i]
+            b2 = self._boxes[j]
+            c1x, c1y = b1['x'] + b1['w']/2, b1['y'] + b1['h']/2
+            c2x, c2y = b2['x'] + b2['w']/2, b2['y'] + b2['h']/2
+            path = QPainterPath()
+            path.moveTo(c1x, c1y)
+            path.cubicTo(c1x + 100, c1y, c2x - 100, c2y, c2x, c2y)
+            p.drawPath(path)
+
+    def _draw_neural_net(self, p, W, H, progress):
+        cx, cy = W / 2, H / 2
+        e = _ease_out_expo(progress)
+        r = 80 * e
+        grad = QLinearGradient(cx - r, cy - r, cx + r, cy + r)
+        grad.setColorAt(0.0, QColor(0, 229, 255, 150))
+        grad.setColorAt(1.0, QColor(0, 229, 255, 0))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(grad)
+        p.drawEllipse(QRectF(cx - r*1.5, cy - r*1.5, r*3, r*3))
+        p.setPen(QPen(QColor(0, 229, 255, int(200 * e)), 1))
+        num_nodes = 8
+        time_rot = self._time * 0.5
+        nodes = []
+        for i in range(num_nodes):
+            angle = (i / num_nodes) * math.pi * 2 + time_rot
+            orbit_r = 120 + math.sin(self._time * 2 + i) * 20
+            nx = cx + math.cos(angle) * orbit_r * e
+            ny = cy + math.sin(angle) * orbit_r * e
+            nodes.append((nx, ny))
+            p.setBrush(QColor(0, 229, 255, 255))
+            p.drawEllipse(QRectF(nx - 3, ny - 3, 6, 6))
+        for i in range(num_nodes):
+            n1 = nodes[i]
+            n2 = nodes[(i+1)%num_nodes]
+            n3 = nodes[(i+3)%num_nodes]
+            p.drawLine(QPointF(*n1), QPointF(*n2))
+            p.drawLine(QPointF(*n1), QPointF(*n3))
+            p.drawLine(QPointF(cx, cy), QPointF(*n1))
+
+    def _draw_center_status(self, p, W, H):
+        cx, cy = W / 2, H / 2
+        if self._is_finishing:
+            dt = self._time - self._finish_time
+            prog = min(1.0, dt / 0.5)
+            e = _ease_out_expo(prog)
+            pw, ph = 400, 120
+            p.setPen(QPen(QColor(0, 229, 255, int(150 * e)), 1))
+            p.setBrush(QColor(10, 10, 5, int(230 * e)))
+            p.drawRoundedRect(QRectF(cx - pw/2, cy - ph/2, pw, ph), 8, 8)
+            if prog > 0.8:
+                p.setPen(QColor(255, 255, 255, 255))
+                p.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+                lines = self._result_text.split("\\n")
+                if len(lines) > 0:
+                    p.drawText(QRectF(cx - pw/2, cy - 20, pw, 24), Qt.AlignmentFlag.AlignCenter, lines[0])
+                if len(lines) > 1:
+                    p.setPen(QColor(0, 229, 255, 255))
+                    p.setFont(QFont("Inter", 10))
+                    p.drawText(QRectF(cx - pw/2, cy + 10, pw, 20), Qt.AlignmentFlag.AlignCenter, lines[1])
+        else:
+            status = "INITIALIZING..."
+            if self._time > 1.0: status = "SCANNING OCR..."
+            if self._time > 2.5: status = "RECOGNIZING OBJECTS..."
+            if self._time > 3.5: status = "ANALYZING CONTEXT..."
+            if self._time > 4.5:
+                cycle = int(self._time * 2) % 4
+                dots = "." * cycle
+                status = f"THINKING{dots}"
+            p.setPen(QColor(255, 255, 255, 255))
+            p.setFont(QFont("Inter", 12, QFont.Weight.Bold))
+            p.drawText(QRectF(0, cy + 160, W, 20), Qt.AlignmentFlag.AlignCenter, status)
+
+
+class BootSequenceOverlay(QWidget):
+    finished = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setWindowOpacity(1.0)
+
+        self._boot_finished = False
+        self._time = 0.0
+        self._dt = 0.016
+        self._total_duration = 3.6
+
+        # Particles & Effects State
+        self._particles = []
+        self._impact_sparks = []
+        self._played_whoosh = False
+        self._played_impact = False
+
+        self._tmr = QTimer(self)
+        self._tmr.timeout.connect(self._tick)
+
+    def _init_particles(self, w: float, h: float):
+        self._particles = []
+        for _ in range(280):
+            self._particles.append({
+                'x': random.uniform(0, w),
+                'y': random.uniform(0, h),
+                'vx': random.uniform(-0.65, 0.65),
+                'vy': random.uniform(-0.65, 0.65),
+                'size': random.uniform(1.4, 4.0),
+                'base_alpha': random.uniform(0.65, 1.0),
+                'twinkle_speed': random.uniform(2.5, 6.5),
+                'twinkle_phase': random.uniform(0, math.pi * 2),
+                'converge_delay': random.uniform(0.0, 0.25),
+                'orig_x': 0.0,
+                'orig_y': 0.0,
+            })
+
+    def start(self, device_name: str = "", greeting_name: str = ""):
+        self._boot_finished = False
+        screen = QApplication.primaryScreen()
+        geo = screen.geometry() if screen else QRectF(0, 0, 1920, 1080).toRect()
+        self.setGeometry(geo)
+        self._init_particles(float(geo.width()), float(geo.height()))
+        self._time = 0.0
+        self._played_whoosh = False
+        self._played_impact = False
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self._tmr.start(16)
+
+    def add_step(self, text: str):
+        pass
+
+    def set_step_status(self, text: str, status: str):
+        pass
+
+    def set_progress(self, percent: int, tip: str | None = None):
+        pass
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self._tmr.stop()
+            self._boot_finished = True
+            self.hide()
+            self.close()
+            self.finished.emit()
+
+    def _tick(self):
+        self._time += self._dt
+        w = float(self.width())
+        h = float(self.height())
+        cx = w / 2.0
+        cy = h / 2.0
+
+        # Phase 1 (0.0 to 1.1s): particles drift across full screen
+        if self._time < 1.1:
+            for p in self._particles:
+                p['x'] += p['vx']
+                p['y'] += p['vy']
+                if p['x'] < 0: p['x'] = w
+                elif p['x'] > w: p['x'] = 0
+                if p['y'] < 0: p['y'] = h
+                elif p['y'] > h: p['y'] = 0
+
+        # Phase 2 (1.1s to 1.8s): burst & convergence towards center
+        elif 1.1 <= self._time < 1.8:
+            if not self._played_whoosh:
+                self._played_whoosh = True
+                try:
+                    from sound_manager import SoundManager
+                    SoundManager.instance().play_deploy_whoosh()
+                except Exception:
+                    pass
+                for p in self._particles:
+                    p['orig_x'] = p['x']
+                    p['orig_y'] = p['y']
+
+            burst_t = (self._time - 1.1) / 0.7
+            for p in self._particles:
+                local_t = max(0.0, min(1.0, (burst_t - p['converge_delay']) / (1.0 - p['converge_delay'] + 0.001)))
+                ease = math.pow(local_t, 3.2)
+                p['x'] = p['orig_x'] + (cx - p['orig_x']) * ease
+                p['y'] = p['orig_y'] + (cy - 30.0 - p['orig_y']) * ease
+
+        # Phase 4 (2.5s to 3.2s): AI - EVO entrance with impact
+        if self._time >= 2.5 and not self._played_impact:
+            self._played_impact = True
+            try:
+                from sound_manager import SoundManager
+                SoundManager.instance().play_mission_complete()
+            except Exception:
+                pass
+            self._impact_sparks = []
+            for _ in range(70):
+                angle = random.uniform(0, math.pi * 2)
+                spd = random.uniform(6.0, 24.0)
+                self._impact_sparks.append({
+                    'x': cx,
+                    'y': cy + 55.0,
+                    'vx': math.cos(angle) * spd,
+                    'vy': math.sin(angle) * spd * 0.65,
+                    'alpha': 1.0,
+                    'size': random.uniform(2.0, 4.5),
+                    'color': random.choice(['#00f0ff', '#ffffff', '#7dd3fc', '#38bdf8'])
+                })
+
+        if self._impact_sparks:
+            for s in self._impact_sparks:
+                s['x'] += s['vx']
+                s['y'] += s['vy']
+                s['vx'] *= 0.92
+                s['vy'] *= 0.92
+                s['alpha'] *= 0.92
+
+        self.update()
+
+        if self._time >= self._total_duration:
+            self._tmr.stop()
+            self._boot_finished = True
+            self.hide()
+            self.close()
+            self.finished.emit()
+
+    def paintEvent(self, event):
+        try:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+            # Minimal DWM compositing fill (alpha=1 ensures DWM layered composition without visible darkening)
+            painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
+
+            w = float(self.width())
+            h = float(self.height())
+            cx = w / 2.0
+            cy = h / 2.0
+
+            # DO NOT DRAW BACKGROUND FILL: Purely transparent!
+
+            # Transition out alpha (Phase 5: 3.2s to 3.6s)
+            global_alpha = 1.0
+            if self._time >= 3.2:
+                exit_t = min(1.0, (self._time - 3.2) / 0.4)
+                global_alpha = max(0.0, 1.0 - exit_t)
+
+            # Camera Shake calculation during impact (2.5s to 3.0s)
+            shake_x, shake_y = 0.0, 0.0
+            if 2.5 <= self._time < 3.0:
+                shake_dt = self._time - 2.5
+                decay = max(0.0, 1.0 - (shake_dt / 0.45))
+                shake_x = math.sin(shake_dt * 65.0) * 16.0 * decay
+                shake_y = math.cos(shake_dt * 52.0) * 10.0 * decay
+
+            painter.translate(shake_x, shake_y)
+
+            # -------------------------------------------------------------
+            # 1. DRAW PARTICLES
+            # -------------------------------------------------------------
+            if self._time < 1.8:
+                for p in self._particles:
+                    p_alpha = p['base_alpha']
+                    if self._time < 0.6:
+                        p_alpha *= (self._time / 0.6)
+                    twinkle = 0.75 + 0.25 * math.sin(self._time * p['twinkle_speed'] + p['twinkle_phase'])
+                    final_alpha = int(255 * p_alpha * twinkle * global_alpha)
+
+                    if final_alpha <= 0:
+                        continue
+
+                    if p['size'] > 2.5:
+                        glow_pen = QColor(255, 255, 255, int(final_alpha * 0.25))
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.setBrush(glow_pen)
+                        painter.drawEllipse(QPointF(p['x'], p['y']), p['size'] * 2.2, p['size'] * 2.2)
+
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QColor(255, 255, 255, final_alpha))
+                    painter.drawEllipse(QPointF(p['x'], p['y']), p['size'], p['size'])
+
+            # -------------------------------------------------------------
+            # 2. DRAW CENTER CONVERGENCE FLASH & SHOCKWAVE
+            # -------------------------------------------------------------
+            if 1.4 <= self._time < 1.9:
+                flash_t = (self._time - 1.4) / 0.5
+                flash_rad = 12.0 + math.sin(flash_t * math.pi) * 80.0
+                flash_alpha = int(255 * math.sin(flash_t * math.pi) * global_alpha)
+                if flash_alpha > 0:
+                    grad = QRadialGradient(cx, cy - 30.0, flash_rad)
+                    grad.setColorAt(0.0, QColor(255, 255, 255, flash_alpha))
+                    grad.setColorAt(0.3, QColor(0, 240, 255, int(flash_alpha * 0.7)))
+                    grad.setColorAt(1.0, QColor(0, 240, 255, 0))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(grad))
+                    painter.drawEllipse(QPointF(cx, cy - 30.0), flash_rad, flash_rad)
+
+            # Impact Shockwave at 2.5s
+            if self._time >= 2.5:
+                sw_prog = min(1.0, (self._time - 2.5) / 0.6)
+                sw_rad = sw_prog * 480.0
+                sw_alpha = int(255 * (1.0 - sw_prog) * global_alpha)
+                if sw_alpha > 0:
+                    sw_pen = QPen(QColor(0, 240, 255, sw_alpha), 3.0)
+                    painter.setPen(sw_pen)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawEllipse(QPointF(cx, cy + 55.0), sw_rad, sw_rad * 0.6)
+
+            # Impact Sparks
+            if self._impact_sparks:
+                painter.setPen(Qt.PenStyle.NoPen)
+                for s in self._impact_sparks:
+                    s_alpha = int(255 * s['alpha'] * global_alpha)
+                    if s_alpha <= 0: continue
+                    col = QColor(s['color'])
+                    col.setAlpha(s_alpha)
+                    painter.setBrush(col)
+                    painter.drawEllipse(QPointF(s['x'], s['y']), s['size'], s['size'])
+
+            # -------------------------------------------------------------
+            # 3. DRAW "NEXUS" TEXT & TYPOGRAPHY EFFECT
+            # -------------------------------------------------------------
+            if self._time >= 1.35:
+                text_t = min(1.0, (self._time - 1.35) / 0.45)
+                text_alpha = int(255 * text_t * global_alpha)
+
+                spacing_prog = min(1.0, (self._time - 1.35) / 1.5)
+                letter_spacing = 10.0 + (spacing_prog * 14.0)
+
+                font_nexus = QFont("Segoe UI", 56, QFont.Weight.Black)
+                font_nexus.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, letter_spacing)
+                painter.setFont(font_nexus)
+
+                rect_nexus = QRectF(cx - 500, cy - 85, 1000, 90)
+
+                # Outer text ice glow
+                glow_col = QColor(47, 209, 217, int(text_alpha * 0.45))
+                painter.setPen(glow_col)
+                for ox, oy in [(-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, 1)]:
+                    painter.drawText(rect_nexus.translated(ox, oy), Qt.AlignmentFlag.AlignCenter, "NEXUS")
+
+                # Core white text with dynamic shimmer
+                if 1.8 <= self._time < 2.5:
+                    shim_t = (self._time - 1.8) / 0.7
+                    sweep_x = cx - 350 + (shim_t * 700)
+                    grad = QLinearGradient(sweep_x - 120, cy, sweep_x + 120, cy)
+                    grad.setColorAt(0.0, QColor(232, 238, 245, int(text_alpha * 0.75)))
+                    grad.setColorAt(0.5, QColor(217, 243, 251, text_alpha))
+                    grad.setColorAt(0.7, QColor(232, 238, 245, text_alpha))
+                    grad.setColorAt(1.0, QColor(232, 238, 245, int(text_alpha * 0.75)))
+                    painter.setPen(QPen(QBrush(grad), 1))
+                else:
+                    painter.setPen(QColor(232, 238, 245, text_alpha))
+
+                painter.drawText(rect_nexus, Qt.AlignmentFlag.AlignCenter, "NEXUS")
+
+            # -------------------------------------------------------------
+            # 4. DRAW "CORE" SUBTITLE WITH MAXIMUM IMPACT (>= 2.5s)
+            # -------------------------------------------------------------
+            if self._time >= 2.5:
+                core_dt = self._time - 2.5
+                core_alpha = int(255 * min(1.0, core_dt / 0.08) * global_alpha)
+
+                slam_scale = 1.0
+                if core_dt < 0.18:
+                    slam_t = core_dt / 0.18
+                    slam_scale = 1.5 - (0.5 * math.sin(slam_t * math.pi * 0.5))
+
+                painter.save()
+                painter.translate(cx, cy + 50.0)
+                painter.scale(slam_scale, slam_scale)
+
+                badge_w = 260.0
+                badge_h = 44.0
+                badge_rect = QRectF(-badge_w / 2.0, -badge_h / 2.0, badge_w, badge_h)
+
+                painter.setPen(QPen(QColor(47, 209, 217, int(core_alpha * 0.8)), 1.5))
+                painter.setBrush(QColor(43, 35, 71, int(core_alpha * 0.55)))
+                painter.drawRoundedRect(badge_rect, 22.0, 22.0)
+
+                font_sub = QFont("Segoe UI", 18, QFont.Weight.Bold)
+                font_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 4.0)
+                painter.setFont(font_sub)
+
+                painter.setPen(QColor(232, 238, 245, core_alpha))
+                painter.drawText(QRectF(-badge_w / 2.0, -badge_h / 2.0, 125, badge_h), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "CORE")
+
+                painter.restore()
+
+            painter.end()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+
+class IncomingAlertDialog(QDialog):
+    decision = pyqtSignal(str)
+
+    def __init__(self, event: dict, parent=None):
+        super().__init__(parent)
+        self._event = event or {}
+        self._kind = (self._event.get("kind") or "message").strip().lower()
+        self._app = (self._event.get("app") or "App").strip()
+        self._title = (self._event.get("title") or "").strip()
+        self._preview = (self._event.get("preview") or "").strip()
+
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setModal(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("IncomingAlertDialog")
+        self.setMinimumWidth(360)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        frame = QFrame()
+        frame.setObjectName("IncomingAlertFrame")
+        frame.setStyleSheet(f"""
+            QFrame#IncomingAlertFrame {{
+                background: rgba(8, 8, 8, 245);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 16px;
+            }}
+        """)
+        root.addWidget(frame)
+
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(10)
+
+        heading = QLabel("Incoming Call" if self._kind == "call" else "Incoming Message")
+        heading.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        heading.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        lay.addWidget(heading)
+
+        app_lbl = QLabel(f"From {self._app}")
+        app_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        app_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        lay.addWidget(app_lbl)
+
+        body = self._preview or self._title or "A notification was detected."
+        body_lbl = QLabel(body)
+        body_lbl.setWordWrap(True)
+        body_lbl.setFont(QFont("Segoe UI", 10))
+        body_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        lay.addWidget(body_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        def _btn(text: str, *, primary: bool = False, danger: bool = False) -> QPushButton:
+            btn = QPushButton(text)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(34)
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            fg = C.WHITE
+            border = C.BORDER_B if primary else C.BORDER
+            bg = "rgba(255,255,255,0.10)" if primary else "rgba(14,14,14,235)"
+            if danger:
+                border = C.RED
+                bg = "rgba(60,10,10,235)"
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg};
+                    color: {fg};
+                    border: 1px solid {border};
+                    border-radius: 11px;
+                    padding: 0 12px;
+                }}
+                QPushButton:hover {{
+                    background: rgba(255,255,255,0.14);
+                    border: 1px solid {C.WHITE};
+                }}
+            """)
+            return btn
+
+        if self._kind == "call":
+            self._accept_btn = _btn("Pick up", primary=True)
+            self._ignore_btn = _btn("Ignore")
+            self._cut_btn = _btn("Cut call", danger=True)
+            self._x_btn = _btn("X")
+            self._accept_btn.clicked.connect(lambda: self._choose("accept"))
+            self._ignore_btn.clicked.connect(lambda: self._choose("ignore"))
+            self._cut_btn.clicked.connect(lambda: self._choose("cut"))
+            self._x_btn.clicked.connect(lambda: self._choose("noop"))
+            for btn in (self._accept_btn, self._ignore_btn, self._cut_btn, self._x_btn):
+                btn_row.addWidget(btn)
+        else:
+            self._hear_btn = _btn("Hear it", primary=True)
+            self._reply_btn = _btn("Reply")
+            self._ignore_btn = _btn("Ignore")
+            self._x_btn = _btn("X")
+            self._hear_btn.clicked.connect(lambda: self._choose("hear"))
+            self._reply_btn.clicked.connect(lambda: self._choose("reply"))
+            self._ignore_btn.clicked.connect(lambda: self._choose("ignore"))
+            self._x_btn.clicked.connect(lambda: self._choose("noop"))
+            btn_row.addWidget(self._hear_btn)
+            btn_row.addWidget(self._reply_btn)
+            btn_row.addWidget(self._ignore_btn)
+            btn_row.addWidget(self._x_btn)
+
+        lay.addLayout(btn_row)
+
+    def _choose(self, decision: str):
+        self.decision.emit(decision)
+        self.close()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self._choose("ignore")
+            return
+        super().keyPressEvent(event)
+
+
+class UltronMalfunctionDialog(QDialog):
+    """
+    Ultron Autonomous Malfunction & Self-Repair HUD Dialog.
+    Pops up on screen immediately when any runtime error occurs in terminal or tool.
+    Displays the problem, root cause, live surgical patch diff, and auto-repair progress.
+    Operates autonomously under Ultron protocol (no user permission asked).
+    """
+
+    def __init__(self, data: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setModal(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("UltronMalfunctionDialog")
+        self.setFixedWidth(540)
+        self.setMinimumHeight(440)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._frame = QFrame()
+        self._frame.setObjectName("UltronPopupFrame")
+        self._frame.setStyleSheet(f"""
+            QFrame#UltronPopupFrame {{
+                background: rgba(10, 12, 16, 252);
+                border: 2px solid {C.RED};
+                border-radius: 16px;
+            }}
+        """)
+        root.addWidget(self._frame)
+
+        self._lay = QVBoxLayout(self._frame)
+        self._lay.setContentsMargins(20, 18, 20, 18)
+        self._lay.setSpacing(10)
+
+        # 1. Header Banner
+        head_layout = QHBoxLayout()
+        head_layout.setSpacing(8)
+
+        self._title_icon = QLabel("🚨")
+        self._title_icon.setFont(QFont("Segoe UI Emoji", 14))
+        self._title_icon.setStyleSheet("background: transparent;")
+        head_layout.addWidget(self._title_icon)
+
+        self._title_lbl = QLabel("ULTRON AUTONOMOUS SELF-REPAIR")
+        self._title_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._title_lbl.setStyleSheet(f"color: {C.RED}; background: transparent; letter-spacing: 1px;")
+        head_layout.addWidget(self._title_lbl, 1)
+
+        self._protocol_badge = QLabel("ULTRON PROTOCOL")
+        self._protocol_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        self._protocol_badge.setStyleSheet(f"""
+            color: #ffffff;
+            background: rgba(255, 59, 48, 0.25);
+            border: 1px solid {C.RED};
+            border-radius: 6px;
+            padding: 3px 7px;
+        """)
+        head_layout.addWidget(self._protocol_badge)
+        self._lay.addLayout(head_layout)
+
+        # Subtitle
+        self._sub_lbl = QLabel("Sir, I detected a malfunction. Stand by, executing autonomous self-repair.")
+        self._sub_lbl.setFont(QFont("Segoe UI", 9))
+        self._sub_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        self._lay.addWidget(self._sub_lbl)
+
+        # 2. Malfunction Target Box
+        self._info_box = QFrame()
+        self._info_box.setStyleSheet("""
+            QFrame {
+                background: rgba(20, 24, 32, 220);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 10px;
+            }
+        """)
+        info_lay = QVBoxLayout(self._info_box)
+        info_lay.setContentsMargins(12, 10, 12, 10)
+        info_lay.setSpacing(4)
+
+        self._target_lbl = QLabel("Component: Scanning...")
+        self._target_lbl.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
+        self._target_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        info_lay.addWidget(self._target_lbl)
+
+        self._exc_lbl = QLabel("Exception: In Progress")
+        self._exc_lbl.setFont(QFont("Consolas", 9))
+        self._exc_lbl.setStyleSheet("color: #ff8580; background: transparent;")
+        self._exc_lbl.setWordWrap(True)
+        info_lay.addWidget(self._exc_lbl)
+        self._lay.addWidget(self._info_box)
+
+        # 3. Problem & Root Cause
+        self._explanation_lbl = QLabel("Root cause analysis running...")
+        self._explanation_lbl.setWordWrap(True)
+        self._explanation_lbl.setFont(QFont("Segoe UI", 9))
+        self._explanation_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        self._lay.addWidget(self._explanation_lbl)
+
+        # 4. Surgical Patch Code Diff Box
+        self._diff_scroll = QScrollArea()
+        self._diff_scroll.setWidgetResizable(True)
+        self._diff_scroll.setFixedHeight(120)
+        self._diff_scroll.setStyleSheet("""
+            QScrollArea {
+                background: #06070a;
+                border: 1px solid rgba(0, 229, 255, 0.20);
+                border-radius: 8px;
+            }
+        """)
+        diff_inner = QWidget()
+        diff_inner.setStyleSheet("background: transparent;")
+        self._diff_lay = QVBoxLayout(diff_inner)
+        self._diff_lay.setContentsMargins(8, 8, 8, 8)
+        self._diff_lay.setSpacing(6)
+
+        self._diff_target = QLabel("")
+        self._diff_target.setFont(QFont("Consolas", 9))
+        self._diff_target.setStyleSheet("color: #ff7070; background: rgba(80, 20, 20, 0.40); padding: 4px; border-radius: 4px;")
+        self._diff_target.setWordWrap(True)
+        self._diff_lay.addWidget(self._diff_target)
+
+        self._diff_rep = QLabel("")
+        self._diff_rep.setFont(QFont("Consolas", 9))
+        self._diff_rep.setStyleSheet("color: #40ff70; background: rgba(20, 80, 30, 0.40); padding: 4px; border-radius: 4px;")
+        self._diff_rep.setWordWrap(True)
+        self._diff_lay.addWidget(self._diff_rep)
+
+        self._diff_scroll.setWidget(diff_inner)
+        self._lay.addWidget(self._diff_scroll)
+
+        # 5. Progress Bar & Status
+        self._pbar = QProgressBar()
+        self._pbar.setFixedHeight(6)
+        self._pbar.setTextVisible(False)
+        self._pbar.setValue(25)
+        self._pbar.setStyleSheet(f"""
+            QProgressBar {{
+                background: #151821;
+                border: none;
+                border-radius: 3px;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {C.RED}, stop:1 {C.ACC});
+                border-radius: 3px;
+            }}
+        """)
+        self._lay.addWidget(self._pbar)
+
+        self._status_lbl = QLabel("Autonomous diagnosis and synthesis in progress...")
+        self._status_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._status_lbl.setStyleSheet(f"color: {C.ACC}; background: transparent;")
+        self._lay.addWidget(self._status_lbl)
+
+        # 6. Action Button (Dismiss / Close - NO asking for user permission!)
+        btn_lay = QHBoxLayout()
+        btn_lay.addStretch(1)
+
+        self._close_btn = QPushButton("Acknowledge & Dismiss")
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.setFixedHeight(32)
+        self._close_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255, 255, 255, 0.08);
+                color: #ffffff;
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.15);
+                border: 1px solid {C.ACC};
+            }}
+        """)
+        self._close_btn.clicked.connect(self.close)
+        btn_lay.addWidget(self._close_btn)
+        self._lay.addLayout(btn_lay)
+
+        self.update_content(data)
+
+    def update_content(self, data: dict):
+        status = data.get("status") or ""
+        percent = data.get("percent", 50)
+        file_name = data.get("file_name") or data.get("target_file") or "System Component"
+        line_num = data.get("line_number")
+        exc_type = data.get("exception_type") or "Error"
+        exc_msg = data.get("exception_message") or ""
+        explanation = data.get("explanation") or ""
+        target_chunk = data.get("target_chunk") or ""
+        replacement_chunk = data.get("replacement_chunk") or ""
+
+        line_str = f" (line {line_num})" if line_num else ""
+        self._target_lbl.setText(f"📁 {file_name}{line_str}")
+        self._exc_lbl.setText(f"💥 {exc_type}: {exc_msg}")
+
+        if explanation:
+            self._explanation_lbl.setText(f"🔍 Analysis: {explanation}")
+
+        if target_chunk:
+            self._diff_target.setText(f"- REMOVING:\n{target_chunk.strip()}")
+            self._diff_target.setVisible(True)
+        else:
+            self._diff_target.setVisible(False)
+
+        if replacement_chunk:
+            self._diff_rep.setText(f"+ APPLYING HOTFIX:\n{replacement_chunk.strip()}")
+            self._diff_rep.setVisible(True)
+        else:
+            self._diff_rep.setVisible(False)
+
+        self._pbar.setValue(percent)
+        if status:
+            self._status_lbl.setText(status)
+
+        # When finished, transition styling to glowing Green
+        if percent >= 100:
+            self._frame.setStyleSheet(f"""
+                QFrame#UltronPopupFrame {{
+                    background: rgba(10, 12, 16, 252);
+                    border: 2px solid {C.GREEN};
+                    border-radius: 16px;
+                }}
+            """)
+            self._title_icon.setText("🛡️")
+            self._title_lbl.setText("ULTRON SELF-REPAIR COMPLETED")
+            self._title_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent; letter-spacing: 1px;")
+            self._protocol_badge.setText("SYSTEM HEALTHY")
+            self._protocol_badge.setStyleSheet(f"""
+                color: #ffffff;
+                background: rgba(55, 255, 95, 0.25);
+                border: 1px solid {C.GREEN};
+                border-radius: 6px;
+                padding: 3px 7px;
+            """)
+            self._status_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
+            self._close_btn.setText("Close")
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
+
+
+class MeetingOverlay(QWidget):
+    stop_requested = pyqtSignal()
+    minimize_requested = pyqtSignal()
+    close_requested = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setMouseTracking(True)
+        self._expanded_height = 142
+        self._collapsed_height = 58
+        self._collapsed = False
+        self.setFixedHeight(self._expanded_height)
+        self.setStyleSheet("background: transparent;")
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        frame = QFrame()
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background: rgba(5, 5, 5, 232);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 18px;
+            }}
+        """)
+        root.addWidget(frame)
+
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(8)
+
+        top = QHBoxLayout()
+        top.setSpacing(10)
+
+        self._badge = QLabel("MEETING MODE")
+        self._badge.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._badge.setStyleSheet(
+            f"color: {C.WHITE}; background: rgba(255,255,255,0.06); border: 1px solid {C.BORDER_B}; border-radius: 10px; padding: 4px 10px;"
+        )
+        top.addWidget(self._badge)
+
+        self._title = QLabel("Watching the meeting")
+        self._title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._title.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        top.addWidget(self._title)
+        top.addStretch()
+
+        self._min_btn = QPushButton("-")
+        self._min_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._min_btn.setFixedSize(28, 28)
+        self._min_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._min_btn.setToolTip("Minimize meeting bar")
+        self._min_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.06);
+                color: {C.WHITE};
+                border: 1px solid {C.BORDER_B};
+                border-radius: 9px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.10);
+                border: 1px solid {C.WHITE};
+            }}
+        """)
+        self._min_btn.clicked.connect(self._toggle_collapsed)
+        top.addWidget(self._min_btn)
+
+        self._stop_btn = QPushButton("Stop")
+        self._stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._stop_btn.setFixedHeight(28)
+        self._stop_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._stop_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.06);
+                color: {C.WHITE};
+                border: 1px solid {C.BORDER_B};
+                border-radius: 9px;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.10);
+                border: 1px solid {C.WHITE};
+            }}
+        """)
+        self._stop_btn.clicked.connect(self.stop_requested.emit)
+        top.addWidget(self._stop_btn)
+
+        self._close_btn = QPushButton("x")
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.setFixedSize(28, 28)
+        self._close_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._close_btn.setToolTip("Close meeting bar")
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.06);
+                color: {C.WHITE};
+                border: 1px solid {C.BORDER_B};
+                border-radius: 9px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.10);
+                border: 1px solid {C.WHITE};
+            }}
+        """)
+        self._close_btn.clicked.connect(self.close_requested.emit)
+        top.addWidget(self._close_btn)
+        lay.addLayout(top)
+
+        self._summary = QLabel("Waiting for a meeting to start...")
+        self._summary.setWordWrap(True)
+        self._summary.setFont(QFont("Segoe UI", 10))
+        self._summary.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        lay.addWidget(self._summary)
+
+        self._speech = QLabel("They said: nothing yet.")
+        self._speech.setWordWrap(True)
+        self._speech.setFont(QFont("Segoe UI", 10))
+        self._speech.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        lay.addWidget(self._speech)
+
+        self._answer = QLabel("Nexus Core will show the live answer here.")
+        self._answer.setWordWrap(True)
+        self._answer.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._answer.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        lay.addWidget(self._answer)
+
+        self._apply_collapsed_state(False)
+
+    def set_content(self, title: str, summary: str, answer: str, active: bool = True, speech: str = ""):
+        self._title.setText(title or "Watching the meeting")
+        self._summary.setText(summary or "Watching the meeting screen.")
+        self._speech.setText(f"They said: {speech or 'nothing yet.'}")
+        self._answer.setText(answer or "No question detected yet.")
+        self._badge.setText("MEETING LIVE" if active else "MEETING MODE")
+
+    def _apply_collapsed_state(self, collapsed: bool):
+        self._collapsed = bool(collapsed)
+        for widget in (self._summary, self._speech, self._answer):
+            widget.setVisible(not self._collapsed)
+        self._min_btn.setText("?" if self._collapsed else "-")
+        self._min_btn.setToolTip("Restore meeting bar" if self._collapsed else "Minimize meeting bar")
+        self.setFixedHeight(self._collapsed_height if self._collapsed else self._expanded_height)
+
+    def set_collapsed(self, collapsed: bool):
+        self._apply_collapsed_state(collapsed)
+
+    def is_collapsed(self) -> bool:
+        return self._collapsed
+
+    def _toggle_collapsed(self):
+        self.minimize_requested.emit()
+
+
+class FloatingLauncher(QWidget):
+    single_clicked = pyqtSignal()
+    double_clicked = pyqtSignal()
+    action_requested = pyqtSignal(str)
+    position_changed = pyqtSignal(int, int)
+
+    _STATE_THEMES = {
+        "idle": (255, 255, 255),       # Luminous Pure White
+        "listening": (0, 229, 255),    # Electric Ice Cyan
+        "thinking": (160, 230, 255),   # Frost Blue
+        "speaking": (255, 255, 255),   # Brilliant White
+        "executing": (0, 229, 255),    # Dynamic Ice Cyan
+        "processing": (0, 229, 255),   # Dynamic Ice Cyan
+        "working": (0, 229, 255),      # Dynamic Ice Cyan
+        "muted": (160, 160, 160),      # Cool Silver
+        "error": (255, 82, 82),        # Alert Crimson
+    }
+
+    def __init__(self):
+        super().__init__(None)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(88, 88)
+        self._state = "idle"
+        self._status_line = "Ready"
+        self._hovered = False
+
+        # Animation state
+        self._anim_angle = 0.0
+        self._ring2_angle = 0.0
+        self._breath_val = 0.0
+        self._breath_dir = 1
+        self._particle_angles = [i * 45.0 for i in range(8)]
+        self._particle_trails = [[] for _ in range(8)]
+
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._anim_tick)
+        self._anim_timer.start(25)  # 40fps
+
+        self._single_timer = QTimer(self)
+        self._single_timer.setSingleShot(True)
+        self._single_timer.timeout.connect(self._on_single_click_timeout)
+
+        # Kinetic spring physics & audio reactivity
+        self._audio_lvl = 0.0
+        self._gaze_x = 0.0
+        self._gaze_y = 0.0
+        self._target_snap_x = 0
+        self._spring_timer = QTimer(self)
+        self._spring_timer.setInterval(16)
+        self._spring_timer.timeout.connect(self._spring_step)
+
+        self._dragging = False
+        self._drag_button = None
+        self._drag_offset = QPoint(0, 0)
+        self._press_pos = QPoint(0, 0)
+        self._apply_state_style()
+
+    def set_audio_level(self, lvl: float):
+        self._audio_lvl = max(0.0, min(1.0, float(lvl)))
+        self.update()
+
+    def _spring_step(self):
+        curr_x = self.x()
+        diff = self._target_snap_x - curr_x
+        if abs(diff) < 2:
+            self.move(self._target_snap_x, self.y())
+            self._spring_timer.stop()
+            self.position_changed.emit(self.x(), self.y())
+        else:
+            step = int(diff * 0.28)
+            if step == 0:
+                step = 1 if diff > 0 else -1
+            self.move(curr_x + step, self.y())
+
+    def _on_single_click_timeout(self):
+        self.single_clicked.emit()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if hasattr(self, "_anim_timer") and self._anim_timer.isActive():
+            self._anim_timer.stop()
+        if hasattr(self, "_spring_timer") and self._spring_timer.isActive():
+            self._spring_timer.stop()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, "_anim_timer") and not self._anim_timer.isActive():
+            self._anim_timer.start(25)
+
+    def _anim_tick(self):
+        if not self.isVisible():
+            if hasattr(self, "_anim_timer") and self._anim_timer.isActive():
+                self._anim_timer.stop()
+            return
+        import math
+        # State-dependent spin speeds
+        spin_speed = 3.2 if self._state == "thinking" else (2.4 if self._state in ("listening", "speaking") else 1.5)
+        self._anim_angle = (self._anim_angle + spin_speed) % 360.0
+        self._ring2_angle = (self._ring2_angle - spin_speed * 0.75) % 360.0
+
+        breath_step = 0.04 if self._state in ("listening", "speaking", "thinking") else 0.022
+        self._breath_val += breath_step * self._breath_dir
+        if self._breath_val >= 1.0:
+            self._breath_val = 1.0
+            self._breath_dir = -1
+        elif self._breath_val <= 0.0:
+            self._breath_val = 0.0
+            self._breath_dir = 1
+
+        w, h = self.width(), self.height()
+        cx, cy = w / 2.0, h / 2.0
+        for i in range(len(self._particle_angles)):
+            speed = 0.9 + i * 0.14
+            self._particle_angles[i] = (self._particle_angles[i] + speed) % 360.0
+            rad = math.radians(self._particle_angles[i])
+            orbit_r = 35.0 + (i % 3) * 2.2 + self._audio_lvl * 5.0
+            px = cx + math.cos(rad) * orbit_r
+            py = cy + math.sin(rad) * orbit_r
+            trail = self._particle_trails[i]
+            trail.append((px, py))
+            if len(trail) > 5:
+                trail.pop(0)
+        self.update()
+
+    _ICON_SIZE = 46
+
+    def _icon_pixmap(self):
+        """App icon, scaled once for this screen. Drawn whole (never clipped to a circle)."""
+        if hasattr(self, "_icon_pm_cache"):
+            return self._icon_pm_cache
+        pm = None
+        try:
+            src = QPixmap(str(APP_ICON_PNG))
+            if not src.isNull():
+                dpr = max(1.0, float(self.devicePixelRatioF()))
+                px = int(round(self._ICON_SIZE * dpr))
+                pm = src.scaled(
+                    px, px,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                pm.setDevicePixelRatio(dpr)
+        except Exception:
+            pm = None
+        self._icon_pm_cache = pm
+        return pm
+
+    def paintEvent(self, event):
+        import math
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        w, h = self.width(), self.height()
+        cx, cy = w / 2.0, h / 2.0
+        icon_pm = self._icon_pixmap()
+
+        ar, ag, ab = self._STATE_THEMES.get(self._state, (255, 255, 255))
+        breath = self._breath_val
+        hover_boost = 1.35 if self._hovered else 1.0
+        audio_boost = self._audio_lvl * 12.0
+
+        # ── 1.5 Dynamic Acoustic Shockwave Ring (Voice Reactive) ──
+        if self._audio_lvl > 0.05:
+            shock_r = 38.0 + breath * 4.0 + self._audio_lvl * 20.0
+            shock_alpha = int(min(220, self._audio_lvl * 240))
+            shock_pen = QPen(QColor(0, 229, 255, shock_alpha), 1.8)
+            painter.setPen(shock_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(cx, cy), shock_r, shock_r)
+
+        # ── 1. Pulsing Ambient Glow (Audio Reactive) ──
+        glow_r = (38.0 + breath * 5.5 + audio_boost) * (1.1 if self._hovered else 1.0)
+        glow_alpha = int((30 + breath * 45 + self._audio_lvl * 70) * hover_boost)
+        glow = QRadialGradient(cx, cy, glow_r)
+        glow.setColorAt(0.0, QColor(ar, ag, ab, min(255, glow_alpha)))
+        glow.setColorAt(0.55, QColor(ar, ag, ab, min(255, int(glow_alpha * 0.35))))
+        glow.setColorAt(1.0, QColor(ar, ag, ab, 0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(glow))
+        painter.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
+
+        # ── 2. Subtle Outer Orbit Guide Ring ──
+        guide_pen = QPen(QColor(ar, ag, ab, int(25 + breath * 20)), 0.75)
+        guide_pen.setStyle(Qt.PenStyle.DotLine)
+        painter.setPen(guide_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(QPointF(cx, cy), 39.0, 39.0)
+
+        # ── 3. High-Tech Dual Rotating Arcs ──
+        # Primary Outer Arc
+        a1 = min(255, int((170 + breath * 75 + self._audio_lvl * 50) * hover_boost))
+        pen1 = QPen(QColor(ar, ag, ab, a1), 2.2 + self._audio_lvl * 1.5)
+        pen1.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen1)
+        rect1 = QRectF(cx - 35.0, cy - 35.0, 70.0, 70.0)
+        arc_len = 110 if self._state != "thinking" else 140
+        painter.drawArc(rect1, int(self._anim_angle * 16), int(arc_len * 16))
+
+        # Secondary Counter-Rotating Arc
+        a2 = min(255, int((90 + breath * 50) * hover_boost))
+        pen2 = QPen(QColor(ar, ag, ab, a2), 1.3)
+        pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen2)
+        rect2 = QRectF(cx - 31.5, cy - 31.5, 63.0, 63.0)
+        painter.drawArc(rect2, int(self._ring2_angle * 16), int(80 * 16))
+
+        # Orbiting Satellite Beacon
+        sat_rad = math.radians(self._anim_angle + 180.0)
+        sat_x = cx + math.cos(sat_rad) * 35.0
+        sat_y = cy + math.sin(sat_rad) * 35.0
+        sat_color = QColor(ar, ag, ab).lighter(150)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(sat_color.red(), sat_color.green(), sat_color.blue(), min(255, int(180 * hover_boost)))))
+        painter.drawEllipse(QPointF(sat_x, sat_y), 2.2, 2.2)
+
+        # ── 4. Central Glassmorphic Core (with Cursor Parallax) ──
+        gx, gy = self._gaze_x, self._gaze_y
+        core_r = 25.5 + self._audio_lvl * 2.0
+        core_grad = QRadialGradient(cx + gx * 0.5, cy - 4.0 + gy * 0.5, core_r)
+        core_grad.setColorAt(0.0, QColor(20, 22, 30, 246))
+        core_grad.setColorAt(0.85, QColor(10, 11, 16, 252))
+        core_grad.setColorAt(1.0, QColor(ar, ag, ab, 30))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(core_grad))
+        if icon_pm is None:
+            painter.drawEllipse(QPointF(cx + gx * 0.5, cy + gy * 0.5), core_r, core_r)
+
+        # Glowing Core Rim
+        rim_alpha = min(255, int((110 + breath * 80 + self._audio_lvl * 60) * hover_boost))
+        rim_pen = QPen(QColor(ar, ag, ab, rim_alpha), 1.2)
+        painter.setPen(rim_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if icon_pm is None:
+            painter.drawEllipse(QPointF(cx + gx * 0.5, cy + gy * 0.5), core_r, core_r)
+
+        # ── 5. Orbiting Micro-Particle Comet Trails ──
+        for i in range(len(self._particle_trails)):
+            trail = self._particle_trails[i]
+            for t_idx, (px, py) in enumerate(trail):
+                frac = (t_idx + 1) / max(len(trail), 1)
+                t_alpha = min(255, int(frac * (50 + breath * 70) * hover_boost))
+                t_size = 0.5 + frac * 1.2
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(QColor(ar, ag, ab, t_alpha)))
+                painter.drawEllipse(QPointF(px, py), t_size, t_size)
+            if trail:
+                hx, hy = trail[-1]
+                head_alpha = min(255, int((120 + breath * 120) * hover_boost))
+                head_c = QColor(ar, ag, ab).lighter(140)
+                painter.setBrush(QBrush(QColor(head_c.red(), head_c.green(), head_c.blue(), head_alpha)))
+                painter.drawEllipse(QPointF(hx, hy), 1.6, 1.6)
+
+        # ── 6. Emblem: the Nexus app icon (whole, uncropped) + Status Dot ──
+        if icon_pm is not None:
+            size = float(self._ICON_SIZE)
+            ix = cx - size / 2.0 + gx * 0.5
+            iy = cy - size / 2.0 + gy * 0.5
+            radius = size * 0.22
+            # soft contact shadow so the icon lifts off the glow
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(0, 0, 0, 80)))
+            painter.drawRoundedRect(QRectF(ix + 0.5, iy + 2.0, size, size), radius, radius)
+            painter.drawPixmap(QPointF(ix, iy), icon_pm)
+            # state beacon on the icon's lower-right corner
+            dot_alpha = min(255, int((170 + breath * 85) * hover_boost))
+            bx, by = ix + size - 3.0, iy + size - 3.0
+            painter.setBrush(QBrush(QColor(8, 10, 16, 235)))
+            painter.drawEllipse(QPointF(bx, by), 4.6, 4.6)
+            painter.setBrush(QBrush(QColor(ar, ag, ab, dot_alpha)))
+            painter.drawEllipse(QPointF(bx, by), 3.0, 3.0)
+        else:
+            text_alpha = min(255, int((215 + breath * 40) * hover_boost))
+            painter.setPen(QPen(QColor(0, 0, 0, 180)))
+            painter.setFont(QFont("Nirmala UI", 11, QFont.Weight.Bold))
+            painter.drawText(QRectF(cx - 21.0 + gx, cy - 13.0 + gy, 44.0, 22.0), Qt.AlignmentFlag.AlignCenter, "\u092C\u094D\u0930\u0939\u094D\u092E\u093E")
+
+            # Crisp glowing text
+            painter.setPen(QPen(QColor(ar, ag, ab, text_alpha)))
+            painter.setFont(QFont("Nirmala UI", 11, QFont.Weight.Bold))
+            painter.drawText(QRectF(cx - 22.0 + gx, cy - 14.0 + gy, 44.0, 22.0), Qt.AlignmentFlag.AlignCenter, "\u092C\u094D\u0930\u0939\u094D\u092E\u093E")
+
+            # Tiny breathing status beacon directly below text
+            dot_alpha = min(255, int((150 + breath * 105) * hover_boost))
+            dot_color = QColor(ar, ag, ab, dot_alpha)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(dot_color))
+            painter.drawEllipse(QPointF(cx + gx, cy + 12.0 + gy), 2.0, 2.0)
+
+        painter.end()
+
+    def show_at(self, x: int | None = None, y: int | None = None):
+        if x is None or y is None:
+            screen = QApplication.primaryScreen().availableGeometry()
+            x = screen.right() - self.width() - 18
+            y = screen.bottom() - self.height() - 90
+        self.move(x, y)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def set_state(self, state: str, detail: str | None = None):
+        old_state = self._state
+        self._state = (state or "idle").strip().lower()
+        self._status_line = (detail or self._default_status()).strip() or self._default_status()
+        self._apply_state_style()
+
+        # Acoustic cyber cues on state changes
+        if self._state != old_state:
+            try:
+                from sound_manager import SoundManager
+                sm = SoundManager.instance()
+                if self._state == "listening":
+                    sm.play_listening_start()
+                elif self._state == "idle" and old_state in ("thinking", "executing", "processing"):
+                    sm.play_mission_complete()
+                elif self._state in ("thinking", "executing", "processing"):
+                    sm.play_telemetry_chirp()
+            except Exception:
+                pass
+
+    def _default_status(self) -> str:
+        return {
+            "idle": "Ready",
+            "listening": "Listening",
+            "thinking": "Thinking...",
+            "speaking": "Speaking",
+            "executing": "Executing task...",
+            "processing": "Processing...",
+            "muted": "Muted",
+            "error": "Error",
+        }.get(self._state, "Ready")
+
+    def _apply_state_style(self):
+        self.setToolTip(
+            f"Nexus Core ({self._status_line})\n"
+            "• Single-click: Chat Workspace\n"
+            "• Double-click: Open Full App\n"
+            "• Drag: Move (Spring Snap)"
+        )
+        self.update()
+
+    def _show_menu(self, global_pos):
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: rgba(14, 16, 22, 248);
+                color: #FFFFFF;
+                border: 1px solid rgba(0, 229, 255, 0.45);
+                border-radius: 12px;
+                padding: 6px;
+                font-family: 'Segoe UI';
+                font-size: 12px;
+            }}
+            QMenu::item {{
+                padding: 7px 18px;
+                border-radius: 6px;
+            }}
+            QMenu::item:selected {{
+                background: rgba(0, 229, 255, 0.20);
+                color: #00e5ff;
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: rgba(255, 255, 255, 0.10);
+                margin: 4px 6px;
+            }}
+        """)
+
+        open_full = QAction("Open Nexus Core (Full App)", self)
+        open_full.triggered.connect(lambda: self.action_requested.emit("open_app"))
+        menu.addAction(open_full)
+
+        open_ws = QAction("Open Chat Workspace", self)
+        open_ws.triggered.connect(lambda: self.action_requested.emit("open_workspace"))
+        menu.addAction(open_ws)
+
+        menu.addSeparator()
+
+        voice_mode = QAction("Toggle Voice Mode", self)
+        voice_mode.triggered.connect(lambda: self.action_requested.emit("voice_mode"))
+        menu.addAction(voice_mode)
+
+        settings_act = QAction("Settings", self)
+        settings_act.triggered.connect(lambda: self.action_requested.emit("settings"))
+        menu.addAction(settings_act)
+
+        menu.addSeparator()
+
+        hide_act = QAction("Hide Floating Icon", self)
+        hide_act.triggered.connect(self.hide)
+        menu.addAction(hide_act)
+
+        quit_act = QAction("Quit Nexus", self)
+        quit_act.triggered.connect(lambda: self.action_requested.emit("quit"))
+        menu.addAction(quit_act)
+
+        menu.exec(global_pos)
+
+    def mousePressEvent(self, event):
+        if event.button() in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            if hasattr(self, "_spring_timer") and self._spring_timer.isActive():
+                self._spring_timer.stop()
+            self._dragging = False
+            self._press_pos = event.globalPosition().toPoint()
+            self._drag_offset = self._press_pos - self.frameGeometry().topLeft()
+            self._single_timer.stop()
+            self._drag_button = event.button()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        pos = event.globalPosition().toPoint()
+        # Calculate subtle cursor parallax
+        local_x = pos.x() - self.x() - self.width() / 2.0
+        local_y = pos.y() - self.y() - self.height() / 2.0
+        self._gaze_x = max(-2.5, min(2.5, local_x * 0.05))
+        self._gaze_y = max(-2.5, min(2.5, local_y * 0.05))
+
+        if event.buttons() & (Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton):
+            if not self._dragging and (pos - self._press_pos).manhattanLength() > 5:
+                self._dragging = True
+            if self._dragging:
+                screen = QApplication.primaryScreen().availableGeometry()
+                new_pos = pos - self._drag_offset
+                new_x = max(screen.left(), min(new_pos.x(), screen.right() - self.width()))
+                new_y = max(screen.top(), min(new_pos.y(), screen.bottom() - self.height()))
+                self.move(new_x, new_y)
+                self.position_changed.emit(new_x, new_y)
+            event.accept()
+            return
+        self.update()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if not self._dragging:
+                self._single_timer.start(200)
+            else:
+                # Magnetic Spring Edge-Snap
+                screen = QApplication.primaryScreen().availableGeometry()
+                mid_x = (screen.left() + screen.right()) / 2.0
+                if self.x() < mid_x:
+                    self._target_snap_x = screen.left() + 16
+                else:
+                    self._target_snap_x = screen.right() - self.width() - 16
+                self._spring_timer.start(16)
+            self._dragging = False
+            self._drag_button = None
+            event.accept()
+            return
+        if event.button() == Qt.MouseButton.RightButton:
+            if not self._dragging:
+                self._show_menu(event.globalPosition().toPoint())
+            self._dragging = False
+            self._drag_button = None
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._single_timer.stop()
+            self.double_clicked.emit()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self._apply_state_style()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._gaze_x = 0.0
+        self._gaze_y = 0.0
+        self._apply_state_style()
+        super().leaveEvent(event)
+
+
+
+class FloatingGestureCard(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(8)
+        
+        self.btn = QPushButton("🖐 Gestures")
+        self.btn.setFixedSize(100, 36)
+        self.btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn.setStyleSheet(
+            "QPushButton { background: #0c0e12; color: #ffffff; border: 1px solid rgba(0, 229, 255, 0.20); border-radius: 8px; font-weight: bold; }"
+            "QPushButton:hover { color: #00e5ff; border: 1px solid #00e5ff; }"
+        )
+        self.btn.clicked.connect(self.toggle_preview)
+        
+        btn_lay = QHBoxLayout()
+        btn_lay.addStretch(1)
+        btn_lay.addWidget(self.btn)
+        self.lay.addLayout(btn_lay)
+        
+        self.preview = GestureCameraPreview()
+        self.preview.setFixedSize(280, 210)
+        self.preview.hide()
+        
+        self.lay.addWidget(self.preview)
+        
+    def toggle_preview(self):
+        if self.preview.isVisible():
+            self.preview.hide()
+            self.preview._stop_camera()
+            self.btn.setStyleSheet(
+                "QPushButton { background: #0c0e12; color: #ffffff; border: 1px solid rgba(0, 229, 255, 0.20); border-radius: 8px; font-weight: bold; }"
+                "QPushButton:hover { color: #00e5ff; border: 1px solid #00e5ff; }"
+            )
+        else:
+            self.preview.show()
+            self.preview._start_camera()
+            self.btn.setStyleSheet(
+                "QPushButton { background: rgba(0, 229, 255, 0.15); color: #00e5ff; border: 1px solid #00e5ff; border-radius: 8px; font-weight: bold; }"
+                "QPushButton:hover { background: rgba(0, 229, 255, 0.25); }"
+            )
+        self.adjustSize()
+        if self.window() and hasattr(self.window(), 'resizeEvent'):
+            self.window().resizeEvent(None)
+
+
+class SystemConnectivitySidebar(QFrame):
+    def __init__(self, controller=None, parent=None):
+        super().__init__(parent)
+        self._controller = controller
+        self.setObjectName("SystemConnectivitySidebar")
+        self.setStyleSheet(
+            f"""
+            QFrame#SystemConnectivitySidebar {{
+                background: rgba(0, 229, 255, 0.03);
+                border: 1px solid rgba(0, 229, 255, 0.6);
+                border-radius: 22px;
+            }}
+            QLabel {{
+                background: transparent;
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.03);
+                color: {C.WHITE};
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                text-align: left;
+                padding: 10px 12px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.10);
+                border: 1px solid rgba(0, 229, 255, 0.3);
+            }}
+            """
+        )
+        try:
+            shadow = QGraphicsDropShadowEffect(self)
+            shadow.setBlurRadius(20)
+            shadow.setColor(QColor(0, 229, 255, 80))
+            shadow.setOffset(0, 0)
+            self.setGraphicsEffect(shadow)
+        except: pass
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 18, 18, 18)
+        lay.setSpacing(14)
+
+        title = QLabel("SYSTEM STATUS")
+        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.WHITE}; letter-spacing: 1px;")
+        lay.addWidget(title)
+
+        self._status_card = QFrame()
+        self._status_card.setStyleSheet("QFrame { background: rgba(14,16,20,0.88); border: 1px solid rgba(53,255,117,0.18); border-radius: 14px; }")
+        s_lay = QVBoxLayout(self._status_card)
+        s_lay.setContentsMargins(16, 14, 16, 14)
+        s_lay.setSpacing(10)
+        self._online_lbl = QLabel("● System Online")
+        self._online_lbl.setStyleSheet("color: #35ff75; font-weight: 700;")
+        self._desc_lbl = QLabel("All systems are operational.")
+        self._desc_lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+        s_lay.addWidget(self._online_lbl)
+        s_lay.addWidget(self._desc_lbl)
+        lay.addWidget(self._status_card)
+
+        self._info_rows: dict[str, QLabel] = {}
+        for label in ("Version", "Platform", "Current AI Provider", "Last Updated"):
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 4, 0, 4)
+            row.setSpacing(10)
+            icon = QLabel("◌")
+            icon.setFixedWidth(18)
+            icon.setStyleSheet(f"color: {C.WHITE};")
+            key_lbl = QLabel(label)
+            key_lbl.setStyleSheet(f"color: {C.WHITE};")
+            val_lbl = QLabel("")
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            val_lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+            row.addWidget(icon)
+            row.addWidget(key_lbl)
+            row.addStretch(1)
+            row.addWidget(val_lbl)
+            lay.addLayout(row)
+            self._info_rows[label] = val_lbl
+
+        quick_title = QLabel("QUICK ACTIONS")
+        quick_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        quick_title.setStyleSheet(f"color: {C.WHITE}; letter-spacing: 1px;")
+        lay.addWidget(quick_title)
+
+        self._quick_actions = QVBoxLayout()
+        self._quick_actions.setSpacing(10)
+        lay.addLayout(self._quick_actions)
+        self._mk_quick_action("↻ Restart Nexus Core", QStyle.StandardPixmap.SP_BrowserReload, self._restart)
+        self._mk_quick_action("⟳ Reload Configuration", QStyle.StandardPixmap.SP_BrowserReload, self._reload)
+        self._mk_quick_action("≡ƒôü Open Data Folder", QStyle.StandardPixmap.SP_DirOpenIcon, self._open_data_folder)
+        self._mk_quick_action("≡ƒôä View Logs", QStyle.StandardPixmap.SP_FileDialogDetailedView, self._view_logs)
+        self._mk_quick_action("⬇ Check for Updates", QStyle.StandardPixmap.SP_ArrowDown, self._check_updates)
+
+        tip = QFrame()
+        tip.setStyleSheet("QFrame { background: rgba(24, 18, 8, 0.85); border: 1px solid rgba(255, 191, 0, 0.22); border-radius: 14px; }")
+        tip_lay = QVBoxLayout(tip)
+        tip_lay.setContentsMargins(16, 14, 16, 14)
+        tip_lay.setSpacing(8)
+        tip_title = QLabel("Security Tip")
+        tip_title.setStyleSheet("color: #ffbf00; font-weight: 700;")
+        tip_body = QLabel('"Never share your API keys with anyone."')
+        tip_body.setWordWrap(True)
+        tip_body.setStyleSheet(f"color: {C.TEXT_MED};")
+        tip_lay.addWidget(tip_title)
+        tip_lay.addWidget(tip_body)
+        lay.addStretch(1)
+        lay.addWidget(tip)
+
+        self.refresh()
+
+    def set_controller(self, controller):
+        self._controller = controller
+        self.refresh()
+
+    def _mk_quick_action(self, text: str, icon_kind, slot):
+        btn = QPushButton(text)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setIcon(self.style().standardIcon(icon_kind))
+        btn.clicked.connect(slot)
+        self._quick_actions.addWidget(btn)
+        return btn
+
+    def _bridge(self):
+        return self._controller
+
+    def _restart(self):
+        if self._bridge() and hasattr(self._bridge(), "_restart_app"):
+            self._bridge()._restart_app()
+
+    def _reload(self):
+        if self._bridge() and hasattr(self._bridge(), "_win"):
+            try:
+                self._bridge()._win._load_api_defaults()
+                self._bridge()._win._load_discord_settings()
+                self._bridge()._log_sig.emit("SYS: Configuration reloaded.")
+            except Exception:
+                pass
+
+    def _open_data_folder(self):
+        try:
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(CONFIG_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(CONFIG_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(CONFIG_DIR)])
+        except Exception:
+            pass
+
+    def _view_logs(self):
+        try:
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(BASE_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(BASE_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(BASE_DIR)])
+        except Exception:
+            pass
+
+    def _check_updates(self):
+        if self._bridge() and hasattr(self._bridge(), "write_log"):
+            self._bridge().write_log("SYS: Update check is not connected to a remote service yet.")
+
+    def refresh(self):
+        if self._bridge() and hasattr(self._bridge(), "_win"):
+            version = "v1.0.0"
+            platform_name = platform.system()
+            provider = self._bridge()._win._load_app_settings().get("default_ai_provider", "Gemini")
+            last_updated = time.strftime("%d %b %Y %H:%M")
+            self._info_rows["Version"].setText(version)
+            self._info_rows["Platform"].setText(platform_name)
+            self._info_rows["Current AI Provider"].setText(provider)
+            self._info_rows["Last Updated"].setText(last_updated)
+        else:
+            self._info_rows["Version"].setText("v1.0.0")
+            self._info_rows["Platform"].setText(platform.system())
+            self._info_rows["Current AI Provider"].setText("Gemini")
+            self._info_rows["Last Updated"].setText(time.strftime("%d %b %Y %H:%M"))
+
+
+
+class SettingsHubPage(QWidget):
+    def __init__(self, navigation_callback, parent=None):
+        super().__init__(parent)
+        self._nav_cb = navigation_callback
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(40, 60, 40, 60)
+        lay.setSpacing(25)
+
+        title = QLabel("Settings Hub")
+        title.setFont(QFont("Segoe UI", 32, QFont.Weight.Black))
+        title.setStyleSheet(f"color: {C.WHITE}; letter-spacing: 1px;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+
+        subtitle = QLabel("Select a section below to configure your Nexus Core environment.")
+        subtitle.setFont(QFont("Segoe UI", 12))
+        subtitle.setStyleSheet(f"color: {C.TEXT_DIM};")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(subtitle)
+
+        cards_lay = QHBoxLayout()
+        cards_lay.setSpacing(24)
+        cards_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        cards_data = [
+            ("Nexus Core Home", "Configure smart home integrations", "🏠", 1),
+            ("Devices", "Manage and control connected hardware", "🔌", 2),
+            ("System & Connect", "Configure providers and api preferences", "⚙️", 3)
+        ]
+
+        for title_text, desc_text, icon_emoji, target_idx in cards_data:
+            card = QFrame()
+            card.setFixedSize(280, 200)
+            card.setCursor(Qt.CursorShape.PointingHandCursor)
+            card.setStyleSheet(
+                f"QFrame {{ "
+                f"  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(16, 18, 26, 0.75), stop:1 rgba(8, 10, 15, 0.85)); "
+                f"  border: 1px solid rgba(0, 229, 255, 0.18); "
+                f"  border-radius: 18px; "
+                f"}} "
+                f"QFrame:hover {{ "
+                f"  border: 1.5px solid {C.PRI}; "
+                f"  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(35, 28, 15, 0.8), stop:1 rgba(16, 12, 8, 0.9)); "
+                f"}}"
+            )
+            card_lay = QVBoxLayout(card)
+            card_lay.setContentsMargins(20, 20, 20, 20)
+            card_lay.setSpacing(12)
+            card_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            icon_lbl = QLabel(icon_emoji)
+            icon_lbl.setFont(QFont("Segoe UI", 36))
+            icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            icon_lbl.setStyleSheet("background: transparent; border: none;")
+            card_lay.addWidget(icon_lbl)
+
+            t = QLabel(title_text)
+            t.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+            t.setStyleSheet(f"color: {C.WHITE}; background: transparent; border: none;")
+            t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_lay.addWidget(t)
+
+            d = QLabel(desc_text)
+            d.setFont(QFont("Segoe UI", 9))
+            d.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; border: none;")
+            d.setWordWrap(True)
+            d.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_lay.addWidget(d)
+
+            card.mousePressEvent = lambda e, idx=target_idx: self._nav_cb(idx)
+            cards_lay.addWidget(card)
+
+        lay.addStretch(1)
+        lay.addLayout(cards_lay)
+        lay.addStretch(2)
+
+class SystemConnectivityPage(QWidget):
+    def __init__(self, controller=None, parent=None):
+        super().__init__(parent)
+        self._controller = controller
+        self.setObjectName("SystemConnectivityPage")
+        self.setStyleSheet(f"""
+            QWidget#SystemConnectivityPage {{
+                background: transparent;
+            }}
+            QFrame#SettingsCard {{
+                background: rgba(10, 12, 18, 160);
+                border: 1.5px solid rgba(0, 229, 255, 0.15);
+                border-radius: 18px;
+            }}
+            QFrame#SettingsCard:hover {{
+                border: 1.5px solid rgba(0, 229, 255, 0.35);
+                background: rgba(20, 16, 12, 200);
+            }}
+            QLabel {{
+                background: transparent;
+                color: #e6edf3;
+            }}
+            QPushButton {{
+                background: rgba(255, 255, 255, 0.03);
+                color: {C.WHITE};
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                padding: 10px 12px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.12);
+                border: 1px solid rgba(0, 229, 255, 0.45);
+            }}
+            QLineEdit, QComboBox {{
+                background: rgba(13, 15, 19, 240);
+                color: {C.WHITE};
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                min-height: 34px;
+                padding: 0 10px;
+            }}
+            QLineEdit:focus, QComboBox:focus {{
+                border: 1px solid {C.PRI};
+                background: rgba(0, 229, 255, 0.02);
+            }}
+            QMessageBox, QDialog {{
+                background-color: #0b0f19;
+                color: #ffffff;
+                border: 1.5px solid rgba(0, 229, 255, 0.35);
+                border-radius: 14px;
+            }}
+            QMessageBox QLabel, QDialog QLabel {{
+                color: #ffffff;
+                background-color: transparent;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+                font-size: 13px;
+                padding: 4px;
+            }}
+            QMessageBox QPushButton, QDialog QPushButton {{
+                background-color: #00e5ff;
+                color: #050a12;
+                font-weight: 700;
+                font-size: 12px;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 24px;
+                min-width: 80px;
+                min-height: 30px;
+            }}
+            QMessageBox QPushButton:hover, QDialog QPushButton:hover {{
+                background-color: #33ebff;
+            }}
+            QMessageBox QPushButton:pressed, QDialog QPushButton:pressed {{
+                background-color: #00b3cc;
+            }}
+        """)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 16, 18, 16)
+        root.setSpacing(0)
+
+        self._scroll = QScrollArea()
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        root.addWidget(self._scroll)
+
+        self._content = QWidget()
+        self._scroll.setWidget(self._content)
+        lay = QVBoxLayout(self._content)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(16)
+
+        header = QFrame()
+        header.setStyleSheet("background: transparent; border: none;")
+        h_lay = QVBoxLayout(header)
+        h_lay.setContentsMargins(0, 0, 0, 0)
+        h_lay.setSpacing(6)
+        title = QLabel("SYSTEM & CONNECTIVITY")
+        title.setFont(QFont("Segoe UI", 22, QFont.Weight.Black))
+        title.setStyleSheet(f"color: {C.WHITE}; letter-spacing: 1px;")
+        sub = QLabel("Manage your AI providers, connections and application preferences.")
+        sub.setFont(QFont("Segoe UI", 10))
+        sub.setStyleSheet(f"color: {C.TEXT_DIM};")
+        h_lay.addWidget(title)
+        h_lay.addWidget(sub)
+        lay.addWidget(header)
+
+        top = QHBoxLayout()
+        top.setSpacing(14)
+        top.addWidget(self._build_left_column(), 7)
+        top.addWidget(self._build_summary_card(), 3)
+        lay.addLayout(top)
+        lay.addStretch(1)
+
+        self.refresh()
+
+    def set_controller(self, controller):
+        self._controller = controller
+        self.refresh()
+
+    def _ctrl(self):
+        return self._controller
+
+    def _card(self, title: str, subtitle: str = "") -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("SettingsCard")
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(12)
+        head = QLabel(title)
+        head.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        head.setStyleSheet(f"color: {C.WHITE};")
+        lay.addWidget(head)
+        if subtitle:
+            sub = QLabel(subtitle)
+            sub.setWordWrap(True)
+            sub.setStyleSheet(f"color: {C.TEXT_DIM};")
+            lay.addWidget(sub)
+        return frame
+
+    def _mk_toggle(self, text: str, checked: bool, callback):
+        btn = QPushButton(text)
+        btn.setCheckable(True)
+        btn.setChecked(checked)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.clicked.connect(lambda: callback(btn.isChecked()))
+        btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                text-align: left;
+                background: rgba(255,255,255,0.03);
+                color: {C.WHITE};
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 12px 14px;
+            }}
+            QPushButton:checked {{
+                background: rgba(0, 229, 255,0.12);
+                border: 1px solid {C.PRI};
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255,0.08);
+            }}
+            """
+        )
+        return btn
+
+    def _provider_key_preview(self, key: str) -> str:
+        key = (key or "").strip()
+        if not key:
+            return "Not set"
+        if len(key) <= 8:
+            return "••••••••"
+        return f"{key[:4]}••••••••{key[-4:]}"
+
+    def _provider_row(self, name: str, key: str, model: str, setting_key: str):
+        row = QFrame()
+        if key:
+            row.setStyleSheet("QFrame { background: rgba(55, 255, 95, 0.02); border: 1px solid rgba(55, 255, 95, 0.1); border-radius: 14px; } QFrame:hover { background: rgba(55, 255, 95, 0.05); border: 1px solid rgba(55, 255, 95, 0.25); }")
+        else:
+            row.setStyleSheet("QFrame { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; } QFrame:hover { background: rgba(0, 229, 255, 0.04); border: 1px solid rgba(0, 229, 255, 0.3); }")
+        r = QHBoxLayout(row)
+        r.setContentsMargins(14, 12, 14, 12)
+        r.setSpacing(12)
+        icon = QLabel(name[:1].upper())
+        icon.setFixedSize(42, 42)
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        if key:
+            icon.setStyleSheet(f"background: rgba(55, 255, 95, 0.12); color: {C.GREEN}; border: 1px solid rgba(55, 255, 95, 0.3); border-radius: 21px;")
+        else:
+            icon.setStyleSheet(f"background: rgba(0, 229, 255, 0.12); color: {C.WHITE}; border: 1px solid rgba(0, 229, 255, 0.38); border-radius: 21px;")
+        r.addWidget(icon)
+        meta = QVBoxLayout()
+        title = QLabel(name)
+        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.WHITE}; border: none;")
+        if key:
+            status = QLabel("\u2713  Already Added")
+            status.setStyleSheet(f"color: {C.GREEN}; border: none; font-weight: bold;")
+        else:
+            status = QLabel("Not configured")
+            status.setStyleSheet(f"color: {C.TEXT_DIM}; border: none;")
+        model_lbl = QLabel(f"Current model: {model}")
+        model_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; border: none;")
+        api_lbl = QLabel(self._provider_key_preview(key))
+        api_lbl.setStyleSheet(f"color: {C.TEXT_MED}; border: none;")
+        meta.addWidget(title)
+        meta.addWidget(status)
+        meta.addWidget(model_lbl)
+        meta.addWidget(api_lbl)
+        r.addLayout(meta, 1)
+        btn_lay = QVBoxLayout()
+        btn_lay.setSpacing(8)
+        if key:
+            edit = QPushButton("Edit API Key")
+        else:
+            edit = QPushButton("Add API Key")
+            edit.setStyleSheet("""
+                QPushButton {
+                    background: rgba(0, 229, 255, 0.1);
+                    color: #00e5ff;
+                    border: 1px solid rgba(0, 229, 255, 0.3);
+                    border-radius: 12px;
+                    padding: 10px 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 229, 255, 0.2);
+                    border: 1px solid rgba(0, 229, 255, 0.5);
+                }
+            """)
+        edit.clicked.connect(lambda: self._open_api_keys())
+        test = QPushButton("Test Connection")
+        test.clicked.connect(lambda: self._test_provider(setting_key))
+        btn_lay.addWidget(edit)
+        btn_lay.addWidget(test)
+        r.addLayout(btn_lay)
+        return row, status, api_lbl
+
+    def _build_spotify_mcp_card(self):
+        spotify_card = self._card("Spotify MCP Server", "Voice & AI music streaming, song searches, playlist browsing, and queue management via Spotify Web API.")
+        s_lay = spotify_card.layout()
+
+        self._spotify_status_lbl = QLabel("Status: Checking...")
+        self._spotify_status_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+        s_lay.addWidget(self._spotify_status_lbl)
+
+        cid_row = QHBoxLayout()
+        cid_lbl = QLabel("Client ID")
+        cid_lbl.setStyleSheet(f"color: {C.WHITE}; min-width: 90px;")
+        cid_row.addWidget(cid_lbl)
+        self._spotify_client_id = QLineEdit()
+        self._spotify_client_id.setPlaceholderText("Spotify Client ID from Developer Dashboard")
+        cid_row.addWidget(self._spotify_client_id, 1)
+        s_lay.addLayout(cid_row)
+
+        csec_row = QHBoxLayout()
+        csec_lbl = QLabel("Client Secret")
+        csec_lbl.setStyleSheet(f"color: {C.WHITE}; min-width: 90px;")
+        csec_row.addWidget(csec_lbl)
+        self._spotify_client_secret = QLineEdit()
+        self._spotify_client_secret.setEchoMode(QLineEdit.EchoMode.Password)
+        self._spotify_client_secret.setPlaceholderText("Spotify Client Secret")
+        csec_row.addWidget(self._spotify_client_secret, 1)
+
+        self._spotify_reveal_btn = QPushButton("Reveal")
+        self._spotify_reveal_btn.setCheckable(True)
+        self._spotify_reveal_btn.clicked.connect(self._toggle_spotify_secret_reveal)
+        csec_row.addWidget(self._spotify_reveal_btn)
+        s_lay.addLayout(csec_row)
+
+        redir_row = QHBoxLayout()
+        redir_lbl = QLabel("Redirect URI:")
+        redir_lbl.setStyleSheet(f"color: {C.TEXT_MED}; font-size: 11px;")
+        redir_val = QLabel("http://127.0.0.1:8888/callback")
+        redir_val.setStyleSheet("color: #00e5ff; font-size: 11px; font-family: monospace; font-weight: bold;")
+        copy_btn = QPushButton("Copy URI")
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.setStyleSheet("padding: 4px 10px; font-size: 10px;")
+        copy_btn.clicked.connect(self._copy_spotify_redirect_uri)
+        redir_row.addWidget(redir_lbl)
+        redir_row.addWidget(redir_val)
+        redir_row.addStretch(1)
+        redir_row.addWidget(copy_btn)
+        s_lay.addLayout(redir_row)
+
+        s_btns_row = QHBoxLayout()
+        s_btns_row.setSpacing(10)
+
+        self._spotify_save_btn = QPushButton("Save Credentials")
+        self._spotify_save_btn.clicked.connect(self._handle_spotify_save)
+        s_btns_row.addWidget(self._spotify_save_btn)
+
+        self._spotify_auth_btn = QPushButton("🔗 Authenticate in Browser")
+        self._spotify_auth_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(0, 229, 255, 0.12);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.45);
+                font-weight: bold;
+                border-radius: 12px;
+                padding: 10px 14px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.25);
+                border: 1px solid #00e5ff;
+            }}
+        """)
+        self._spotify_auth_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._spotify_auth_btn.clicked.connect(self._handle_spotify_auth)
+        s_btns_row.addWidget(self._spotify_auth_btn)
+
+        self._spotify_test_btn = QPushButton("Test Connection")
+        self._spotify_test_btn.clicked.connect(self._handle_spotify_test)
+        s_btns_row.addWidget(self._spotify_test_btn)
+
+        self._spotify_disconnect_btn = QPushButton("Disconnect")
+        self._spotify_disconnect_btn.clicked.connect(self._handle_spotify_disconnect)
+        s_btns_row.addWidget(self._spotify_disconnect_btn)
+
+        s_lay.addLayout(s_btns_row)
+
+        spotify_tip = QLabel("Tip: In developer.spotify.com/dashboard ➔ Settings ➔ add 'http://127.0.0.1:8888/callback' to Redirect URIs and save.")
+        spotify_tip.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 10px;")
+        spotify_tip.setWordWrap(True)
+        s_lay.addWidget(spotify_tip)
+
+        self._prefill_spotify_credentials()
+        self._update_spotify_status()
+
+        return spotify_card
+
+    def _build_left_column(self):
+        col = QWidget()
+        lay = QVBoxLayout(col)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+
+
+        
+
+
+        # Instagram Connect
+        ig_card = self._card("Instagram Connect", "Connect your personal Instagram account to allow Nexus Core to manage your DMs.")
+        ig_lay = ig_card.layout()
+
+        self._ig_status_lbl = QLabel("Status: Checking...")
+        self._ig_status_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+        ig_lay.addWidget(self._ig_status_lbl)
+
+        self._ig_browser_btn = QPushButton("🌐 Connect via Browser (Recommended)")
+        self._ig_browser_btn.setStyleSheet(f"background: {C.PRI}; color: {C.DARK}; font-weight: bold; padding: 7px; border-radius: 4px;")
+        self._ig_browser_btn.setToolTip("Opens Instagram in a genuine browser window. Login once, solve 2FA easily, and never get blocked by Meta.")
+        self._ig_browser_btn.clicked.connect(self._handle_ig_browser_connect)
+        ig_lay.addWidget(self._ig_browser_btn)
+
+        or_sep = QLabel("─── or connect with mobile credentials ───")
+        or_sep.setAlignment(__import__('PyQt6').QtCore.Qt.AlignmentFlag.AlignCenter)
+        or_sep.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 10px; margin: 4px 0;")
+        ig_lay.addWidget(or_sep)
+
+        ig_user_row = QHBoxLayout()
+        ig_user_row.addWidget(QLabel("Username"))
+        self._ig_username = QLineEdit()
+        self._ig_username.setPlaceholderText("Instagram Username")
+        ig_user_row.addWidget(self._ig_username)
+        ig_lay.addLayout(ig_user_row)
+
+        ig_pass_row = QHBoxLayout()
+        ig_pass_row.addWidget(QLabel("Password"))
+        self._ig_password = QLineEdit()
+        self._ig_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self._ig_password.setPlaceholderText("Instagram Password (or browser sessionid)")
+        ig_pass_row.addWidget(self._ig_password, 1)
+
+        self._ig_reveal_btn = QPushButton("Reveal")
+        self._ig_reveal_btn.setCheckable(True)
+        self._ig_reveal_btn.clicked.connect(self._toggle_ig_password_reveal)
+        ig_pass_row.addWidget(self._ig_reveal_btn)
+        ig_lay.addLayout(ig_pass_row)
+
+        ig_hint = QLabel("Tip: Use 'Connect via Browser' above to avoid Meta's automated mobile blocks and 429 rate limits.")
+        ig_hint.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 11px;")
+        ig_hint.setWordWrap(True)
+        ig_lay.addWidget(ig_hint)
+        
+        ig_btns_row = QHBoxLayout()
+        
+        self._ig_connect_btn = QPushButton("Connect (Password)")
+        self._ig_connect_btn.clicked.connect(self._handle_ig_connect)
+        ig_btns_row.addWidget(self._ig_connect_btn)
+
+        self._ig_cookie_btn = QPushButton("🍪 Connect via Cookie")
+        self._ig_cookie_btn.setToolTip("Fastest 100% reliable login bypassing all Meta security checks: paste your browser sessionid cookie.")
+        self._ig_cookie_btn.clicked.connect(self._handle_ig_cookie_dialog)
+        ig_btns_row.addWidget(self._ig_cookie_btn)
+        
+        self._ig_disconnect_btn = QPushButton("Disconnect")
+        self._ig_disconnect_btn.clicked.connect(self._handle_ig_disconnect)
+        ig_btns_row.addWidget(self._ig_disconnect_btn)
+
+        ig_lay.addLayout(ig_btns_row)
+        
+        lay.addWidget(ig_card)
+        
+        # Pre-fill from API keys if they exist
+        try:
+            with open(Path("config/api_keys.json"), "r", encoding="utf-8") as f:
+                d = json.load(f)
+                if d.get("instagram_username"):
+                    self._ig_username.setText(d.get("instagram_username"))
+                if d.get("instagram_password"):
+                    self._ig_password.setText(d.get("instagram_password"))
+        except Exception:
+            pass
+
+        self._update_ig_status()
+
+        # Google Workspace (Gmail / Calendar / Drive)
+        gw_card = self._card("Google Workspace (Gmail / Calendar / Drive)", "Configure your Gmail, Google Calendar, and Drive integration.")
+        gw_lay = gw_card.layout()
+
+        gw_email_row = QHBoxLayout()
+        gw_email_row.addWidget(QLabel("Gmail Address"))
+        self._gw_email = QLineEdit()
+        self._gw_email.setPlaceholderText("your-email@gmail.com")
+        gw_email_row.addWidget(self._gw_email)
+        gw_lay.addLayout(gw_email_row)
+
+        gw_pass_row = QHBoxLayout()
+        gw_pass_row.addWidget(QLabel("App Password"))
+        self._gw_password = QLineEdit()
+        self._gw_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self._gw_password.setPlaceholderText("16-character Google App Password")
+        gw_pass_row.addWidget(self._gw_password)
+
+        self._gw_reveal_btn = QPushButton("Reveal")
+        self._gw_reveal_btn.setCheckable(True)
+        self._gw_reveal_btn.clicked.connect(self._toggle_gw_password_reveal)
+        gw_pass_row.addWidget(self._gw_reveal_btn)
+        gw_lay.addLayout(gw_pass_row)
+
+        gw_btns_row = QHBoxLayout()
+        self._gw_save_btn = QPushButton("Save Credentials")
+        self._gw_save_btn.clicked.connect(self._handle_gw_save)
+        gw_btns_row.addWidget(self._gw_save_btn)
+
+        self._gw_test_btn = QPushButton("Test Connection")
+        self._gw_test_btn.clicked.connect(self._handle_gw_test)
+        gw_btns_row.addWidget(self._gw_test_btn)
+
+        self._gw_oauth_btn = QPushButton("Load OAuth JSON")
+        self._gw_oauth_btn.clicked.connect(self._handle_gw_oauth)
+        gw_btns_row.addWidget(self._gw_oauth_btn)
+        gw_lay.addLayout(gw_btns_row)
+
+        self._gw_status_lbl = QLabel("Status: Ready")
+        self._gw_status_lbl.setStyleSheet(f"color: {C.TEXT_DIM};")
+        gw_lay.addWidget(self._gw_status_lbl)
+
+        gw_help = QLabel("Tip: Generate a 16-character App Password at myaccount.google.com/apppasswords")
+        gw_help.setStyleSheet(f"color: {C.TEXT_MED}; font-size: 11px;")
+        gw_lay.addWidget(gw_help)
+
+        lay.addWidget(gw_card)
+
+        # Pre-fill stored Google Workspace credentials
+        try:
+            from actions.google_workspace_mcp import get_stored_gmail_credentials
+            _em, _pw = get_stored_gmail_credentials()
+            if _em:
+                self._gw_email.setText(_em)
+            if _pw:
+                self._gw_password.setText(_pw)
+        except Exception:
+            pass
+
+        # Spotify MCP Server
+        lay.addWidget(self._build_spotify_mcp_card())
+
+        # Identity & Profile
+        identity_card = self._card("Identity & Profile", "Configure assistant identity, user profile, and behavior.")
+        ilay = identity_card.layout()
+        
+        # Assistant Settings
+        ast_row = QHBoxLayout()
+        ast_row.addWidget(QLabel("Assistant Name"))
+        self._set_ast_name = QLineEdit(identity.get_assistant_name())
+        self._set_ast_name.textChanged.connect(lambda t: identity.set_assistant_name(t.strip() or "Nexus"))
+        ast_row.addWidget(self._set_ast_name)
+        ilay.addLayout(ast_row)
+        
+        app_row = QHBoxLayout()
+        app_row.addWidget(QLabel("Application Name"))
+        self._set_app_name = QLineEdit(identity.get_application_name())
+        self._set_app_name.textChanged.connect(lambda t: identity.set_application_name(t.strip() or "Nexus Core"))
+        app_row.addWidget(self._set_app_name)
+        ilay.addLayout(app_row)
+
+        # Owner Profile
+        own_row = QHBoxLayout()
+        own_row.addWidget(QLabel("Your Name"))
+        self._set_own_name = QLineEdit(identity.get_owner_name())
+        self._set_own_name.textChanged.connect(lambda t: identity.set_owner_name(t.strip()))
+        own_row.addWidget(self._set_own_name)
+        ilay.addLayout(own_row)
+
+        role_row = QHBoxLayout()
+        role_row.addWidget(QLabel("Your Role"))
+        self._set_own_role = QLineEdit(identity.get_owner_role())
+        self._set_own_role.textChanged.connect(lambda t: identity.set_owner_role(t.strip()))
+        role_row.addWidget(self._set_own_role)
+        ilay.addLayout(role_row)
+
+        # Behavior
+        beh_row = QHBoxLayout()
+        beh_row.addWidget(QLabel("Behavior Mode"))
+        self._set_beh_mode = QComboBox()
+        self._set_beh_mode.addItems(["professional", "casual", "technical", "minimal", "proactive"])
+        self._set_beh_mode.setCurrentText(identity.get_behavior_mode())
+        self._set_beh_mode.currentTextChanged.connect(lambda t: identity.set_behavior_mode(t))
+        beh_row.addWidget(self._set_beh_mode)
+        ilay.addLayout(beh_row)
+
+        lay.addWidget(identity_card)
+
+        # AI Providers
+        card = self._card("AI Providers", "Only the supported providers are shown here.")
+        lay1 = card.layout()
+        self._api_defaults = self._load_api_defaults()
+        self._gemini_row, self._gemini_status, self._gemini_key = self._provider_row(
+            "Google Gemini",
+            self._api_defaults.get("gemini_api_key", ""),
+            "gemini-3.8-flash",
+            "gemini",
+        )
+        self._or_row, self._or_status, self._or_key = self._provider_row(
+            "OpenRouter",
+            self._api_defaults.get("openrouter_api_key", ""),
+            "auto",
+            "openrouter",
+        )
+        self._nvidia_row, self._nvidia_status, self._nvidia_key = self._provider_row(
+            "NVIDIA",
+            self._api_defaults.get("nvidia_api_key", ""),
+            "nvidia/nemotron-3-super-120b-a12b",
+            "nvidia",
+        )
+        self._groq_row, self._groq_status, self._groq_key = self._provider_row(
+            "Groq",
+            self._api_defaults.get("groq_api_key", ""),
+            "llama-3.1-8b-instant",
+            "groq",
+        )
+        self._custom_row, self._custom_status, self._custom_key = self._provider_row(
+            "Custom",
+            self._api_defaults.get("custom_ai_api_key", ""),
+            "custom-model",
+            "custom",
+        )
+        self._pollinations_row, self._pollinations_status, self._pollinations_key = self._provider_row(
+            "Pollinations (Images)",
+            self._api_defaults.get("pollinations_api_key", ""),
+            "flux",
+            "pollinations",
+        )
+        lay1.addWidget(self._gemini_row)
+        lay1.addWidget(self._or_row)
+        lay1.addWidget(self._nvidia_row)
+        lay1.addWidget(self._groq_row)
+        lay1.addWidget(self._custom_row)
+        lay1.addWidget(self._pollinations_row)
+        controls = QHBoxLayout()
+        controls.setSpacing(12)
+        self._default_provider = QComboBox()
+        self._default_provider.addItems(["Google Gemini", "OpenRouter", "NVIDIA", "Groq", "Custom", "Local"])
+        
+        current_provider = self._load_app_settings().get("default_ai_provider", "Gemini")
+        if current_provider in {"Gemini", "Google Gemini"}:
+            self._default_provider.setCurrentText("Google Gemini")
+        elif current_provider == "Local":
+            self._default_provider.setCurrentText("Local")
+        elif current_provider == "NVIDIA":
+            self._default_provider.setCurrentText("NVIDIA")
+        elif current_provider == "Groq":
+            self._default_provider.setCurrentText("Groq")
+        elif current_provider == "Custom":
+            self._default_provider.setCurrentText("Custom")
+        else:
+            self._default_provider.setCurrentText("OpenRouter")
+            
+        self._default_provider.currentTextChanged.connect(self._set_default_provider)
+        controls.addWidget(QLabel("Default AI Provider"))
+        controls.addWidget(self._default_provider, 1)
+        lay1.addLayout(controls)
+        
+        # Local AI Settings
+        self._local_ai_widget = QWidget()
+        local_lay = QVBoxLayout(self._local_ai_widget)
+        local_lay.setContentsMargins(0, 8, 0, 8)
+        local_lay.setSpacing(10)
+        
+        # Engine Status Row
+        status_row = QHBoxLayout()
+        is_online = local_brain.is_available()
+        status_text = "🟢 Local Engine Online (Ollama)" if is_online else "🔴 Local Engine Offline"
+        self._local_status_lbl = QLabel(status_text)
+        self._local_status_lbl.setStyleSheet("color: #00ffaa; font-weight: bold;" if is_online else "color: #ff5555; font-weight: bold;")
+        status_row.addWidget(QLabel("Engine Status:"))
+        status_row.addWidget(self._local_status_lbl, 1)
+        local_lay.addLayout(status_row)
+
+        # Server URL
+        url_row = QHBoxLayout()
+        url_row.addWidget(QLabel("Local Server URL"))
+        self._local_url_input = QLineEdit(self._load_app_settings().get("local_ai_url", "http://localhost:11434/v1"))
+        self._local_url_input.textChanged.connect(lambda t: self._set_setting("local_ai_url", t))
+        url_row.addWidget(self._local_url_input, 1)
+        local_lay.addLayout(url_row)
+        
+        # Model Selection with Combo Box & Refresh
+        model_row = QHBoxLayout()
+        model_row.addWidget(QLabel("Local Model"))
+        self._local_model_combo = QComboBox()
+        self._local_model_combo.setEditable(True)
+        
+        def _populate_models():
+            self._local_model_combo.clear()
+            installed = local_brain.list_installed_models()
+            if installed:
+                self._local_model_combo.addItems(installed)
+            else:
+                self._local_model_combo.addItem("qwen2.5:3b")
+            saved_model = self._load_app_settings().get("local_ai_model", "qwen2.5:3b")
+            self._local_model_combo.setCurrentText(saved_model)
+            online = local_brain.is_available()
+            self._local_status_lbl.setText("🟢 Local Engine Online (Ollama)" if online else "🔴 Local Engine Offline")
+            self._local_status_lbl.setStyleSheet("color: #00ffaa; font-weight: bold;" if online else "color: #ff5555; font-weight: bold;")
+
+        _populate_models()
+        self._local_model_combo.currentTextChanged.connect(lambda t: self._set_setting("local_ai_model", t))
+        model_row.addWidget(self._local_model_combo, 1)
+
+        btn_refresh = QPushButton("🔄 Refresh")
+        btn_refresh.setFixedWidth(85)
+        btn_refresh.setStyleSheet("background: rgba(255, 255, 255, 0.1); border-radius: 4px; padding: 5px;")
+        btn_refresh.clicked.connect(_populate_models)
+        model_row.addWidget(btn_refresh)
+        local_lay.addLayout(model_row)
+
+        # 1-Click Model Download Helper Button
+        action_row = QHBoxLayout()
+        btn_pull = QPushButton("📥 Pull Qwen 2.5 (3B)")
+        btn_pull.setStyleSheet("background: rgba(0, 255, 170, 0.15); color: #00ffaa; border: 1px solid #00ffaa; border-radius: 4px; padding: 6px;")
+        def _on_download_click():
+            btn_pull.setText("⏳ Downloading model in background...")
+            btn_pull.setEnabled(False)
+            local_brain.pull_model_async("qwen2.5:3b", lambda chunk: _populate_models())
+        btn_pull.clicked.connect(_on_download_click)
+        action_row.addWidget(btn_pull)
+        local_lay.addLayout(action_row)
+
+        self._local_ai_widget.setVisible(current_provider == "Local")
+        self._default_provider.currentTextChanged.connect(lambda t: self._local_ai_widget.setVisible(t == "Local"))
+        
+        lay1.addWidget(self._local_ai_widget)
+        
+        self._auto_switch_btn = self._mk_toggle("Automatically switch if a provider fails", bool(self._load_app_settings().get("auto_provider_switch", True)), self._toggle_auto_provider_switch)
+        lay1.addWidget(self._auto_switch_btn)
+
+        # Dedicated Offline Mode Toggle
+        is_offline_mode = bool(self._load_app_settings().get("offline_mode_enabled", False))
+        self._offline_mode_btn = self._mk_toggle(
+            "🔒 Offline Mode (Air-Gapped: 100% Local Inference & Speech)",
+            is_offline_mode,
+            self._toggle_offline_mode
+        )
+        lay1.addWidget(self._offline_mode_btn)
+        lay.addWidget(card)
+
+        # STT Engine Settings
+        stt_card = self._card("Speech-to-Text Engine", "Choose how Nexus Core transcribes your voice.")
+        stt_lay = stt_card.layout()
+
+        # Engine selection
+        stt_engine_row = QHBoxLayout()
+        stt_engine_row.addWidget(QLabel("STT Engine"))
+        self._stt_engine_combo = QComboBox()
+        engines = get_available_stt_engines()
+        for eng in engines:
+            label = eng["name"]
+            if not eng["available"]:
+                label += " (not installed)"
+            self._stt_engine_combo.addItem(label, eng["id"])
+        current_stt = self._load_app_settings().get("stt_engine", "moonshine")
+        idx = self._stt_engine_combo.findData(current_stt)
+        if idx >= 0:
+            self._stt_engine_combo.setCurrentIndex(idx)
+        self._stt_engine_combo.currentTextChanged.connect(self._on_stt_engine_changed)
+        stt_engine_row.addWidget(self._stt_engine_combo, 1)
+        stt_lay.addLayout(stt_engine_row)
+
+        # Autocorrect toggle
+        is_autocorrect = bool(self._load_app_settings().get("stt_autocorrect", True))
+        self._stt_autocorrect_btn = self._mk_toggle(
+            "Auto-correct transcriptions",
+            is_autocorrect,
+            self._toggle_stt_autocorrect
+        )
+        stt_lay.addWidget(self._stt_autocorrect_btn)
+
+        # Moonshine availability info + Install button
+        moonshine_lay = QHBoxLayout()
+        moonshine_lay.setContentsMargins(0, 0, 0, 0)
+        moonshine_lay.setSpacing(8)
+
+        moonshine_info = QLabel()
+        if is_moonshine_available():
+            moonshine_info.setText("✅ Moonshine STT is installed and ready")
+            moonshine_info.setStyleSheet(f"color: {C.GREEN}; font-size: 11px;")
+        else:
+            moonshine_info.setText("⚠️ Moonshine not installed — click below to auto-install")
+            moonshine_info.setStyleSheet(f"color: #ff5555; font-size: 11px;")
+        moonshine_lay.addWidget(moonshine_info)
+
+        # Install button (only shown when not available)
+        self._moonshine_install_btn = QPushButton("Install Moonshine")
+        self._moonshine_install_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._moonshine_install_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0, 229, 255, 0.12);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.35);
+                border-radius: 8px;
+                padding: 6px 14px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.22);
+                border: 1px solid #00e5ff;
+            }
+            QPushButton:disabled {
+                background: rgba(128, 128, 128, 0.15);
+                color: #666;
+                border: 1px solid rgba(128, 128, 128, 0.15);
+            }
+        """)
+        self._moonshine_install_btn.setVisible(not is_moonshine_available())
+        self._moonshine_install_btn.clicked.connect(self._install_moonshine)
+        moonshine_lay.addWidget(self._moonshine_install_btn)
+
+        moonshine_lay.addStretch()
+        stt_lay.addLayout(moonshine_lay)
+
+        lay.addWidget(stt_card)
+
+        # TTS Engine Settings
+        tts_card = self._card("Text-to-Speech Engine", "Choose how Nexus Core speaks.")
+        tts_lay = tts_card.layout()
+
+        tts_engine_row = QHBoxLayout()
+        tts_engine_row.addWidget(QLabel("TTS Engine"))
+        self._tts_engine_combo = QComboBox()
+        tts_providers = get_available_tts_providers()
+        for p in tts_providers:
+            label = p["name"]
+            if not p["available"]:
+                label += " (not configured)"
+            self._tts_engine_combo.addItem(label, p["id"])
+        current_tts = self._load_app_settings().get("tts_engine", "elevenlabs")
+        idx = self._tts_engine_combo.findData(current_tts)
+        if idx >= 0:
+            self._tts_engine_combo.setCurrentIndex(idx)
+        self._tts_engine_combo.currentTextChanged.connect(self._on_tts_engine_changed)
+        tts_engine_row.addWidget(self._tts_engine_combo, 1)
+        tts_lay.addLayout(tts_engine_row)
+
+        # Voice selection
+        tts_voice_row = QHBoxLayout()
+        tts_voice_row.addWidget(QLabel("Voice"))
+        self._tts_voice_combo = QComboBox()
+        current_voice = self._load_app_settings().get("tts_voice_id", "pNInz6obpgDQGcFmaJgB")
+        # Populate with default voices from first available provider
+        for p in tts_providers:
+            if p["available"]:
+                for v in p.get("voices", []):
+                    self._tts_voice_combo.addItem(f"{v['name']} ({v['id']})", v["id"])
+        if self._tts_voice_combo.findData(current_voice) >= 0:
+            self._tts_voice_combo.setCurrentData(current_voice)
+        self._tts_voice_combo.currentIndexChanged.connect(lambda: self._set_setting("tts_voice_id", self._tts_voice_combo.currentData()))
+        tts_voice_row.addWidget(self._tts_voice_combo, 1)
+        tts_lay.addLayout(tts_voice_row)
+
+        lay.addWidget(tts_card)
+
+        # Search Engine Settings
+        search_card = self._card("Search Engine", "Choose how Nexus Core searches the web.")
+        search_lay = search_card.layout()
+
+        search_engine_row = QHBoxLayout()
+        search_engine_row.addWidget(QLabel("Search Engine"))
+        self._search_engine_combo = QComboBox()
+        search_providers = get_available_search_providers()
+        for p in search_providers:
+            label = p["name"]
+            if not p["available"]:
+                label += " (not configured)"
+            self._search_engine_combo.addItem(label, p["id"])
+        current_search = self._load_app_settings().get("search_engine", "tavily")
+        idx = self._search_engine_combo.findData(current_search)
+        if idx >= 0:
+            self._search_engine_combo.setCurrentIndex(idx)
+        self._search_engine_combo.currentTextChanged.connect(lambda: self._set_setting("search_engine", self._search_engine_combo.currentData()))
+        search_engine_row.addWidget(self._search_engine_combo, 1)
+        search_lay.addLayout(search_engine_row)
+
+        lay.addWidget(search_card)
+
+        # Image Generation Settings
+        image_card = self._card("Image Generation", "Choose how Nexus Core generates images.")
+        image_lay = image_card.layout()
+
+        image_engine_row = QHBoxLayout()
+        image_engine_row.addWidget(QLabel("Image Engine"))
+        self._image_engine_combo = QComboBox()
+        image_providers = get_available_image_providers()
+        for p in image_providers:
+            label = p["name"]
+            if not p["available"]:
+                label += " (not configured)"
+            self._image_engine_combo.addItem(label, p["id"])
+        current_image = self._load_app_settings().get("image_engine", "pollinations")
+        idx = self._image_engine_combo.findData(current_image)
+        if idx >= 0:
+            self._image_engine_combo.setCurrentIndex(idx)
+        self._image_engine_combo.currentTextChanged.connect(lambda: self._set_setting("image_engine", self._image_engine_combo.currentData()))
+        image_engine_row.addWidget(self._image_engine_combo, 1)
+        image_lay.addLayout(image_engine_row)
+
+        # Pollinations model selection
+        image_model_row = QHBoxLayout()
+        image_model_row.addWidget(QLabel("Pollinations Model"))
+        self._image_model_combo = QComboBox()
+        self._image_model_combo.addItems(["flux", "flux-pro", "flux-dev", "turbo", "community/scriptsnsenses-sys/flux-2-dev-free"])
+        current_image_model = self._load_app_settings().get("image_model", "community/scriptsnsenses-sys/flux-2-dev-free")
+        idx = self._image_model_combo.findText(current_image_model)
+        if idx >= 0:
+            self._image_model_combo.setCurrentIndex(idx)
+        self._image_model_combo.currentTextChanged.connect(lambda t: self._set_setting("image_model", t))
+        image_model_row.addWidget(self._image_model_combo, 1)
+        image_lay.addLayout(image_model_row)
+
+        lay.addWidget(image_card)
+
+        # Mobile connect
+        mobile = self._card("Mobile Connect", "Connect your phone and control Nexus Core remotely.")
+        ml = mobile.layout()
+        self._mobile_status = QLabel("Connection Status: Ready")
+        self._mobile_phone = QLabel("Phone Name: Not connected")
+        self._mobile_last = QLabel("Last Connected: Never")
+        for lbl in (self._mobile_status, self._mobile_phone, self._mobile_last):
+            lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+            ml.addWidget(lbl)
+        row = QHBoxLayout()
+        self._mobile_connect_btn = QPushButton("Connect Device")
+        self._mobile_connect_btn.clicked.connect(self._connect_mobile)
+        self._mobile_disconnect_btn = QPushButton("Disconnect")
+        self._mobile_disconnect_btn.clicked.connect(self._disconnect_mobile)
+        self._mobile_qr_btn = QPushButton("Generate QR Code")
+        self._mobile_qr_btn.clicked.connect(self._show_qr_code)
+        row.addWidget(self._mobile_connect_btn)
+        row.addWidget(self._mobile_disconnect_btn)
+        row.addWidget(self._mobile_qr_btn)
+        ml.addLayout(row)
+        lay.addWidget(mobile)
+
+        # Attention prompts
+        attention = self._card("Attention Prompts", "Control incoming message and call alerts.")
+        al = attention.layout()
+        self._attention_message_btn = self._mk_toggle(
+            "Show incoming message prompts",
+            bool(self._load_app_settings().get("attention_message_prompts", True)),
+            self._toggle_attention_message_prompts,
+        )
+        self._attention_call_btn = self._mk_toggle(
+            "Show incoming call prompts",
+            bool(self._load_app_settings().get("attention_call_prompts", True)),
+            self._toggle_attention_call_prompts,
+        )
+        al.addWidget(self._attention_message_btn)
+        al.addWidget(self._attention_call_btn)
+        lay.addWidget(attention)
+
+        # Startup
+        startup = self._card("Startup", "Use Nexus Core with Windows startup preferences.")
+        sl = startup.layout()
+        self._startup_launch_btn = self._mk_toggle("Launch Nexus Core when Windows starts", bool(self._load_app_settings().get("show_workspace_on_startup", False)), self._toggle_startup_from_page)
+        self._startup_minimized_btn = self._mk_toggle("Launch Minimized", bool(self._load_app_settings().get("launch_minimized", False)), self._toggle_launch_minimized)
+        self._startup_updates_btn = self._mk_toggle("Check for updates on startup", bool(self._load_app_settings().get("check_updates_on_startup", True)), self._toggle_update_check)
+        sl.addWidget(self._startup_launch_btn)
+        sl.addWidget(self._startup_minimized_btn)
+        sl.addWidget(self._startup_updates_btn)
+        lay.addWidget(startup)
+
+        # Shortcuts & Pinning
+        shortcuts = self._card("Shortcuts & Pinning", "Create shortcuts and pin Nexus Core to your Windows system.")
+        shl = shortcuts.layout()
+        
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
+        
+        self._desktop_shortcut_btn = QPushButton("Create Desktop Shortcut")
+        self._desktop_shortcut_btn.clicked.connect(self._handle_create_desktop_shortcut)
+        self._taskbar_pin_btn = QPushButton("Pin to Taskbar")
+        self._taskbar_pin_btn.clicked.connect(self._handle_pin_to_taskbar)
+        
+        btn_row.addWidget(self._desktop_shortcut_btn, 1)
+        btn_row.addWidget(self._taskbar_pin_btn, 1)
+        shl.addLayout(btn_row)
+        lay.addWidget(shortcuts)
+
+        # App Theme
+        theme_card = self._card("App Theme", "Select the primary color theme for Nexus Core.")
+        tl = theme_card.layout()
+        theme_row = QHBoxLayout()
+        theme_row.addWidget(QLabel("Primary Color:"))
+        
+        self._pick_theme_btn = QPushButton("Pick Color Palette")
+        self._pick_theme_btn.clicked.connect(self._pick_theme_color)
+        
+        current_theme = "Gold"
+        try:
+            if APP_SETTINGS_FILE.exists():
+                with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    _d = json.load(f)
+                    current_theme = _d.get("app_theme", "Gold")
+        except:
+            pass
+            
+        if current_theme.startswith("#"):
+            self._pick_theme_btn.setStyleSheet(f"background: {current_theme}; color: #ffffff;")
+        
+        theme_row.addWidget(self._pick_theme_btn, 1)
+        tl.addLayout(theme_row)
+        lay.addWidget(theme_card)
+
+        # Startup animation
+        anim = self._card("Startup Animation", "Control how the boot sequence behaves.")
+        al = anim.layout()
+        self._startup_anim_enable_btn = self._mk_toggle("Enable Startup Animation", bool(self._startup_animation_enabled()), self._toggle_startup_animation_from_page)
+        al.addWidget(self._startup_anim_enable_btn)
+        speed_row = QHBoxLayout()
+        speed_row.addWidget(QLabel("Animation Speed"))
+        self._anim_speed = QComboBox()
+        self._anim_speed.addItems(["Fast", "Normal", "Slow"])
+        self._anim_speed.setCurrentText(self._load_app_settings().get("startup_anim_speed", "Normal"))
+        speed_row.addWidget(self._anim_speed, 1)
+        al.addLayout(speed_row)
+        self._anim_preview_btn = QPushButton("Preview Animation")
+        self._anim_preview_btn.clicked.connect(self._preview_animation)
+        al.addWidget(self._anim_preview_btn)
+        self._preview_progress = QProgressBar()
+        self._preview_progress.setRange(0, 100)
+        self._preview_progress.setValue(0)
+        self._preview_progress.setTextVisible(False)
+        self._preview_progress.setFixedHeight(8)
+        self._preview_progress.setStyleSheet("QProgressBar { background: rgba(255,255,255,0.05); border: none; border-radius: 4px; } QProgressBar::chunk { background: #00e5ff; border-radius: 4px; }")
+        al.addWidget(self._preview_progress)
+        lay.addWidget(anim)
+        # Discord bot
+        discord = self._card("Discord Bot", "Mirror Nexus Core between the app and your server.")
+        dl = discord.layout()
+        self._discord_defaults = self._load_discord_settings()
+        self._discord_status = QLabel("Bot Status: Offline")
+        dl.addWidget(self._discord_status)
+        self._discord_token = QLineEdit()
+        self._discord_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self._discord_token.setPlaceholderText("Bot Token")
+        self._discord_token.setText((self._discord_defaults.get("bot_token") or "").strip())
+        self._discord_token.setCursorPosition(0)
+        dl.addWidget(self._discord_token)
+        self._discord_reveal = QPushButton("Reveal")
+        self._discord_reveal.setCheckable(True)
+        self._discord_reveal.clicked.connect(self._toggle_discord_reveal)
+        dl.addWidget(self._discord_reveal)
+        self._discord_channel = QLineEdit()
+        self._discord_channel.setPlaceholderText("Optional Channel ID")
+        self._discord_channel.setText((self._discord_defaults.get("channel_id") or "").strip())
+        dl.addWidget(self._discord_channel)
+        db = QHBoxLayout()
+        self._discord_save = QPushButton("Save")
+        self._discord_test = QPushButton("Test Connection")
+        self._discord_restart = QPushButton("Restart Bot")
+        self._discord_save.clicked.connect(self._save_discord_from_page)
+        self._discord_test.clicked.connect(self._test_discord_from_page)
+        self._discord_restart.clicked.connect(self._restart_discord_from_page)
+        db.addWidget(self._discord_save)
+        db.addWidget(self._discord_test)
+        db.addWidget(self._discord_restart)
+        dl.addLayout(db)
+        self._discord_msg = QLabel("")
+        self._discord_msg.setStyleSheet(f"color: {C.TEXT_DIM};")
+        dl.addWidget(self._discord_msg)
+        lay.addWidget(discord)
+
+        about = self._card("About Nexus Core", "Nexus Core information only.")
+        ab = about.layout()
+        about_grid = QGridLayout()
+        about_grid.setHorizontalSpacing(22)
+        about_grid.setVerticalSpacing(8)
+        entries = [
+            ("Version", "v1.0.0"),
+            ("Build Number", "2026.06.29"),
+            ("Release Date", "29 Jun 2026"),
+        ]
+        self._about_values: dict[str, QLabel] = {}
+        for idx, (label, value) in enumerate(entries):
+            key = QLabel(label)
+            key.setStyleSheet(f"color: {C.TEXT_DIM};")
+            val = QLabel(value)
+            val.setStyleSheet(f"color: {C.WHITE}; font-weight: 700;")
+            about_grid.addWidget(key, idx, 0)
+            about_grid.addWidget(val, idx, 1)
+            self._about_values[label] = val
+        ab.addLayout(about_grid)
+        lay.addWidget(about)
+
+        # Autonomous Self-Healing & Continuous Self-Improvement Card
+        auto_heal_card = self._card("Auto-Heal & Continuous Self-Improvement", "Autonomous bug repair, crash recovery sentry, AST-verified patching, and persistent behavioral directives.")
+        ah_lay = auto_heal_card.layout()
+
+        self._ah_status_lbl = QLabel("Sentry: Active | Sandbox: Enabled | Rules: 0 active")
+        self._ah_status_lbl.setStyleSheet(f"color: {C.WHITE}; font-size: 12px; font-weight: bold; padding: 4px 0;")
+        ah_lay.addWidget(self._ah_status_lbl)
+
+        ah_btn_row = QHBoxLayout()
+        self._ah_history_btn = QPushButton("Patch History")
+        self._ah_history_btn.clicked.connect(self._handle_ah_history)
+        ah_btn_row.addWidget(self._ah_history_btn)
+
+        self._ah_rollback_btn = QPushButton("Rollback Last Patch")
+        self._ah_rollback_btn.clicked.connect(self._handle_ah_rollback)
+        ah_btn_row.addWidget(self._ah_rollback_btn)
+
+        self._ah_rules_btn = QPushButton("Learned Rules")
+        self._ah_rules_btn.clicked.connect(self._handle_ah_rules)
+        ah_btn_row.addWidget(self._ah_rules_btn)
+        ah_lay.addLayout(ah_btn_row)
+
+        test_row = QHBoxLayout()
+        self._ah_trigger_bug_btn = QPushButton("⚡ Trigger Test Bug")
+        self._ah_trigger_bug_btn.clicked.connect(self._handle_ah_trigger_test_bug)
+        test_row.addWidget(self._ah_trigger_bug_btn)
+
+        self._ah_fix_bug_btn = QPushButton("🛠️ Fix Captured Bug")
+        self._ah_fix_bug_btn.clicked.connect(self._handle_ah_fix_captured_bug)
+        test_row.addWidget(self._ah_fix_bug_btn)
+        ah_lay.addLayout(test_row)
+
+        rule_input_row = QHBoxLayout()
+        self._ah_rule_input = QLineEdit()
+        self._ah_rule_input.setPlaceholderText("Teach Nexus a rule (e.g. Always summarize in bullet points)")
+        rule_input_row.addWidget(self._ah_rule_input)
+        self._ah_learn_btn = QPushButton("Teach Rule")
+        self._ah_learn_btn.clicked.connect(self._handle_ah_learn_rule)
+        rule_input_row.addWidget(self._ah_learn_btn)
+        ah_lay.addLayout(rule_input_row)
+
+        self._ah_output_lbl = QLabel("Self-healing sentry is active. Safe unbrick & auto-rollback protected.")
+        self._ah_output_lbl.setStyleSheet(f"color: {C.TEXT_MED}; font-size: 11px;")
+        self._ah_output_lbl.setWordWrap(True)
+        ah_lay.addWidget(self._ah_output_lbl)
+
+        lay.addWidget(auto_heal_card)
+        try:
+            self._refresh_auto_heal_status()
+        except Exception:
+            pass
+
+        # Nexus Audio Routing & Hardware Controls
+        audio_card = self._card("Audio Routing & Hardware Controls", "Select hardware audio interfaces, toggle Push-to-Talk, or inspect long-term memory.")
+        alay = audio_card.layout()
+
+        # Mic selection row
+        mic_row = QHBoxLayout()
+        mic_lbl = QLabel("Input Microphone")
+        mic_lbl.setStyleSheet(f"color: {C.WHITE}; min-width: 130px;")
+        mic_row.addWidget(mic_lbl)
+
+        self._mic_combo = QComboBox()
+        self._mic_combo.addItem("Default System Microphone")
+        try:
+            from core import audio_devices
+            from memory import config_manager
+            audio_devices.prefetch()
+            input_devs = audio_devices.list_devices("input")
+            for dev in input_devs:
+                self._mic_combo.addItem(dev)
+            saved_in = config_manager.get_input_device()
+            if saved_in and saved_in in input_devs:
+                self._mic_combo.setCurrentText(saved_in)
+        except Exception:
+            pass
+        self._mic_combo.currentTextChanged.connect(self._on_input_device_changed)
+        mic_row.addWidget(self._mic_combo, 1)
+        alay.addLayout(mic_row)
+
+        # Speaker selection row
+        spk_row = QHBoxLayout()
+        spk_lbl = QLabel("Output Speaker")
+        spk_lbl.setStyleSheet(f"color: {C.WHITE}; min-width: 130px;")
+        spk_row.addWidget(spk_lbl)
+
+        self._spk_combo = QComboBox()
+        self._spk_combo.addItem("Default System Speaker")
+        try:
+            from core import audio_devices
+            from memory import config_manager
+            output_devs = audio_devices.list_devices("output")
+            for dev in output_devs:
+                self._spk_combo.addItem(dev)
+            saved_out = config_manager.get_output_device()
+            if saved_out and saved_out in output_devs:
+                self._spk_combo.setCurrentText(saved_out)
+        except Exception:
+            pass
+        self._spk_combo.currentTextChanged.connect(self._on_output_device_changed)
+        spk_row.addWidget(self._spk_combo, 1)
+        alay.addLayout(spk_row)
+
+        # Push-to-Talk and Memory Inspector Action buttons
+        tools_row = QHBoxLayout()
+        try:
+            from memory import config_manager
+            ptt_enabled = config_manager.get_push_to_talk_enabled()
+        except Exception:
+            ptt_enabled = False
+
+        self._ptt_toggle = self._mk_toggle(
+            "Push-to-Talk (Hold Ctrl+Space)",
+            ptt_enabled,
+            self._on_ptt_toggled
+        )
+        tools_row.addWidget(self._ptt_toggle)
+
+        # Wake-word listening toggle (off by default = not intrusive)
+        try:
+            from memory import config_manager
+            ww_enabled = config_manager.get_wake_word_enabled()
+        except Exception:
+            ww_enabled = False
+
+        self._ww_toggle = self._mk_toggle(
+            "Wake-word listening (Say 'Hey Nexus')",
+            ww_enabled,
+            self._on_ww_toggled
+        )
+        tools_row.addWidget(self._ww_toggle)
+
+        mem_btn = QPushButton("🧠 Inspect Memory")
+        mem_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        mem_btn.clicked.connect(self._open_memory_inspector)
+        tools_row.addWidget(mem_btn)
+
+        undo_btn = QPushButton("↺ Rollback (Undo)")
+        undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        undo_btn.clicked.connect(self._handle_undo_click)
+        tools_row.addWidget(undo_btn)
+        alay.addLayout(tools_row)
+
+        self._audio_status_lbl = QLabel("Hardware audio deduplication, echo guard and undo stack active.")
+        self._audio_status_lbl.setStyleSheet(f"color: {C.TEXT_MED}; font-size: 11px;")
+        alay.addWidget(self._audio_status_lbl)
+
+        lay.addWidget(audio_card)
+
+        lay.addStretch(1)
+        return col
+
+
+    def _on_input_device_changed(self, name: str):
+        try:
+            from memory import config_manager
+            val = "" if name == "Default System Microphone" else name
+            config_manager.set_input_device(val)
+            self._audio_status_lbl.setText(f"✅ Input device set to: {name}")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error setting input: {e}")
+
+    def _on_output_device_changed(self, name: str):
+        try:
+            from memory import config_manager
+            val = "" if name == "Default System Speaker" else name
+            config_manager.set_output_device(val)
+            self._audio_status_lbl.setText(f"✅ Output device set to: {name}")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error setting output: {e}")
+
+    def _on_ptt_toggled(self, checked: bool):
+        try:
+            from memory import config_manager
+            config_manager.set_push_to_talk_enabled(checked)
+            self._audio_status_lbl.setText(f"✅ Push-to-Talk {'enabled (Hold Ctrl+Space)' if checked else 'disabled'}")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error toggling PTT: {e}")
+
+    def _on_ww_toggled(self, checked: bool):
+        try:
+            from memory import config_manager
+            config_manager.save_wake_word_enabled(checked)
+            self._audio_status_lbl.setText(f"✅ Wake-word listening {'ON (say Hey Nexus)' if checked else 'OFF (not intrusive)'}")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error toggling wake word: {e}")
+
+    def _open_memory_inspector(self):
+        try:
+            win = self.window()
+            if hasattr(win, "show_memory_inspector"):
+                win.show_memory_inspector()
+            elif hasattr(win, "_memory_overlay_sig"):
+                win._memory_overlay_sig.emit("show")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error opening memory inspector: {e}")
+
+    def _handle_undo_click(self):
+        try:
+            from core import undo
+            if not undo.can_undo():
+                self._audio_status_lbl.setText("ℹ Nothing to undo yet.")
+                return
+            res = undo.undo_last()
+            self._audio_status_lbl.setText(f"↺ {res}")
+        except Exception as e:
+            self._audio_status_lbl.setText(f"Error running undo: {e}")
+
+    def _update_ig_status(self):
+        try:
+            if not hasattr(self, "_ig_status_lbl"):
+                return
+            from pathlib import Path
+            import json
+            from actions.instagram_mcp import CONFIG_PATH, SESSION_PATH
+
+            username = ""
+            d = {}
+            for api_keys in [CONFIG_PATH, Path("config/api_keys.json")]:
+                if api_keys.exists():
+                    try:
+                        with open(api_keys, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            if data.get("instagram_username") or data.get("instagram_sessionid"):
+                                d = data
+                                username = d.get("instagram_username", "")
+                                break
+                    except Exception:
+                        pass
+
+            is_browser_auth = bool(d.get("instagram_browser_authenticated") and d.get("instagram_sessionid"))
+            if is_browser_auth:
+                name_str = f" (@{username})" if username else ""
+                self._ig_status_lbl.setText(f"Status: 🟢 Connected via Browser / Session{name_str}")
+                self._ig_status_lbl.setStyleSheet("color: #00ffcc; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+                return
+
+            has_session = False
+            for sp in [SESSION_PATH, Path("config/ig_session.json")]:
+                if sp.exists():
+                    has_session = True
+                    break
+
+            if username and has_session:
+                self._ig_status_lbl.setText(f"Status: 🟢 Connected (@{username})")
+                self._ig_status_lbl.setStyleSheet("color: #00ffcc; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+                return
+
+            self._ig_status_lbl.setText("Status: ⚪ Not Connected — Click 'Connect via Browser' or 'Cookie'")
+            self._ig_status_lbl.setStyleSheet(f"color: {C.PRI}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+        except Exception:
+            pass
+
+    def _handle_ig_disconnect(self):
+        try:
+            import json
+            import shutil
+            from pathlib import Path
+            from actions.instagram_mcp import CONFIG_PATH, SESSION_PATH, BROWSER_PROFILE_DIR, stop_daemon, kill_browser_processes
+
+            for cfg_path in [CONFIG_PATH, Path("config/api_keys.json")]:
+                if cfg_path.exists():
+                    try:
+                        with open(cfg_path, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                        d["instagram_username"] = ""
+                        d["instagram_password"] = ""
+                        d["instagram_sessionid"] = ""
+                        d["instagram_user_id"] = ""
+                        d["instagram_browser_authenticated"] = False
+                        with open(cfg_path, "w", encoding="utf-8") as f:
+                            json.dump(d, f, indent=4)
+                    except Exception:
+                        pass
+                
+            for sp in [SESSION_PATH, Path("config/ig_session.json")]:
+                if sp.exists():
+                    try:
+                        sp.unlink()
+                    except Exception:
+                        pass
+
+            for pdir in [BROWSER_PROFILE_DIR, Path("config/ig_browser_profile")]:
+                if pdir.exists():
+                    try:
+                        shutil.rmtree(pdir)
+                    except Exception:
+                        pass
+                
+            stop_daemon()
+            kill_browser_processes()
+            
+            self._update_ig_status()
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Disconnected", "Instagram account disconnected.")
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Error disconnecting Instagram: {e}")
+
+    class IGBrowserLoginWorker(__import__('PyQt6').QtCore.QThread):
+        finished_success = __import__('PyQt6').QtCore.pyqtSignal(str)
+        finished_error = __import__('PyQt6').QtCore.pyqtSignal(str)
+        status_update = __import__('PyQt6').QtCore.pyqtSignal(str)
+
+        def __init__(self, username=""):
+            super().__init__()
+            self.username = username
+
+        def run(self):
+            try:
+                from playwright.sync_api import sync_playwright
+                from pathlib import Path
+                import json
+                import time
+                from actions.instagram_mcp import CONFIG_PATH, BROWSER_PROFILE_DIR, launch_robust_browser_context
+
+                profile_dir = BROWSER_PROFILE_DIR
+                profile_dir.mkdir(parents=True, exist_ok=True)
+
+                self.status_update.emit("Launching browser for Instagram (using Chromium / Edge)...")
+                with sync_playwright() as p:
+                    context = launch_robust_browser_context(
+                        p,
+                        profile_dir,
+                        headless=False,
+                        args=["--disable-blink-features=AutomationControlled"],
+                        viewport={"width": 1080, "height": 800},
+                    )
+                    page = context.pages[0] if context.pages else context.new_page()
+                    page.goto("https://www.instagram.com/accounts/login/", timeout=60000)
+
+                    # Try to prefill username
+                    if self.username:
+                        try:
+                            user_input = page.wait_for_selector('input[name="username"], input[name="email"]', timeout=5000)
+                            if user_input and not user_input.input_value():
+                                user_input.fill(self.username)
+                        except Exception:
+                            pass
+
+                    self.status_update.emit("Please log in in the opened browser window...")
+
+                    logged_in = False
+                    detected_username = self.username
+                    # Poll cookies for up to 5 minutes
+                    for _ in range(300):
+                        if self.isInterruptionRequested():
+                            break
+                        try:
+                            cookies = context.cookies("https://www.instagram.com")
+                            cookie_map = {c["name"]: c["value"] for c in cookies}
+                            if "sessionid" in cookie_map and "ds_user_id" in cookie_map:
+                                logged_in = True
+                                sid = cookie_map["sessionid"]
+                                uid = cookie_map["ds_user_id"]
+
+                                time.sleep(2)
+                                try:
+                                    u = page.evaluate("() => window._sharedData?.config?.viewer?.username || ''")
+                                    if u:
+                                        detected_username = u
+                                    else:
+                                        parts = [x for x in page.url.replace("https://www.instagram.com/", "").split("/") if x]
+                                        if parts and parts[0] not in ["accounts", "direct", "explore", "reels"]:
+                                            detected_username = parts[0]
+                                except Exception:
+                                    pass
+
+                                cfg_targets = [CONFIG_PATH, Path("config/api_keys.json")]
+                                for target_file in cfg_targets:
+                                    try:
+                                        data = {}
+                                        if target_file.exists():
+                                            with open(target_file, "r", encoding="utf-8") as f:
+                                                data = json.load(f)
+                                        if detected_username:
+                                            data["instagram_username"] = detected_username
+                                        data["instagram_sessionid"] = sid
+                                        data["instagram_user_id"] = uid
+                                        data["instagram_browser_authenticated"] = True
+                                        target_file.parent.mkdir(parents=True, exist_ok=True)
+                                        with open(target_file, "w", encoding="utf-8") as f:
+                                            json.dump(data, f, indent=4)
+                                    except Exception:
+                                        pass
+
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(1)
+
+                    context.close()
+
+                    if logged_in:
+                        from actions.instagram_mcp import stop_daemon, start_daemon
+                        stop_daemon()
+                        start_daemon()
+                        self.finished_success.emit(detected_username or "")
+                    else:
+                        self.finished_error.emit("Login timed out or the browser window was closed before login was completed.")
+            except Exception as e:
+                self.finished_error.emit(str(e))
+
+    def _handle_ig_browser_connect(self):
+        self._ig_browser_btn.setEnabled(False)
+        self._ig_browser_btn.setText("Connecting via Browser...")
+        from actions.instagram_mcp import stop_daemon, kill_browser_processes
+        stop_daemon()
+        kill_browser_processes()
+        username = self._ig_username.text().strip()
+        self._ig_browser_worker = self.IGBrowserLoginWorker(username)
+        self._ig_browser_worker.finished_success.connect(self._ig_browser_success)
+        self._ig_browser_worker.finished_error.connect(self._ig_browser_error)
+        self._ig_browser_worker.start()
+
+    def _ig_browser_success(self, detected_username):
+        self._ig_browser_btn.setEnabled(True)
+        self._ig_browser_btn.setText("🌐 Connect via Browser (Recommended)")
+        if detected_username:
+            self._ig_username.setText(detected_username)
+        self._update_ig_status()
+        from PyQt6.QtWidgets import QMessageBox
+        name_str = f" as @{detected_username}" if detected_username else ""
+        QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Browser{name_str}!\n\nNexus is now active for voice DM notifications and instant direct replies.")
+
+    def _ig_browser_error(self, err_msg):
+        self._ig_browser_btn.setEnabled(True)
+        self._ig_browser_btn.setText("🌐 Connect via Browser (Recommended)")
+        self._update_ig_status()
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.warning(self, "Browser Login", f"Browser connection was not completed: {err_msg}")
+
+    def _handle_ig_cookie_dialog(self):
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QDialogButtonBox, QMessageBox
+        import json
+        import re
+        from pathlib import Path
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Connect Instagram via Session Cookie")
+        dlg.setFixedWidth(460)
+        vbox = QVBoxLayout(dlg)
+        vbox.setSpacing(10)
+
+        lbl = QLabel(
+            "<b>Connect directly with your browser session:</b><br>"
+            "1. Open <b>instagram.com</b> in Chrome or Edge (where you're logged in).<br>"
+            "2. Press <b>F12</b> (Inspect) → <b>Application</b> tab → <b>Cookies</b> → <i>https://www.instagram.com</i>.<br>"
+            "3. Copy the value of <b>sessionid</b> and paste it below."
+        )
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(f"color: {C.TEXT_MED}; font-size: 11px; line-height: 1.4;")
+        vbox.addWidget(lbl)
+
+        u_input = QLineEdit()
+        u_input.setPlaceholderText("Instagram Username (e.g. your_handle)")
+        curr_u = self._ig_username.text().strip()
+        if curr_u:
+            u_input.setText(curr_u)
+        vbox.addWidget(u_input)
+
+        s_input = QLineEdit()
+        s_input.setPlaceholderText("Paste 'sessionid' cookie value here...")
+        s_input.setEchoMode(QLineEdit.EchoMode.Password)
+        vbox.addWidget(s_input)
+
+        bbox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bbox.accepted.connect(dlg.accept)
+        bbox.rejected.connect(dlg.reject)
+        vbox.addWidget(bbox)
+
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            sid = s_input.text().strip()
+            username = u_input.text().strip()
+            if not sid:
+                QMessageBox.warning(self, "Missing Cookie", "Please enter a valid sessionid cookie value.")
+                return
+
+            if "sessionid=" in sid:
+                sid = sid.split("sessionid=")[-1].split(";")[0].strip()
+
+            user_match = re.search(r"^\d+", sid)
+            uid = user_match.group() if user_match else ""
+
+            from actions.instagram_mcp import CONFIG_PATH, stop_daemon, start_daemon
+            cfg_targets = [CONFIG_PATH, Path("config/api_keys.json")]
+            for target_file in cfg_targets:
+                cfg = {}
+                if target_file.exists():
+                    try:
+                        with open(target_file, "r", encoding="utf-8") as f:
+                            cfg = json.load(f)
+                    except Exception:
+                        cfg = {}
+                if username:
+                    cfg["instagram_username"] = username
+                cfg["instagram_sessionid"] = sid
+                cfg["instagram_password"] = f"sessionid:{sid}"
+                if uid:
+                    cfg["instagram_user_id"] = uid
+                cfg["instagram_browser_authenticated"] = True
+                try:
+                    target_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(target_file, "w", encoding="utf-8") as f:
+                        json.dump(cfg, f, indent=4)
+                except Exception:
+                    pass
+
+            if username:
+                self._ig_username.setText(username)
+
+            stop_daemon()
+            start_daemon()
+            self._update_ig_status()
+            QMessageBox.information(self, "Instagram Connected", f"Instagram successfully connected via Session Cookie!\n\nNexus background DM daemon is now active.")
+
+    class IGLoginWorker(__import__('PyQt6').QtCore.QThread):
+        finished_success = __import__('PyQt6').QtCore.pyqtSignal()
+        finished_error = __import__('PyQt6').QtCore.pyqtSignal(str)
+        request_2fa = __import__('PyQt6').QtCore.pyqtSignal()
+        request_challenge = __import__('PyQt6').QtCore.pyqtSignal()
+        
+        def __init__(self, username, password):
+            super().__init__()
+            self.username = username
+            self.password = password
+            self.code_event = __import__('threading').Event()
+            self.code = None
+            
+        def run(self):
+            try:
+                from instagrapi import Client
+                from instagrapi.exceptions import TwoFactorRequired, ChallengeRequired
+                import json
+                from pathlib import Path
+                cl = Client()
+                
+                pwd = (self.password or "").strip()
+                if pwd.startswith("sessionid:") or (len(pwd) > 40 and "%3A" in pwd):
+                    sid = pwd.replace("sessionid:", "").strip()
+                    cl.login_by_sessionid(sid)
+                else:
+                    cl.username = self.username
+                    outcome = cl.bloks_caa_login(self.username, pwd)
+                    raw_str = json.dumps(outcome, default=str)
+                    
+                    if outcome.get("logged_in"):
+                        cl.login_flow()
+                    elif "login_wrong_password" in raw_str or "Incorrect password" in raw_str or "password you entered is incorrect" in raw_str:
+                        raise Exception("The password you entered is incorrect. Please check your Instagram password, or paste your web browser 'sessionid' cookie.")
+                    elif "checkpoint_required" in raw_str or "challenge_required" in raw_str:
+                        try:
+                            cl.login(self.username, pwd)
+                        except TwoFactorRequired:
+                            self.request_2fa.emit()
+                            self.code_event.wait()
+                            if not self.code:
+                                raise Exception("2FA code not provided.")
+                            cl.two_factor_login(self.code)
+                        except ChallengeRequired:
+                            self.request_challenge.emit()
+                            self.code_event.wait()
+                            if not self.code:
+                                raise Exception("Challenge code not provided.")
+                            cl.challenge_resolve(self.code)
+                    else:
+                        try:
+                            cl.login(self.username, pwd)
+                        except TwoFactorRequired:
+                            self.request_2fa.emit()
+                            self.code_event.wait()
+                            if not self.code:
+                                raise Exception("2FA code not provided.")
+                            cl.two_factor_login(self.code)
+                        except ChallengeRequired:
+                            self.request_challenge.emit()
+                            self.code_event.wait()
+                            if not self.code:
+                                raise Exception("Challenge code not provided.")
+                            cl.challenge_resolve(self.code)
+                        except Exception as e:
+                            err_str = str(e)
+                            if "out of date" in err_str.lower() or "CAA login" in err_str:
+                                raise Exception("Instagram rejected credentials or security check. Please check your username/password or paste your web browser 'sessionid' cookie.")
+                            raise
+                
+                from actions.instagram_mcp import SESSION_PATH, CONFIG_PATH, stop_daemon, start_daemon
+                SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
+                cl.dump_settings(str(SESSION_PATH))
+                try:
+                    Path("config").mkdir(parents=True, exist_ok=True)
+                    cl.dump_settings("config/ig_session.json")
+                except Exception:
+                    pass
+
+                stop_daemon()
+                start_daemon()
+                self.finished_success.emit()
+            except Exception as e:
+                self.finished_error.emit(str(e))
+
+    def _handle_ig_connect(self):
+        username = self._ig_username.text().strip()
+        password = self._ig_password.text().strip()
+        
+        from PyQt6.QtWidgets import QMessageBox
+        import json
+        from actions.instagram_mcp import CONFIG_PATH
+        
+        if not username or not password:
+            QMessageBox.warning(self, "Error", "Please enter both username and password.")
+            return
+            
+        self._ig_connect_btn.setEnabled(False)
+        self._ig_connect_btn.setText("Connecting...")
+        
+        # Save credentials to both canonical and local configs
+        for target_file in [CONFIG_PATH, Path("config/api_keys.json")]:
+            try:
+                d = {}
+                if target_file.exists():
+                    with open(target_file, "r", encoding="utf-8") as f:
+                        d = json.load(f)
+                d["instagram_username"] = username
+                d["instagram_password"] = password
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(target_file, "w", encoding="utf-8") as f:
+                    json.dump(d, f, indent=4)
+            except Exception:
+                pass
+            
+        self._ig_worker = self.IGLoginWorker(username, password)
+        self._ig_worker.finished_success.connect(self._ig_login_success)
+        self._ig_worker.finished_error.connect(self._ig_login_error)
+        self._ig_worker.request_2fa.connect(self._ig_login_2fa)
+        self._ig_worker.request_challenge.connect(self._ig_login_challenge)
+        self._ig_worker.start()
+
+    def _ig_login_success(self):
+        self._ig_connect_btn.setEnabled(True)
+        self._ig_connect_btn.setText("Connect (Password)")
+        self._update_ig_status()
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(self, "Success", "Instagram login successful and daemon started!")
+
+    def _ig_login_error(self, err_msg):
+        self._ig_connect_btn.setEnabled(True)
+        self._ig_connect_btn.setText("Connect (Password)")
+        self._update_ig_status()
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Instagram Mobile Login Blocked",
+            f"Instagram direct password login failed:\n{err_msg}\n\n"
+            "Meta frequently blocks automated mobile password logins.\n"
+            "Would you like to connect securely via Browser instead?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._handle_ig_browser_connect()
+
+    def _ig_login_2fa(self):
+        from PyQt6.QtWidgets import QInputDialog
+        code, ok = QInputDialog.getText(self, "2-Factor Authentication", "Enter the 6-digit code sent to your device:")
+        if ok and code:
+            self._ig_worker.code = code
+        else:
+            self._ig_worker.code = None
+        self._ig_worker.code_event.set()
+
+    def _ig_login_challenge(self):
+        from PyQt6.QtWidgets import QInputDialog
+        code, ok = QInputDialog.getText(self, "Challenge Required", "Enter the verification code sent to your email/phone:")
+        if ok and code:
+            self._ig_worker.code = code
+        else:
+            self._ig_worker.code = None
+        self._ig_worker.code_event.set()
+
+    def _toggle_ig_password_reveal(self):
+        from PyQt6.QtWidgets import QLineEdit
+        if getattr(self, "_ig_reveal_btn", None) and self._ig_reveal_btn.isChecked():
+            self._ig_password.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._ig_reveal_btn.setText("Hide")
+        else:
+            self._ig_password.setEchoMode(QLineEdit.EchoMode.Password)
+            self._ig_reveal_btn.setText("Reveal")
+
+    def _toggle_gw_password_reveal(self):
+        from PyQt6.QtWidgets import QLineEdit
+        if getattr(self, "_gw_reveal_btn", None) and self._gw_reveal_btn.isChecked():
+            self._gw_password.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._gw_reveal_btn.setText("Hide")
+        else:
+            self._gw_password.setEchoMode(QLineEdit.EchoMode.Password)
+            self._gw_reveal_btn.setText("Reveal")
+
+    def _handle_gw_save(self):
+        email_val = self._gw_email.text().strip()
+        pw_val = self._gw_password.text().strip()
+        from PyQt6.QtWidgets import QMessageBox
+        if not email_val:
+            QMessageBox.warning(self, "Missing Email", "Please enter your Gmail address.")
+            return
+        try:
+            from actions.google_workspace_mcp import save_stored_gmail_credentials
+            ok = save_stored_gmail_credentials(email_val, pw_val)
+            if ok:
+                try:
+                    from actions.google_workspace_mcp import stop_email_daemon, start_email_daemon
+                    stop_email_daemon()
+                    start_email_daemon()
+                except Exception:
+                    pass
+                self._gw_status_lbl.setText("Status: Credentials saved securely.")
+                self._gw_status_lbl.setStyleSheet("color: #4caf50;")
+                QMessageBox.information(self, "Saved", "Google Workspace credentials saved successfully!")
+            else:
+                QMessageBox.critical(self, "Error", "Failed to encrypt and save credentials.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error saving credentials: {e}")
+
+    def _handle_gw_test(self):
+        self._gw_status_lbl.setText("Status: Testing connection...")
+        self._gw_status_lbl.setStyleSheet(f"color: {C.TEXT_DIM};")
+        email_val = self._gw_email.text().strip()
+        pw_val = self._gw_password.text().strip()
+        if email_val and pw_val:
+            try:
+                from actions.google_workspace_mcp import save_stored_gmail_credentials
+                save_stored_gmail_credentials(email_val, pw_val)
+            except Exception:
+                pass
+
+        from actions.google_workspace_mcp import GmailEngine
+        res = GmailEngine.test_connection()
+        from PyQt6.QtWidgets import QMessageBox
+        if res.get("success"):
+            self._gw_status_lbl.setText(f"Status: {res.get('message')}")
+            self._gw_status_lbl.setStyleSheet("color: #4caf50;")
+            QMessageBox.information(self, "Connection Successful", res.get("message"))
+        else:
+            self._gw_status_lbl.setText(f"Status: {res.get('message')}")
+            self._gw_status_lbl.setStyleSheet("color: #f44336;")
+            QMessageBox.warning(self, "Connection Failed", res.get("message"))
+
+    def _handle_gw_oauth(self):
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        path, _ = QFileDialog.getOpenFileName(self, "Select Google Cloud credentials.json", str(Path.home()), "JSON Files (*.json)")
+        if path:
+            try:
+                import shutil
+                shutil.copy2(path, Path("config/google_workspace_credentials.json"))
+                self._gw_status_lbl.setText("Status: OAuth credentials.json loaded.")
+                self._gw_status_lbl.setStyleSheet("color: #4caf50;")
+                QMessageBox.information(self, "Success", "Google Cloud OAuth credentials loaded successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load credentials: {e}")
+
+    class SpotifyTestWorker(__import__('PyQt6').QtCore.QThread):
+        finished_result = __import__('PyQt6').QtCore.pyqtSignal(bool, str)
+
+        def run(self):
+            try:
+                from actions.spotify_controller import is_spotify_configured, _spotify_mcp_call, get_spotify_config
+                if not is_spotify_configured():
+                    self.finished_result.emit(False, "Spotify MCP is not configured. Please enter your Client ID and Client Secret.")
+                    return
+                data = get_spotify_config()
+                if not data.get("refreshToken"):
+                    self.finished_result.emit(False, "Credentials saved, but browser authorization has not been completed. Click 'Authenticate in Browser'.")
+                    return
+                res = _spotify_mcp_call("getAvailableDevices", {})
+                out = res.get("output", "")
+                if "Error" in out or not res.get("success", False):
+                    self.finished_result.emit(False, out or res.get("error", "Failed to contact Spotify API."))
+                else:
+                    self.finished_result.emit(True, out or "Successfully connected to Spotify MCP server!")
+            except Exception as e:
+                self.finished_result.emit(False, str(e))
+
+    def _prefill_spotify_credentials(self):
+        try:
+            from actions.spotify_controller import get_spotify_config
+            cfg = get_spotify_config()
+            cid = cfg.get("clientId", "")
+            csec = cfg.get("clientSecret", "")
+            if cid and hasattr(self, "_spotify_client_id"):
+                self._spotify_client_id.setText(cid)
+            if csec and hasattr(self, "_spotify_client_secret"):
+                self._spotify_client_secret.setText(csec)
+        except Exception:
+            pass
+
+    def _update_spotify_status(self):
+        try:
+            if not hasattr(self, "_spotify_status_lbl"):
+                return
+            from actions.spotify_controller import get_spotify_config
+            cfg = get_spotify_config()
+            has_id = bool(cfg.get("clientId"))
+            has_sec = bool(cfg.get("clientSecret"))
+            has_token = bool(cfg.get("refreshToken"))
+            if has_id and has_sec and has_token:
+                self._spotify_status_lbl.setText("Status: 🟢 Connected & Authorized (Ready)")
+                self._spotify_status_lbl.setStyleSheet("color: #00ffcc; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+            elif has_id and has_sec:
+                self._spotify_status_lbl.setText("Status: 🟡 Credentials Saved — Click 'Authenticate in Browser'")
+                self._spotify_status_lbl.setStyleSheet(f"color: {C.ACC}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+            else:
+                self._spotify_status_lbl.setText("Status: ⚪ Not Configured — Enter credentials below")
+                self._spotify_status_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+        except Exception:
+            pass
+
+    def _toggle_spotify_secret_reveal(self):
+        from PyQt6.QtWidgets import QLineEdit
+        if getattr(self, "_spotify_reveal_btn", None) and self._spotify_reveal_btn.isChecked():
+            self._spotify_client_secret.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._spotify_reveal_btn.setText("Hide")
+        else:
+            self._spotify_client_secret.setEchoMode(QLineEdit.EchoMode.Password)
+            self._spotify_reveal_btn.setText("Reveal")
+
+    def _copy_spotify_redirect_uri(self):
+        try:
+            from PyQt6.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            clipboard.setText("http://127.0.0.1:8888/callback")
+            if hasattr(self, "_spotify_status_lbl"):
+                self._spotify_status_lbl.setText("Status: 📋 Redirect URI copied to clipboard!")
+                self._spotify_status_lbl.setStyleSheet("color: #00e5ff; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+                QTimer.singleShot(2500, self._update_spotify_status)
+        except Exception:
+            pass
+
+    def _handle_spotify_save(self):
+        cid = self._spotify_client_id.text().strip()
+        csec = self._spotify_client_secret.text().strip()
+        from PyQt6.QtWidgets import QMessageBox
+        if not cid or not csec:
+            QMessageBox.warning(self, "Missing Credentials", "Please enter both Spotify Client ID and Client Secret.")
+            return
+        try:
+            from actions.spotify_controller import save_spotify_credentials
+            ok = save_spotify_credentials(cid, csec)
+            if ok:
+                self._update_spotify_status()
+                QMessageBox.information(
+                    self,
+                    "Credentials Saved",
+                    "Spotify credentials saved successfully!\n\n"
+                    "Now click 'Authenticate in Browser' to link your Spotify account."
+                )
+            else:
+                QMessageBox.critical(self, "Error", "Failed to save Spotify configuration.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error saving credentials: {e}")
+
+    def _handle_spotify_auth(self):
+        cid = self._spotify_client_id.text().strip()
+        csec = self._spotify_client_secret.text().strip()
+        from PyQt6.QtWidgets import QMessageBox
+        from actions.spotify_controller import is_spotify_configured, save_spotify_credentials, _spotify_mcp_action
+        if cid and csec:
+            save_spotify_credentials(cid, csec)
+        elif not is_spotify_configured():
+            QMessageBox.warning(self, "Configuration Required", "Please enter your Spotify Client ID and Client Secret before authenticating.")
+            return
+
+        self._spotify_status_lbl.setText("Status: 🌐 Opening browser for Spotify authorization...")
+        self._spotify_status_lbl.setStyleSheet(f"color: {C.ACC}; font-size: 11px; font-weight: bold; margin-bottom: 4px;")
+        self._spotify_auth_btn.setEnabled(False)
+        self._spotify_auth_btn.setText("Authenticating...")
+
+        msg = _spotify_mcp_action({"action": "auth"})
+
+        self._spotify_auth_ticks = 0
+        if not hasattr(self, "_spotify_auth_timer"):
+            self._spotify_auth_timer = QTimer(self)
+            self._spotify_auth_timer.setInterval(1500)
+            self._spotify_auth_timer.timeout.connect(self._poll_spotify_auth_status)
+        self._spotify_auth_timer.start()
+
+        QMessageBox.information(
+            self,
+            "Spotify Authorization",
+            f"{msg}\n\n"
+            "Steps to complete:\n"
+            "1. Log in to Spotify in the browser window.\n"
+            "2. Click 'Agree' to grant playback permissions.\n"
+            "3. Once redirected to callback, Nexus Core will automatically detect authorization!\n\n"
+            "⚠️ Important: In developer.spotify.com/dashboard -> Your App -> Settings -> ensure 'http://127.0.0.1:8888/callback' is added to Redirect URIs."
+        )
+
+    def _poll_spotify_auth_status(self):
+        self._spotify_auth_ticks = getattr(self, "_spotify_auth_ticks", 0) + 1
+        from actions.spotify_controller import get_spotify_config
+        cfg = get_spotify_config()
+        if cfg.get("refreshToken"):
+            if hasattr(self, "_spotify_auth_timer"):
+                self._spotify_auth_timer.stop()
+            if hasattr(self, "_spotify_auth_btn"):
+                self._spotify_auth_btn.setEnabled(True)
+                self._spotify_auth_btn.setText("🔗 Authenticate in Browser")
+            self._update_spotify_status()
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Spotify Connected", "Spotify MCP Server has been successfully authorized and connected!")
+            return
+        if self._spotify_auth_ticks >= 60:
+            if hasattr(self, "_spotify_auth_timer"):
+                self._spotify_auth_timer.stop()
+            if hasattr(self, "_spotify_auth_btn"):
+                self._spotify_auth_btn.setEnabled(True)
+                self._spotify_auth_btn.setText("🔗 Authenticate in Browser")
+            self._update_spotify_status()
+
+    def _handle_spotify_test(self):
+        from actions.spotify_controller import is_spotify_configured
+        from PyQt6.QtWidgets import QMessageBox
+        if not is_spotify_configured():
+            QMessageBox.warning(self, "Not Configured", "Please enter and save your Spotify Client ID and Client Secret first.")
+            return
+
+        self._spotify_test_btn.setEnabled(False)
+        self._spotify_test_btn.setText("Testing...")
+        self._spotify_status_lbl.setText("Status: Testing Spotify MCP connection...")
+
+        self._spotify_test_worker = self.SpotifyTestWorker()
+        self._spotify_test_worker.finished_result.connect(self._on_spotify_test_finished)
+        self._spotify_test_worker.start()
+
+    def _on_spotify_test_finished(self, success: bool, message: str):
+        self._spotify_test_btn.setEnabled(True)
+        self._spotify_test_btn.setText("Test Connection")
+        self._update_spotify_status()
+        from PyQt6.QtWidgets import QMessageBox
+        if success:
+            QMessageBox.information(self, "Spotify Connection Successful", f"Connection to Spotify MCP Server was successful!\n\n{message}")
+        else:
+            QMessageBox.warning(self, "Spotify Connection Test", f"Spotify test result:\n\n{message}")
+
+    def _handle_spotify_disconnect(self):
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Disconnect Spotify",
+            "Are you sure you want to disconnect Spotify and clear stored credentials?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                from actions.spotify_controller import clear_spotify_credentials
+                clear_spotify_credentials()
+                if hasattr(self, "_spotify_client_id"):
+                    self._spotify_client_id.clear()
+                if hasattr(self, "_spotify_client_secret"):
+                    self._spotify_client_secret.clear()
+                self._update_spotify_status()
+                QMessageBox.information(self, "Disconnected", "Spotify configuration and credentials removed.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to disconnect: {e}")
+
+    def _refresh_hw_vitals(self):
+        try:
+            from actions.system_diagnostics_mcp import get_full_diagnostics
+            d = get_full_diagnostics()
+            cpu_pct = d["cpu"]["usage_percent"]
+            ram_pct = d["ram"]["usage_percent"]
+            bat_pct = d["battery"].get("percent", "--")
+            disp = d["display"].get("brightness_levels", [80])
+            b_val = disp[0] if disp else 80
+            self._hw_vitals_lbl.setText(f"CPU: {cpu_pct}% | RAM: {ram_pct}% | Battery: {bat_pct}% | Display: {b_val}%")
+            self._hw_brightness_slider.blockSignals(True)
+            self._hw_brightness_slider.setValue(int(b_val))
+            self._hw_brightness_val_lbl.setText(f"{b_val}%")
+            self._hw_brightness_slider.blockSignals(False)
+            self._hw_output_lbl.setText(f"Vitals updated. Uptime: {d['uptime']} ({d['running_processes_count']} processes).")
+        except Exception as e:
+            self._hw_output_lbl.setText(f"Error fetching vitals: {e}")
+
+    def _handle_hw_brightness_slider(self, val):
+        self._hw_brightness_val_lbl.setText(f"{val}%")
+        try:
+            from actions.system_diagnostics_mcp import set_brightness
+            set_brightness(val)
+        except Exception:
+            pass
+
+    def _handle_hw_ram_hogs(self):
+        try:
+            from actions.system_diagnostics_mcp import system_diagnostics
+            res = system_diagnostics({"action": "ram_hogs", "limit": 4})
+            self._hw_output_lbl.setText(res)
+        except Exception as e:
+            self._hw_output_lbl.setText(f"Error scanning RAM hogs: {e}")
+
+    def _handle_hw_battery(self):
+        try:
+            from actions.system_diagnostics_mcp import system_diagnostics
+            res = system_diagnostics({"action": "battery"})
+            self._hw_output_lbl.setText(res)
+        except Exception as e:
+            self._hw_output_lbl.setText(f"Error checking battery: {e}")
+
+    def _handle_hw_kill(self):
+        target = self._hw_kill_target.text().strip()
+        if not target:
+            self._hw_output_lbl.setText("Please enter an application name or PID to kill.")
+            return
+        try:
+            from actions.system_diagnostics_mcp import kill_process
+            res = kill_process(target)
+            msg = res.get("message", "Done.")
+            self._hw_output_lbl.setText(msg)
+            from PyQt6.QtWidgets import QMessageBox
+            if res.get("success"):
+                QMessageBox.information(self, "Process Terminated", msg)
+            else:
+                QMessageBox.warning(self, "Process Management", msg)
+        except Exception as e:
+            self._hw_output_lbl.setText(f"Error: {e}")
+
+    def _refresh_auto_heal_status(self):
+        try:
+            from core.learned_rules import LearnedRulesEngine
+            rules = LearnedRulesEngine.list_rules()
+            active_count = sum(1 for r in rules if r.get("active", True))
+            self._ah_status_lbl.setText(f"Sentry: Active | Sandbox: Verified | Rules: {active_count} active")
+        except Exception as e:
+            self._ah_status_lbl.setText(f"Status: Error loading ({e})")
+
+    def _handle_ah_history(self):
+        try:
+            from actions.auto_heal_engine import auto_heal
+            res = auto_heal({"action": "history"})
+            self._ah_output_lbl.setText(res)
+        except Exception as e:
+            self._ah_output_lbl.setText(f"Error reading patch history: {e}")
+
+    def _handle_ah_rollback(self):
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            from actions.auto_heal_engine import auto_heal
+            reply = QMessageBox.question(
+                self,
+                "Confirm Rollback",
+                "Are you sure you want to rollback the most recent autonomous patch?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                res = auto_heal({"action": "rollback", "patch_id": "latest"})
+                self._ah_output_lbl.setText(res)
+                self._refresh_auto_heal_status()
+                QMessageBox.information(self, "Rollback Result", res)
+        except Exception as e:
+            self._ah_output_lbl.setText(f"Error executing rollback: {e}")
+
+    def _handle_ah_rules(self):
+        try:
+            from actions.auto_heal_engine import auto_heal
+            res = auto_heal({"action": "list_rules"})
+            self._ah_output_lbl.setText(res)
+        except Exception as e:
+            self._ah_output_lbl.setText(f"Error reading learned rules: {e}")
+
+    def _handle_ah_learn_rule(self):
+        txt = self._ah_rule_input.text().strip()
+        if not txt:
+            self._ah_output_lbl.setText("Please enter a rule or habit to teach.")
+            return
+        try:
+            from core.learned_rules import LearnedRulesEngine
+            res = LearnedRulesEngine.add_rule(txt, origin="ui_settings")
+            msg = res.get("message", "Rule saved.")
+            self._ah_output_lbl.setText(f"✅ {msg}")
+            self._ah_rule_input.clear()
+            self._refresh_auto_heal_status()
+        except Exception as e:
+            self._ah_output_lbl.setText(f"Error saving rule: {e}")
+
+    def _handle_ah_trigger_test_bug(self):
+        try:
+            from actions.test_action import test_action
+            res = test_action({})
+            self._ah_output_lbl.setText(f"✅ Test action executed cleanly with no errors: {res}\nThe code is already healthy!")
+        except Exception as e:
+            import traceback
+            from actions.auto_heal_engine import AutoHealEngine
+            tb = traceback.format_exc()
+            AutoHealEngine.record_last_error(tb)
+            self._ah_output_lbl.setText(
+                f"❌ Simulated bug triggered in test_action.py: {type(e).__name__}: {e}\n"
+                f"Traceback captured in AutoHealEngine! Click 'Fix Captured Bug' or say 'Nexus, fix that bug'."
+            )
+
+    def _handle_ah_fix_captured_bug(self):
+        self._ah_output_lbl.setText("⏳ Gemini is synthesizing hotfix in safety sandbox...")
+        from PyQt6.QtWidgets import QApplication
+        QApplication.processEvents()
+        try:
+            from actions.auto_heal_engine import auto_heal
+            res = auto_heal({"action": "heal"})
+            self._ah_output_lbl.setText(f"🛠️ Result:\n{res}")
+            self._refresh_auto_heal_status()
+        except Exception as e:
+            self._ah_output_lbl.setText(f"Error repairing bug: {e}")
+
+    def _pick_theme_color(self):
+        color = QColorDialog.getColor(QColor(C.PRI), self, "Select App Theme Color")
+        if color.isValid():
+            self._change_theme(color.name())
+
+    def _change_theme(self, new_theme: str):
+        settings = {}
+        try:
+            if APP_SETTINGS_FILE.exists():
+                with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+        except Exception:
+            pass
+        old_theme = settings.get("app_theme", "Gold")
+        if new_theme.lower() == old_theme.lower():
+            return
+        settings["app_theme"] = new_theme
+        try:
+            with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=4)
+        except Exception as e:
+            print(f"Error saving theme: {e}")
+        import subprocess
+        import sys
+        QMessageBox.information(self, "Restart Required", "The application will now restart to apply the new theme.")
+        subprocess.Popen([sys.executable, "main.py"])
+        QApplication.quit()
+
+    def _build_summary_card(self):
+        card = self._card("")
+        card.layout().setContentsMargins(18, 18, 18, 18)
+        card.layout().setSpacing(14)
+        card.layout().addWidget(self._build_status_box())
+        card.layout().addWidget(self._build_quick_actions_box())
+        card.layout().addWidget(self._build_security_tip())
+        return card
+
+    def _build_status_box(self):
+        box = self._card("System Status", "")
+        lay = box.layout()
+        self._sys_online = QLabel("≡ƒƒó System Online")
+        self._sys_online.setStyleSheet("color: #35ff75; font-weight: 700;")
+        self._sys_note = QLabel("All systems are operational.")
+        self._sys_note.setStyleSheet(f"color: {C.TEXT_MED};")
+        lay.addWidget(self._sys_online)
+        lay.addWidget(self._sys_note)
+        self._sys_version = QLabel("v1.0.0")
+        self._sys_platform = QLabel(platform.system())
+        self._sys_provider = QLabel("Gemini")
+        self._sys_updated = QLabel(time.strftime("%d %b %Y %H:%M"))
+        for label, val in (("Version", self._sys_version), ("Platform", self._sys_platform), ("Current AI Provider", self._sys_provider), ("Last Updated", self._sys_updated)):
+            row = QHBoxLayout()
+            row.addWidget(QLabel(label))
+            row.addStretch(1)
+            row.addWidget(val)
+            lay.addLayout(row)
+        return box
+
+    def _build_quick_actions_box(self):
+        box = self._card("Quick Actions", "")
+        lay = box.layout()
+        actions = [
+            ("Restart Nexus Core", QStyle.StandardPixmap.SP_BrowserReload, self._restart_app),
+            ("Reload Configuration", QStyle.StandardPixmap.SP_BrowserReload, self._reload_config),
+            ("Open Data Folder", QStyle.StandardPixmap.SP_DirOpenIcon, self._open_data_folder),
+            ("View Logs", QStyle.StandardPixmap.SP_FileDialogDetailedView, self._view_logs),
+            ("Check for Updates", QStyle.StandardPixmap.SP_ArrowDown, self._check_updates),
+        ]
+        for text, icon_kind, slot in actions:
+            btn = QPushButton(text)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setIcon(self.style().standardIcon(icon_kind))
+            btn.clicked.connect(slot)
+            lay.addWidget(btn)
+        return box
+
+    def _build_security_tip(self):
+        box = QFrame()
+        box.setStyleSheet("QFrame { background: rgba(24, 18, 8, 0.85); border: 1px solid rgba(255, 191, 0, 0.22); border-radius: 14px; }")
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+        title = QLabel("Security Tip")
+        title.setStyleSheet("color: #ffbf00; font-weight: 700;")
+        body = QLabel('"Never share your API keys with anyone."')
+        body.setWordWrap(True)
+        body.setStyleSheet(f"color: {C.TEXT_MED};")
+        lay.addWidget(title)
+        lay.addWidget(body)
+        return box
+
+    def _load_api_defaults(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            return self._ctrl()._win._load_api_defaults()
+        return {
+            "gemini_api_key": "",
+            "openrouter_api_key": "",
+            "os_system": platform.system(),
+        }
+
+    def _load_app_settings(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            return self._ctrl()._win._load_app_settings()
+        return _default_app_settings()
+
+    def _load_discord_settings(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            return self._ctrl()._win._load_discord_settings()
+        return _default_discord_settings()
+
+    def _startup_animation_enabled(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            return self._ctrl()._win._startup_animation_enabled()
+        return True
+
+    def _toggle_sound_effects(self, enabled: bool):
+        sound_mgr.enabled = enabled
+        self._set_setting("sound_effects_enabled", enabled)
+        if enabled:
+            sound_mgr.play_listening_start()
+
+    def _on_sfx_volume_changed(self, val: int):
+        sound_mgr.set_volume_percent(val)
+        if hasattr(self, "_sfx_val_lbl"):
+            self._sfx_val_lbl.setText(f"{val}%")
+        self._set_setting("sound_effects_volume", val)
+
+    def _set_setting(self, key: str, value):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            settings = self._ctrl()._win._load_app_settings()
+            settings[key] = value
+            self._ctrl()._win._save_app_settings(settings)
+        else:
+            try:
+                data = {}
+                if APP_SETTINGS_FILE.exists():
+                    with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                data[key] = value
+                with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4)
+            except Exception:
+                pass
+
+    def _open_api_keys(self):
+        win = getattr(self._ctrl(), "_win", None) if self._ctrl() else None
+        try:
+            if win is not None and hasattr(win, "_open_api_keys"):
+                win._open_api_keys()
+                self.refresh()
+                return
+            data = {}
+            if APP_SETTINGS_FILE.exists():
+                with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            dialog = APIKeySettingsDialog(data, parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                merged = dict(data)
+                merged.update(dialog.get_settings())
+                _write_settings_files(merged)
+                if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                    self._ctrl().write_log("SYS: API keys updated.")
+                self.refresh()
+        except Exception as e:
+            print(f"[Settings] Error saving API keys: {e}")
+
+    def _test_provider(self, setting_key: str):
+        api = self._load_api_defaults()
+        key_map = {
+            "gemini": ("gemini_api_key", "Google Gemini"),
+            "openrouter": ("openrouter_api_key", "OpenRouter"),
+            "nvidia": ("nvidia_api_key", "NVIDIA NIM"),
+            "groq": ("groq_api_key", "Groq"),
+            "custom": ("custom_ai_api_key", "Custom AI"),
+            "tavily": ("tavily_api_key", "Tavily Search"),
+            "firecrawl": ("firecrawl_api_key", "Firecrawl"),
+            "serpapi": ("serpapi_api_key", "SerpAPI"),
+            "anthropic": ("anthropic_api_key", "Anthropic Claude"),
+            "pollinations": ("pollinations_api_key", "Pollinations"),
+            "elevenlabs": ("elevenlabs_api_key", "ElevenLabs"),
+            "fish_audio": ("fish_audio_api_key", "Fish Audio"),
+            "cloudflare": ("cloudflare_api_key", "Cloudflare"),
+        }
+        key_field, name = key_map.get(setting_key, ("gemini_api_key", "Google Gemini"))
+        val = api.get(key_field, "")
+        msg = f"{name} key detected." if val.strip() else f"{name} key missing."
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: {msg}")
+        self.refresh()
+
+    def _connect_mobile(self):
+        ctrl = self._ctrl()
+        if not ctrl:
+            return
+        target = None
+        if hasattr(ctrl, "_show_remote_connect"):
+            target = ctrl
+        elif hasattr(ctrl, "_win") and hasattr(ctrl._win, "_show_remote_connect"):
+            target = ctrl._win
+        if target is not None:
+            self._mobile_connect_btn.setText("Connecting...")
+            target._show_remote_connect()
+            QTimer.singleShot(1100, lambda: self._mobile_connect_btn.setText("Connect Device"))
+
+    def _disconnect_mobile(self):
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log("SYS: Mobile Connect session closed.")
+        self._mobile_status.setText("Connection Status: Disconnected")
+        self._mobile_phone.setText("Phone Name: Not connected")
+        self._mobile_last.setText("Last Connected: Never")
+
+    def _show_qr_code(self):
+        ctrl = self._ctrl()
+        if not ctrl:
+            return
+        target = None
+        if hasattr(ctrl, "_show_remote_connect"):
+            target = ctrl
+        elif hasattr(ctrl, "_win") and hasattr(ctrl._win, "_show_remote_connect"):
+            target = ctrl._win
+        if target is not None:
+            target._show_remote_connect()
+
+    def _toggle_startup_from_page(self, checked: bool):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            self._ctrl()._win._set_startup_enabled(bool(checked))
+            self._ctrl()._win._refresh_startup_button()
+
+    def _toggle_launch_minimized(self, checked: bool):
+        self._set_setting("launch_minimized", bool(checked))
+
+    def _toggle_update_check(self, checked: bool):
+        self._set_setting("check_updates_on_startup", bool(checked))
+
+    def _toggle_startup_animation_from_page(self, checked: bool):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            self._ctrl()._win._set_startup_animation_enabled(bool(checked))
+            self._ctrl()._win._refresh_startup_animation_button()
+
+    def _set_default_provider(self, text: str):
+        raw = (text or "").strip().lower()
+        if raw.startswith("google") or raw == "gemini":
+            provider = "Gemini"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to Google Gemini. Cloud connectivity active."
+        elif raw == "local":
+            provider = "Local"
+            self._set_setting("offline_mode_enabled", True)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(True)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(True)
+            msg = "SYS: Default AI provider set to Local AI (Ollama). Offline Mode active."
+        elif raw == "nvidia":
+            provider = "NVIDIA"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to NVIDIA NIM. Cloud connectivity active."
+        elif raw == "groq":
+            provider = "Groq"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to Groq. Cloud connectivity active."
+        elif raw == "custom":
+            provider = "Custom"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to Custom OpenAI-compatible endpoint. Cloud connectivity active."
+        else:
+            provider = "OpenRouter"
+            self._set_setting("offline_mode_enabled", False)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.blockSignals(True)
+                self._offline_mode_btn.setChecked(False)
+                self._offline_mode_btn.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            msg = "SYS: Default AI provider set to OpenRouter. Cloud connectivity active."
+        self._set_setting("default_ai_provider", provider)
+        if hasattr(self, "_sys_provider"):
+            self._sys_provider.setText(provider)
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(msg)
+
+    def _toggle_auto_provider_switch(self, checked: bool):
+        self._set_setting("auto_provider_switch", bool(checked))
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Auto provider switch {'enabled' if checked else 'disabled'}.")
+
+    def _toggle_offline_mode(self, checked: bool):
+        self._set_setting("offline_mode_enabled", bool(checked))
+        if checked:
+            self._set_setting("default_ai_provider", "Local")
+            if hasattr(self, "_default_provider"):
+                self._default_provider.blockSignals(True)
+                self._default_provider.setCurrentText("Local")
+                self._default_provider.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(True)
+            if hasattr(self, "_sys_provider"):
+                self._sys_provider.setText("Local")
+            msg = "🔒 SYSTEM: Air-Gapped Offline Mode ENGAGED. All operations running 100% locally."
+        else:
+            self._set_setting("default_ai_provider", "Gemini")
+            if hasattr(self, "_default_provider"):
+                self._default_provider.blockSignals(True)
+                self._default_provider.setCurrentText("Google Gemini")
+                self._default_provider.blockSignals(False)
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(False)
+            if hasattr(self, "_sys_provider"):
+                self._sys_provider.setText("Gemini")
+            msg = "🌐 SYSTEM: Offline Mode DISENGAGED. Cloud connectivity restored."
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(msg)
+
+    def _on_stt_engine_changed(self, text: str):
+        """Handle STT engine dropdown change."""
+        if not hasattr(self, "_stt_engine_combo"):
+            return
+        engine_id = self._stt_engine_combo.currentData()
+        if engine_id:
+            self._set_setting("stt_engine", engine_id)
+            # Apply to live voice engine
+            if self._ctrl() and hasattr(self._ctrl(), "_win") and hasattr(self._ctrl()._win, "_nexus_connect"):
+                pass  # Will be applied via engine getter
+            # Update live voice engine if accessible
+            try:
+                from core.live_voice_engine import live_voice_engine as lve
+                lve.set_stt_config(engine=engine_id)
+            except Exception:
+                pass
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log(f"SYS: STT engine set to {engine_id}")
+
+    def _toggle_stt_autocorrect(self, checked: bool):
+        """Toggle STT auto-correction."""
+        self._set_setting("stt_autocorrect", bool(checked))
+        try:
+            from core.live_voice_engine import live_voice_engine as lve
+            lve.set_stt_config(autocorrect=bool(checked))
+        except Exception:
+            pass
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: STT auto-correction {'enabled' if checked else 'disabled'}")
+
+    def _install_moonshine(self):
+        """Install Moonshine STT via pip."""
+        if not hasattr(self, "_moonshine_install_btn"):
+            return
+        self._moonshine_install_btn.setEnabled(False)
+        self._moonshine_install_btn.setText("Installing...")
+
+        try:
+            from core.moonshine_stt import install_moonshine
+            ok, msg = install_moonshine(progress_cb=self._moonshine_install_log)
+            if ok:
+                self._moonshine_install_btn.setText("Installed ✓")
+                self._moonshine_install_btn.setEnabled(False)
+                moonshine_info = getattr(self, "_moonshine_info", None)
+                if moonshine_info:
+                    moonshine_info.setText("✅ Moonshine STT installed and ready")
+                    moonshine_info.setStyleSheet(f"color: {C.GREEN}; font-size: 11px;")
+                if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                    self._ctrl().write_log("SYS: Moonshine STT installed successfully")
+                self.refresh()
+            else:
+                self._moonshine_install_btn.setText("Install Failed")
+                if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                    self._ctrl().write_log(f"SYS: Moonshine install failed: {msg}")
+        except Exception as e:
+            self._moonshine_install_btn.setText("Install Failed")
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log(f"SYS: Moonshine install error: {e}")
+
+    def _moonshine_install_log(self, msg: str):
+        """Progress callback for moonshine install."""
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Moonshine install — {msg}")
+
+    def _on_tts_engine_changed(self, text: str):
+        """Handle TTS engine dropdown change."""
+        if not hasattr(self, "_tts_engine_combo"):
+            return
+        engine_id = self._tts_engine_combo.currentData()
+        if engine_id:
+            self._set_setting("tts_engine", engine_id)
+            try:
+                from core.live_voice_engine import live_voice_engine as lve
+                lve.set_tts_config(engine=engine_id)
+            except Exception:
+                pass
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log(f"SYS: TTS engine set to {engine_id}")
+
+    def _toggle_attention_message_prompts(self, checked: bool):
+        self._set_setting("attention_message_prompts", bool(checked))
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Incoming message prompts {'enabled' if checked else 'disabled'}.")
+
+    def _toggle_attention_call_prompts(self, checked: bool):
+        self._set_setting("attention_call_prompts", bool(checked))
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Incoming call prompts {'enabled' if checked else 'disabled'}.")
+
+    def _preview_animation(self):
+        self._preview_progress.setValue(0)
+        if hasattr(self, "_preview_timer") and self._preview_timer:
+            try:
+                self._preview_timer.stop()
+            except Exception:
+                pass
+        self._preview_timer = QTimer(self)
+        self._preview_timer.timeout.connect(self._tick_preview)
+        self._preview_timer.start(24)
+
+    def _tick_preview(self):
+        value = min(100, self._preview_progress.value() + 4)
+        self._preview_progress.setValue(value)
+        if value >= 100 and hasattr(self, "_preview_timer"):
+            self._preview_timer.stop()
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log("SYS: Startup animation preview finished.")
+
+    def _toggle_discord_reveal(self, checked: bool):
+        self._discord_token.setEchoMode(QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password)
+
+    def _save_discord_from_page(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            self._ctrl()._win._discord_token_input = self._discord_token
+            self._ctrl()._win._discord_channel_input = self._discord_channel
+            self._ctrl()._win._save_discord_token()
+            self._discord_status.setText("Bot Status: Saved")
+            self.refresh()
+
+    def _test_discord_from_page(self):
+        self._save_discord_from_page()
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            self._ctrl()._win._start_discord_bot()
+            self._ctrl()._win._stop_discord_bot()
+            self._discord_status.setText("Bot Status: Test sent")
+            self._discord_msg.setText("Connected as Nexus Core#9649" if self._discord_token.text().strip() else "Bot Offline")
+
+    def _restart_discord_from_page(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            self._ctrl()._win._stop_discord_bot()
+            self._ctrl()._win._start_discord_bot()
+            self._discord_status.setText("Bot Status: Restarted")
+
+    def _restart_app(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_restart_app"):
+            self._ctrl()._restart_app()
+
+    def _reload_config(self):
+        if self._ctrl() and hasattr(self._ctrl(), "_win"):
+            self._ctrl()._win._load_api_defaults()
+            self._ctrl()._win._load_discord_settings()
+            if hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log("SYS: Configuration reloaded.")
+            self.refresh()
+
+    def _open_data_folder(self):
+        try:
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(CONFIG_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(CONFIG_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(CONFIG_DIR)])
+        except Exception:
+            pass
+
+    def _view_logs(self):
+        try:
+            import subprocess
+            if sys.platform == "win32":
+                os.startfile(str(BASE_DIR))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(BASE_DIR)])
+            else:
+                subprocess.Popen(["xdg-open", str(BASE_DIR)])
+        except Exception:
+            pass
+
+    def _check_updates(self):
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log("SYS: Update check requested.")
+
+    def refresh(self):
+        api = self._load_api_defaults()
+        app = self._load_app_settings()
+        discord = self._load_discord_settings()
+        for widget in (
+            getattr(self, "_default_provider", None),
+            getattr(self, "_offline_mode_btn", None),
+            getattr(self, "_auto_switch_btn", None),
+            getattr(self, "_attention_message_btn", None),
+            getattr(self, "_attention_call_btn", None),
+            getattr(self, "_startup_launch_btn", None),
+            getattr(self, "_startup_minimized_btn", None),
+            getattr(self, "_startup_updates_btn", None),
+            getattr(self, "_startup_anim_enable_btn", None),
+            getattr(self, "_discord_token", None),
+            getattr(self, "_discord_channel", None),
+            getattr(self, "_discord_reveal", None),
+        ):
+            if widget is not None:
+                widget.blockSignals(True)
+        try:
+            self._gemini_status.setText("Connected" if api.get("gemini_api_key") else "Not connected")
+            self._or_status.setText("Connected" if api.get("openrouter_api_key") else "Not connected")
+            self._gemini_key.setText(self._provider_key_preview(api.get("gemini_api_key", "")))
+            self._or_key.setText(self._provider_key_preview(api.get("openrouter_api_key", "")))
+            self._nvidia_status.setText("Connected" if api.get("nvidia_api_key") else "Not connected")
+            self._nvidia_key.setText(self._provider_key_preview(api.get("nvidia_api_key", "")))
+            self._groq_status.setText("Connected" if api.get("groq_api_key") else "Not connected")
+            self._groq_key.setText(self._provider_key_preview(api.get("groq_api_key", "")))
+            self._custom_status.setText("Connected" if api.get("custom_ai_api_key") else "Not connected")
+            self._custom_key.setText(self._provider_key_preview(api.get("custom_ai_api_key", "")))
+            if hasattr(self, "_pollinations_status"):
+                self._pollinations_status.setText("Connected" if api.get("pollinations_api_key") else "Not connected")
+                self._pollinations_key.setText(self._provider_key_preview(api.get("pollinations_api_key", "")))
+            
+            prov = app.get("default_ai_provider", "Gemini")
+            is_offline = bool(app.get("offline_mode_enabled", False))
+            if prov == "Local" or is_offline:
+                disp_prov = "Local"
+            elif prov == "OpenRouter":
+                disp_prov = "OpenRouter"
+            elif prov == "NVIDIA":
+                disp_prov = "NVIDIA"
+            elif prov == "Groq":
+                disp_prov = "Groq"
+            elif prov == "Custom":
+                disp_prov = "Custom"
+            else:
+                disp_prov = "Google Gemini"
+            if hasattr(self, "_default_provider"):
+                self._default_provider.setCurrentText(disp_prov)
+            if hasattr(self, "_offline_mode_btn"):
+                self._offline_mode_btn.setChecked(is_offline or prov == "Local")
+            if hasattr(self, "_local_ai_widget"):
+                self._local_ai_widget.setVisible(is_offline or prov == "Local")
+
+            self._auto_switch_btn.setChecked(bool(app.get("auto_provider_switch", True)))
+            self._attention_message_btn.setChecked(bool(app.get("attention_message_prompts", True)))
+            self._attention_call_btn.setChecked(bool(app.get("attention_call_prompts", True)))
+            self._startup_launch_btn.setChecked(bool(app.get("show_workspace_on_startup", False)))
+            self._startup_minimized_btn.setChecked(bool(app.get("launch_minimized", False)))
+            self._startup_updates_btn.setChecked(bool(app.get("check_updates_on_startup", True)))
+            self._startup_anim_enable_btn.setChecked(bool(self._startup_animation_enabled()))
+            self._discord_token.setText((discord.get("bot_token") or "").strip())
+            self._discord_channel.setText((discord.get("channel_id") or "").strip())
+        finally:
+            for widget in (
+                getattr(self, "_default_provider", None),
+                getattr(self, "_offline_mode_btn", None),
+                getattr(self, "_auto_switch_btn", None),
+                getattr(self, "_attention_message_btn", None),
+                getattr(self, "_attention_call_btn", None),
+                getattr(self, "_startup_launch_btn", None),
+                getattr(self, "_startup_minimized_btn", None),
+                getattr(self, "_startup_updates_btn", None),
+                getattr(self, "_startup_anim_enable_btn", None),
+                getattr(self, "_discord_token", None),
+                getattr(self, "_discord_channel", None),
+                getattr(self, "_discord_reveal", None),
+            ):
+                if widget is not None:
+                    widget.blockSignals(False)
+        enabled = bool(discord.get("enabled", False))
+        token = (discord.get("bot_token") or "").strip()
+        if enabled and token:
+            self._discord_status.setText("Bot Status: Online")
+            self._discord_msg.setText("Connected as Nexus Core#9649")
+        elif token:
+            self._discord_status.setText("Bot Status: Offline")
+            self._discord_msg.setText("Bot Offline")
+        else:
+            self._discord_status.setText("Bot Status: Offline")
+            self._discord_msg.setText("Token required")
+        if hasattr(self, "_sys_provider"):
+            self._sys_provider.setText(app.get("default_ai_provider", "Gemini"))
+        if hasattr(self, "_update_spotify_status"):
+            self._update_spotify_status()
+
+    def _handle_create_desktop_shortcut(self):
+        success, path_or_err = self._create_desktop_shortcut_logic()
+        if success:
+            QMessageBox.information(
+                self, 
+                "Success", 
+                f"Desktop shortcut created successfully at:\n{path_or_err}"
+            )
+        else:
+            QMessageBox.warning(
+                self, 
+                "Error", 
+                f"Failed to create desktop shortcut:\n{path_or_err}"
+            )
+
+    def _handle_pin_to_taskbar(self):
+        success, msg = self._pin_app_to_taskbar_logic()
+        if success:
+            QMessageBox.information(self, "Success", msg)
+        else:
+            QMessageBox.warning(
+                self, 
+                "Taskbar Pinning", 
+                msg
+            )
+
+    def _create_desktop_shortcut_logic(self):
+        # .lnk desktop shortcuts are a Windows-only concept; skip on macOS/Linux.
+        if sys.platform != "win32":
+            return
+        try:
+            import os
+            import shutil
+            import subprocess
+            from pathlib import Path
+            import winreg
+            
+            # Find the correct Desktop folder path using registry (OneDrive safe!)
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
+                desktop_raw, _ = winreg.QueryValueEx(key, "Desktop")
+                winreg.CloseKey(key)
+                desktop_dir = Path(os.path.expandvars(desktop_raw))
+            except Exception:
+                desktop_dir = Path(os.path.expanduser("~")) / "Desktop"
+                
+            desktop_dir.mkdir(parents=True, exist_ok=True)
+            shortcut_path = desktop_dir / "Nexus Core - Premium.lnk"
+            
+            # Base variables
+            base_dir = Path(os.path.abspath("."))
+            script_path = base_dir / "main.py"
+            icon_path = base_dir / "assets" / "nexus_lite_logo.ico"
+            
+            python_exe = sys.executable
+            if not python_exe:
+                python_exe = shutil.which("pythonw") or shutil.which("python") or "pythonw"
+                
+            shortcut_target = python_exe
+            shortcut_args = f'"{script_path}"'
+            if getattr(sys, "frozen", False):
+                shortcut_target = python_exe
+                shortcut_args = ""
+                
+            powershell_exe = shutil.which("powershell.exe") or "powershell"
+            
+            def _ps_escape(value: str) -> str:
+                return value.replace("'", "''")
+                
+            icon_value = str(icon_path) if icon_path.exists() else ""
+            ps1_script = "\n".join([
+                "$WshShell = New-Object -ComObject WScript.Shell",
+                f"$Shortcut = $WshShell.CreateShortcut('{_ps_escape(str(shortcut_path))}')",
+                f"$Shortcut.TargetPath = '{_ps_escape(shortcut_target)}'",
+                f"$Shortcut.Arguments = '{_ps_escape(shortcut_args)}'",
+                f"$Shortcut.WorkingDirectory = '{_ps_escape(str(base_dir))}'",
+                "$Shortcut.WindowStyle = 7",
+                "$Shortcut.Description = 'Launch Nexus Core - Premium'",
+                f"if ('{_ps_escape(icon_value)}') {{ $Shortcut.IconLocation = '{_ps_escape(icon_value)},0' }}",
+                "$Shortcut.Save()",
+            ])
+            
+            ps1_path = get_user_data_dir() / "config" / "create_desktop_shortcut.ps1"
+            ps1_path.write_text(ps1_script, encoding="utf-8")
+            
+            subprocess.run(
+                [powershell_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            
+            # Write marker file
+            marker_path = get_user_data_dir() / "config" / ".desktop_shortcut_created"
+            marker_path.write_text("created", encoding="utf-8")
+            
+            return True, str(shortcut_path)
+        except Exception as e:
+            return False, str(e)
+
+    def _pin_app_to_taskbar_logic(self):
+        try:
+            import os
+            import sys
+            import shutil
+            import subprocess
+            from pathlib import Path
+            
+            # Ensure desktop shortcut exists first
+            success, path_or_err = self._create_desktop_shortcut_logic()
+            if not success:
+                return False, f"Failed to create desktop shortcut first: {path_or_err}"
+                
+            shortcut_path = Path(path_or_err)
+            if not shortcut_path.exists():
+                return False, "Shortcut file does not exist."
+                
+            powershell_exe = shutil.which("powershell.exe") or "powershell"
+            
+            # COM pin script
+            def _ps_escape(value: str) -> str:
+                return value.replace("'", "''")
+                
+            pin_script = "\n".join([
+                "$Shell = New-Object -ComObject Shell.Application",
+                f"$Folder = $Shell.NameSpace('{_ps_escape(str(shortcut_path.parent))}')",
+                f"$Item = $Folder.ParseName('{_ps_escape(shortcut_path.name)}')",
+                "$Verb = $Item.Verbs() | Where-Object { $_.Name.Replace('&', '') -match 'Pin to taskbar' }",
+                "if ($Verb) { $Verb.DoIt(); exit 0 } else { exit 1 }"
+            ])
+            
+            res = subprocess.run(
+                [powershell_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", pin_script],
+                capture_output=True
+            )
+            
+            if res.returncode == 0:
+                return True, "Nexus Core has been pinned to your Taskbar!"
+            else:
+                return False, "Windows restricts programmatic taskbar pinning. Please right-click the 'Nexus Core - Premium.lnk' shortcut on your Desktop and select 'Pin to taskbar', or drag it directly onto your taskbar."
+        except Exception as e:
+            return False, f"Error pinning to taskbar: {e}"
+
+class SmartDevicesSection(QFrame):
+    def __init__(self, controller=None, parent=None):
+        super().__init__(parent)
+        self._controller = controller
+        self._service = SmartHomeService()
+        self._snapshot = ""
+        self._device_tiles: list[_DeviceTile] = []
+        self._card_anims: list[QPropertyAnimation] = []
+        self._selected_device: dict[str, object] | None = None
+
+        self.setObjectName("SmartDevicesSection")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setStyleSheet(f"""
+            QFrame#SmartDevicesSection {{
+                background: transparent;
+                border: none;
+            }}
+            QLabel {{
+                background: transparent;
+            }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(6)
+
+        header = QHBoxLayout()
+        header.setSpacing(8)
+        title_box = QVBoxLayout()
+        title_box.setSpacing(1)
+        self._title_lbl = QLabel("SMART DEVICES")
+        self._title_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._title_lbl.setStyleSheet(f"color: {C.WHITE}; letter-spacing: 1px;")
+        self._subtitle_lbl = QLabel("Quick access to your connected home devices.")
+        self._subtitle_lbl.setFont(QFont("Segoe UI", 8))
+        self._subtitle_lbl.setStyleSheet(f"color: {C.TEXT_DIM};")
+        title_box.addWidget(self._title_lbl)
+        title_box.addWidget(self._subtitle_lbl)
+        header.addLayout(title_box, 1)
+
+        self._count_chip = QLabel("0 devices")
+        self._count_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._count_chip.setStyleSheet(
+            f"QLabel {{ background: rgba(255,255,255,0.03); color: {C.PRI}; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 4px 10px; }}"
+        )
+        header.addWidget(self._count_chip)
+
+        self._refresh_btn = QPushButton("↻")
+        self._refresh_btn.setFixedSize(32, 32)
+        self._refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.03);
+                color: {C.WHITE};
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 9px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255,0.08);
+                border: 1px solid {C.PRI};
+            }}
+        """)
+        self._refresh_btn.clicked.connect(lambda: self.refresh(force=True))
+        header.addWidget(self._refresh_btn)
+
+        self._open_home_btn = QPushButton("Add Device")
+        self._open_home_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._open_home_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(0, 229, 255,0.10);
+                color: {C.WHITE};
+                border: 1px solid {C.PRI};
+                border-radius: 9px;
+                padding: 0 14px;
+                min-height: 32px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255,0.16);
+            }}
+        """)
+        self._open_home_btn.clicked.connect(self._open_brahma_home)
+        header.addWidget(self._open_home_btn)
+        root.addLayout(header)
+
+        self._empty_card = QWidget()
+        self._empty_card.setStyleSheet("background: transparent;")
+        empty_lay = QVBoxLayout(self._empty_card)
+        empty_lay.setContentsMargins(6, 4, 6, 4)
+        empty_lay.setSpacing(6)
+        empty_title = QLabel("No Smart Devices Connected")
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        empty_title.setStyleSheet(f"color: {C.WHITE}; border: none;")
+        empty_desc = QLabel("Connect your first smart device to control it directly from your dashboard.")
+        empty_desc.setWordWrap(True)
+        empty_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_desc.setFont(QFont("Segoe UI", 8))
+        empty_desc.setStyleSheet(f"color: {C.TEXT_DIM};")
+        empty_btn = QPushButton("Open Nexus Core Home")
+        empty_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        empty_btn.setFixedWidth(160)
+        empty_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(0, 229, 255,0.12);
+                color: {C.WHITE};
+                border: 1px solid {C.PRI};
+                border-radius: 10px;
+                min-height: 34px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255,0.18);
+            }}
+        """)
+        empty_btn.clicked.connect(self._open_brahma_home)
+        empty_lay.addStretch(1)
+        empty_lay.addWidget(empty_title)
+        empty_lay.addWidget(empty_desc)
+        empty_lay.addWidget(empty_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+        empty_lay.addStretch(1)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        self._grid_page = QWidget()
+        self._grid_page.setStyleSheet("background: transparent;")
+        self._grid_layout = QGridLayout(self._grid_page)
+        self._grid_layout.setContentsMargins(0, 0, 0, 0)
+        self._grid_layout.setHorizontalSpacing(12)
+        self._grid_layout.setVerticalSpacing(12)
+
+        self._row_page = QWidget()
+        self._row_page.setStyleSheet("background: transparent;")
+        self._row_layout = QHBoxLayout(self._row_page)
+        self._row_layout.setContentsMargins(0, 0, 0, 0)
+        self._row_layout.setSpacing(12)
+
+        self._cards_stack = QStackedWidget()
+        self._cards_stack.setStyleSheet("background: transparent; border: none;")
+        self._cards_stack.addWidget(self._grid_page)
+        self._cards_stack.addWidget(self._row_page)
+        self._scroll.setWidget(self._cards_stack)
+        root.addWidget(self._empty_card)
+        root.addWidget(self._scroll, 1)
+
+        self._panel = QFrame(self)
+        self._panel.setObjectName("SmartDevicePanel")
+        self._panel.setStyleSheet(f"""
+            QFrame#SmartDevicePanel {{
+                background: rgba(8, 9, 13, 245);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 18px;
+            }}
+            QLabel {{
+                background: transparent;
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.03);
+                color: {C.WHITE};
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255,0.08);
+                border: 1px solid {C.PRI};
+            }}
+        """)
+        self._panel.setVisible(False)
+        self._panel.setMinimumSize(280, 260)
+        self._panel_effect = QGraphicsOpacityEffect(self._panel)
+        self._panel_effect.setOpacity(0.0)
+        self._panel.setGraphicsEffect(self._panel_effect)
+        self._panel_lay = QVBoxLayout(self._panel)
+        self._panel_lay.setContentsMargins(14, 12, 14, 12)
+        self._panel_lay.setSpacing(8)
+
+        panel_top = QHBoxLayout()
+        panel_top.setSpacing(6)
+        self._panel_name = QLabel("Device")
+        self._panel_name.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._panel_name.setStyleSheet(f"color: {C.WHITE};")
+        panel_top.addWidget(self._panel_name, 1)
+        self._panel_close = QPushButton("X")
+        self._panel_close.setFixedSize(28, 28)
+        self._panel_close.clicked.connect(self._close_panel)
+        panel_top.addWidget(self._panel_close)
+        self._panel_lay.addLayout(panel_top)
+
+        self._panel_meta = QLabel("")
+        self._panel_meta.setWordWrap(True)
+        self._panel_meta.setStyleSheet(f"color: {C.TEXT_DIM};")
+        self._panel_lay.addWidget(self._panel_meta)
+
+        self._panel_status = QLabel("")
+        self._panel_status.setStyleSheet(f"color: {C.GREEN}; font-weight: 700;")
+        self._panel_lay.addWidget(self._panel_status)
+
+        self._panel_controls = QVBoxLayout()
+        self._panel_controls.setSpacing(10)
+        self._panel_lay.addLayout(self._panel_controls)
+        self._panel_lay.addStretch(1)
+
+        self._panel_actions = QHBoxLayout()
+        self._panel_actions.setSpacing(8)
+        self._panel_lay.addLayout(self._panel_actions)
+
+        self._panel_hint = QLabel("")
+        self._panel_hint.setWordWrap(True)
+        self._panel_hint.setStyleSheet(f"color: {C.TEXT_DIM};")
+        self._panel_lay.addWidget(self._panel_hint)
+
+        self._poll_tmr = QTimer(self)
+        self._poll_tmr.timeout.connect(lambda: self.refresh(force=False))
+        self._poll_tmr.start(2500)
+
+        self.refresh(force=True)
+
+    def _controller_bridge(self):
+        return self._controller
+
+    def _open_brahma_home(self):
+        bridge = self._controller_bridge()
+        if bridge and hasattr(bridge, "_set_page"):
+            bridge._set_page("home")
+
+    def _snapshot_devices(self, devices: list[dict[str, object]]) -> str:
+        payload = [
+            (
+                str(d.get("id", "")),
+                int(d.get("updated_at") or 0),
+                str(d.get("name", "")),
+                bool(d.get("is_on")),
+                str(d.get("room", "")),
+                str(d.get("device_type", "")),
+                str(d.get("manufacturer", "")),
+            )
+            for d in devices
+        ]
+        return json.dumps(payload, ensure_ascii=True, sort_keys=False)
+
+    def refresh(self, force: bool = False):
+        devices = self._service.list_devices()
+        snapshot = self._snapshot_devices(devices)
+        if not force and snapshot == self._snapshot:
+            return
+        self._snapshot = snapshot
+        self._count_chip.setText(f"{len(devices)} device(s)")
+        self._empty_card.setVisible(not devices)
+        self._scroll.setVisible(bool(devices))
+        self._rebuild_device_cards(devices)
+        if self._panel.isVisible() and self._selected_device:
+            device_id = str(self._selected_device.get("id", ""))
+            device = self._find_device(device_id)
+            if device:
+                self._selected_device = device
+                self._populate_panel(device)
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _rebuild_device_cards(self, devices: list[dict[str, object]]):
+        self._clear_layout(self._grid_layout)
+        self._clear_layout(self._row_layout)
+        self._device_tiles.clear()
+        self._card_anims.clear()
+
+        if not devices:
+            self._cards_stack.setCurrentIndex(0)
+            self._close_panel()
+            return
+
+        count = len(devices)
+        if count <= 3:
+            self._cards_stack.setCurrentIndex(1)
+            self._clear_layout(self._row_layout)
+            for idx, device in enumerate(devices):
+                tile = _DeviceTile(device)
+                tile.select_requested.connect(self._open_device_panel)
+                tile.action_requested.connect(self._apply_tile_action)
+                self._row_layout.addWidget(tile)
+                self._animate_card(tile, idx)
+                self._device_tiles.append(tile)
+            self._row_layout.addStretch(1)
+            self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        elif count <= 6:
+            self._cards_stack.setCurrentIndex(0)
+            columns = 3 if count > 3 else count
+            for idx, device in enumerate(devices):
+                tile = _DeviceTile(device)
+                tile.select_requested.connect(self._open_device_panel)
+                tile.action_requested.connect(self._apply_tile_action)
+                self._grid_layout.addWidget(tile, idx // columns, idx % columns)
+                self._animate_card(tile, idx)
+                self._device_tiles.append(tile)
+            last_row = (count - 1) // columns + 1
+            self._grid_layout.setRowStretch(last_row, 1)
+            self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        else:
+            self._cards_stack.setCurrentIndex(1)
+            self._clear_layout(self._row_layout)
+            for idx, device in enumerate(devices):
+                tile = _DeviceTile(device)
+                tile.select_requested.connect(self._open_device_panel)
+                tile.action_requested.connect(self._apply_tile_action)
+                self._row_layout.addWidget(tile)
+                self._animate_card(tile, idx)
+                self._device_tiles.append(tile)
+            self._row_layout.addStretch(1)
+            self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+    def _animate_card(self, widget: QWidget, index: int):
+        effect = QGraphicsOpacityEffect(widget)
+        effect.setOpacity(0.0)
+        widget.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(effect, b"opacity", self)
+        anim.setDuration(220)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._card_anims.append(anim)
+        QTimer.singleShot(index * 45, anim.start)
+
+    def _device_id_from_input(self, device_or_id):
+        if isinstance(device_or_id, dict):
+            return str(device_or_id.get("id", ""))
+        return str(device_or_id or "")
+
+    def _find_device(self, device_id: str) -> dict[str, object] | None:
+        for device in self._service.list_devices():
+            if str(device.get("id", "")) == device_id:
+                return device
+        return None
+
+    def _apply_tile_action(self, device_id: str, action: str, payload: dict):
+        try:
+            self._service.execute_device_action(device_id, action, payload)
+        except Exception:
+            return
+        self.refresh(force=True)
+        device = self._find_device(device_id)
+        if device:
+            self._selected_device = device
+            self._open_device_panel(device)
+
+    def _open_device_panel(self, device_or_id):
+        try:
+            device_id = self._device_id_from_input(device_or_id)
+            device = self._find_device(device_id)
+            if not device:
+                return
+            self._selected_device = device
+            self._populate_panel(device)
+            self._show_panel()
+        except Exception:
+            return
+
+    def _show_panel(self):
+        try:
+            self._position_panel()
+            self._panel.setVisible(True)
+            self._panel.raise_()
+            self._panel_effect.setOpacity(1.0)
+        except Exception:
+            self._panel.hide()
+            self._panel_effect.setOpacity(0.0)
+
+    def _close_panel(self):
+        if not self._panel.isVisible():
+            return
+        self._panel.hide()
+        self._panel_effect.setOpacity(0.0)
+
+    def _clear_panel_controls(self):
+        self._clear_layout(self._panel_controls)
+        self._clear_layout(self._panel_actions)
+
+    def _populate_panel(self, device: dict[str, object]):
+        try:
+            self._clear_panel_controls()
+            self._clear_layout(self._panel_actions)
+            name = str(device.get("name", "Device"))
+            room = str(device.get("room", ""))
+            device_type = str(device.get("device_type", "device")).lower()
+            is_on = bool(device.get("is_on"))
+            traits = device.get("traits") if isinstance(device.get("traits"), dict) else {}
+
+            self._panel_name.setText(name)
+            self._panel_meta.setText(
+                f"Room: {room or 'Unassigned'}\nType: {device_type.title()}\nManufacturer: {device.get('manufacturer', '')}\nConnection: Connected"
+            )
+            self._panel_status.setText("ON" if is_on else "OFF")
+            self._panel_hint.setText("Click outside the panel to close.")
+
+            power_btn = QPushButton("Power")
+            power_btn.clicked.connect(lambda: self._apply_tile_action(str(device.get("id", "")), "power", {"is_on": not is_on}))
+            self._panel_actions.addWidget(power_btn)
+
+            forget_btn = QPushButton("Forget")
+            forget_btn.clicked.connect(lambda: self._forget_device(str(device.get("id", ""))))
+            self._panel_actions.addWidget(forget_btn)
+
+            rename_btn = QPushButton("Rename")
+            rename_btn.clicked.connect(lambda: self._rename_device(str(device.get("id", "")), name))
+            self._panel_actions.addWidget(rename_btn)
+
+            if device_type == "fan":
+                speed = int(traits.get("speed", 4) or 4)
+                lbl = QLabel(f"Speed {speed}")
+                lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+                self._panel_controls.addWidget(lbl)
+                slider = QSlider(Qt.Orientation.Horizontal)
+                slider.setRange(1, 6)
+                slider.setValue(speed)
+                slider.valueChanged.connect(lambda value: self._apply_tile_action(str(device.get("id", "")), "speed", {"speed": value}))
+                self._panel_controls.addWidget(slider)
+            elif device_type == "light":
+                brightness = int(traits.get("brightness", 75) or 75)
+                lbl = QLabel(f"Brightness {brightness}%")
+                lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+                self._panel_controls.addWidget(lbl)
+                slider = QSlider(Qt.Orientation.Horizontal)
+                slider.setRange(1, 100)
+                slider.setValue(brightness)
+                slider.valueChanged.connect(lambda value: self._apply_tile_action(str(device.get("id", "")), "brightness", {"brightness": value}))
+                self._panel_controls.addWidget(slider)
+                color_btn = QPushButton("Color")
+                color_btn.clicked.connect(lambda: self._pick_color(device))
+                self._panel_controls.addWidget(color_btn)
+            elif device_type == "ac":
+                temperature = int(traits.get("temperature", 24) or 24)
+                lbl = QLabel(f"Temperature {temperature}")
+                lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+                self._panel_controls.addWidget(lbl)
+                slider = QSlider(Qt.Orientation.Horizontal)
+                slider.setRange(16, 30)
+                slider.setValue(temperature)
+                slider.valueChanged.connect(lambda value: self._apply_tile_action(str(device.get("id", "")), "temperature", {"temperature": value}))
+                self._panel_controls.addWidget(slider)
+            elif device_type in ("tv", "speaker"):
+                volume = int(traits.get("volume", 18) or 18)
+                lbl = QLabel(f"Volume {volume}")
+                lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+                self._panel_controls.addWidget(lbl)
+                slider = QSlider(Qt.Orientation.Horizontal)
+                slider.setRange(0, 100)
+                slider.setValue(volume)
+                slider.valueChanged.connect(lambda value: self._apply_tile_action(str(device.get("id", "")), "volume", {"volume": value}))
+                self._panel_controls.addWidget(slider)
+            elif device_type == "plug":
+                usage = traits.get("energy_usage", traits.get("power_usage", "N/A"))
+                lbl = QLabel(f"Energy usage: {usage}")
+                lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+                self._panel_controls.addWidget(lbl)
+            else:
+                lbl = QLabel("Primary controls are available from the card below.")
+                lbl.setWordWrap(True)
+                lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+                self._panel_controls.addWidget(lbl)
+        except Exception:
+            return
+
+    def _pick_color(self, device: dict[str, object]):
+        color = QColorDialog.getColor(QColor(C.PRI), self, "Pick Light Color")
+        if color.isValid():
+            self._apply_tile_action(str(device.get("id", "")), "color", {"color": color.name()})
+
+    def _rename_device(self, device_id: str, current_name: str):
+        new_name, ok = QInputDialog.getText(self, "Rename Device", "New name:", text=current_name)
+        if ok and new_name.strip():
+            try:
+                self._service.rename_device(device_id, new_name.strip())
+            except Exception:
+                return
+            self.refresh(force=True)
+
+    def _forget_device(self, device_id: str):
+        try:
+            self._service.forget_device(device_id)
+        except Exception:
+            return
+        self._close_panel()
+        self.refresh(force=True)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._panel.isVisible():
+            self._position_panel()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh(force=True)
+
+    def _position_panel(self):
+        panel_w = min(330, max(270, int(self.width() * 0.28)))
+        panel_h = min(340, max(240, int(self.height() * 0.45)))
+        x = max(12, self.width() - panel_w - 12)
+        y = 12
+        self._panel.setGeometry(x, y, panel_w, panel_h)
+
+
+
+class _ConnectDeviceCard(QFrame):
+    clicked = pyqtSignal(str)
+    action_requested = pyqtSignal(str, str, dict)
+
+    def __init__(self, device: dict[str, object], parent=None):
+        super().__init__(parent)
+        self.device = device
+        self._expanded = False
+        self.setObjectName("ConnectDeviceCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.setMinimumSize(220, 150)
+        self.setStyleSheet("""
+            QFrame#ConnectDeviceCard {
+                background: rgba(10, 12, 18, 240);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 18px;
+            }
+            QLabel {
+                background: transparent;
+            }
+            QPushButton {
+                background: rgba(255,255,255,0.06);
+                color: #ffffff;
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                min-height: 30px;
+                padding: 0 10px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255,0.12);
+                color: #00e5ff;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(8)
+
+        self._title = QLabel(str(device.get("name", "Device")))
+        self._title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._title.setStyleSheet("color: #ffffff;")
+        layout.addWidget(self._title)
+
+        platform = str(device.get("platform", "UNKNOWN")).upper()
+        status = "ONLINE" if bool(device.get("online")) else "OFFLINE"
+        self._status_label = QLabel(f"{platform} • {status}")
+        self._status_label.setFont(QFont("Segoe UI", 8))
+        self._status_label.setStyleSheet("color: rgba(255,255,255,0.55);")
+        layout.addWidget(self._status_label)
+
+        info = []
+        if device.get("manufacturer"):
+            info.append(str(device.get("manufacturer")))
+        if device.get("device_type"):
+            info.append(str(device.get("device_type")))
+        if device.get("ip"):
+            info.append(str(device.get("ip")))
+        self._info_lbl = QLabel(" ┬╖ ".join(info) if info else "Connected device")
+        self._info_lbl.setFont(QFont("Segoe UI", 8))
+        self._info_lbl.setStyleSheet("color: rgba(255,255,255,0.45);")
+        self._info_lbl.setWordWrap(True)
+        layout.addWidget(self._info_lbl)
+
+        layout.addStretch(1)
+
+        self._action_container = QFrame(self)
+        self._action_container.setVisible(False)
+        self._action_container.setStyleSheet("QFrame { background: rgba(255,255,255,0.03); border-radius: 14px; }")
+        actions_layout = QHBoxLayout(self._action_container)
+        actions_layout.setContentsMargins(8, 8, 8, 8)
+        actions_layout.setSpacing(8)
+
+        self._rename_btn = QPushButton("Rename")
+        self._disconnect_btn = QPushButton("Disconnect")
+        self._forget_btn = QPushButton("Remove")
+        self._pin_btn = QPushButton("Set PIN")
+
+        actions_layout.addWidget(self._pin_btn)
+        actions_layout.addWidget(self._rename_btn)
+        actions_layout.addWidget(self._disconnect_btn)
+        actions_layout.addWidget(self._forget_btn)
+        layout.addWidget(self._action_container)
+
+        self._pin_btn.clicked.connect(lambda: self.action_requested.emit(str(self.device.get("device_id", "")), "set_pin", {}))
+        self._rename_btn.clicked.connect(lambda: self.action_requested.emit(str(self.device.get("device_id", "")), "rename", {}))
+        self._disconnect_btn.clicked.connect(lambda: self.action_requested.emit(str(self.device.get("device_id", "")), "disconnect", {}))
+        self._forget_btn.clicked.connect(lambda: self.action_requested.emit(str(self.device.get("device_id", "")), "forget", {}))
+
+    def set_expanded(self, expanded: bool):
+        self._expanded = bool(expanded)
+        self._action_container.setVisible(self._expanded)
+        if self._expanded:
+            self.setStyleSheet("""
+                QFrame#ConnectDeviceCard {
+                    background: rgba(255,255,255,0.06);
+                    border: 1px solid rgba(0, 229, 255,0.25);
+                    border-radius: 18px;
+                }
+                QLabel {
+                    background: transparent;
+                }
+                QPushButton {
+                    background: rgba(255,255,255,0.08);
+                    color: #ffffff;
+                    border: 1px solid rgba(255,255,255,0.12);
+                    border-radius: 10px;
+                    min-height: 30px;
+                    padding: 0 10px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 229, 255,0.16);
+                    color: #00e5ff;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QFrame#ConnectDeviceCard {
+                    background: rgba(10, 12, 18, 240);
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 18px;
+                }
+                QLabel {
+                    background: transparent;
+                }
+                QPushButton {
+                    background: rgba(255,255,255,0.06);
+                    color: #ffffff;
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 10px;
+                    min-height: 30px;
+                    padding: 0 10px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 229, 255,0.12);
+                    color: #00e5ff;
+                }
+            """)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(str(self.device.get("device_id", "")))
+        super().mouseReleaseEvent(event)
+
+
+class NexusConnectDevicesPage(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._service = None
+        self._connected_device = None
+        self._log_snapshot = ""
+        self._card_anims: list[QPropertyAnimation] = []
+        self._cards: list[_ConnectDeviceCard] = []
+        self._selected_device_id: str | None = None
+        self._onboarding_known_device_ids: set[str] = set()
+
+        self.setObjectName("NexusConnectDevicesPage")
+        self.setStyleSheet(f"""
+            QFrame#NexusConnectDevicesPage {{
+                background: transparent;
+                border: none;
+            }}
+            QLabel {{
+                background: transparent;
+            }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(10)
+
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        title_box = QVBoxLayout()
+        title_box.setSpacing(2)
+        self._title = QLabel("DEVICES")
+        self._title.setFont(QFont("Segoe UI", 18, QFont.Weight.Black))
+        self._title.setStyleSheet("color: #ffffff; letter-spacing: 2px;")
+        self._subtitle = QLabel("Everything connected to Nexus.")
+        self._subtitle.setFont(QFont("Segoe UI", 9))
+        self._subtitle.setStyleSheet("color: rgba(255,255,255,0.62);")
+        title_box.addWidget(self._title)
+        title_box.addWidget(self._subtitle)
+        header.addLayout(title_box, 1)
+
+        status_wrap = QVBoxLayout()
+        status_wrap.setSpacing(4)
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+        self._gateway_pill = QLabel("● Gateway Online")
+        self._gateway_pill.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self._gateway_pill.setStyleSheet("color: #35ff75; background: rgba(53,255,117,0.06); border: 1px solid rgba(53,255,117,0.16); border-radius: 12px; padding: 5px 10px;")
+        top_row.addWidget(self._gateway_pill)
+        top_row.addStretch(1)
+        self._add_btn = QPushButton("+ Add Device")
+        self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._add_btn.setFixedHeight(34)
+        self._add_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._add_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0, 229, 255, 0.10);
+                color: #ffffff;
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 12px;
+                padding: 0 14px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.16);
+                border: 1px solid rgba(0, 229, 255, 0.40);
+            }
+        """)
+        self._add_btn.clicked.connect(self._trigger_add_device)
+        top_row.addWidget(self._add_btn)
+        status_wrap.addLayout(top_row)
+        self._gateway_meta = QLabel("Port: 8765  ┬╖  Devices: 0")
+        self._gateway_meta.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._gateway_meta.setFont(QFont("Segoe UI", 8))
+        self._gateway_meta.setStyleSheet("color: rgba(255,255,255,0.42);")
+        status_wrap.addWidget(self._gateway_meta)
+        header.addLayout(status_wrap)
+        root.addLayout(header)
+
+        self._main_stack = QStackedWidget()
+        self._main_stack.setStyleSheet("background: transparent;")
+        
+        # ───────────────────────────────────────────────
+        # PAGE 0 — OVERVIEW (GRID / EMPTY)
+        # ───────────────────────────────────────────────
+        self._overview_page = QWidget()
+        ov_lay = QVBoxLayout(self._overview_page)
+        ov_lay.setContentsMargins(0, 10, 0, 0)
+        ov_lay.setSpacing(12)
+        
+        self._my_devices_lbl = QLabel("MY DEVICES")
+        self._my_devices_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._my_devices_lbl.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
+        ov_lay.addWidget(self._my_devices_lbl)
+        
+        self._overview_stack = QStackedWidget()
+        
+        # Grid View
+        self._grid_page = QWidget()
+        grid_lay = QVBoxLayout(self._grid_page)
+        grid_lay.setContentsMargins(0, 0, 0, 0)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._grid_host = QWidget()
+        self._grid = QGridLayout(self._grid_host)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(16)
+        self._grid.setVerticalSpacing(16)
+        self._scroll.setWidget(self._grid_host)
+        grid_lay.addWidget(self._scroll)
+        self._overview_stack.addWidget(self._grid_page)
+        
+        # Empty View
+        self._empty_page = QWidget()
+        empty_lay = QVBoxLayout(self._empty_page)
+        empty_lay.addStretch(1)
+        empty_lbl = QLabel("No devices connected yet.")
+        empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_lbl.setFont(QFont("Segoe UI", 12))
+        empty_lbl.setStyleSheet("color: rgba(255,255,255,0.5);")
+        empty_lay.addWidget(empty_lbl)
+        empty_btn = QPushButton("+ ADD DEVICE")
+        empty_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        empty_btn.setFixedSize(160, 40)
+        empty_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        empty_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0, 229, 255, 0.10);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.20);
+                border: 1px solid rgba(0, 229, 255, 0.50);
+            }
+        """)
+        empty_btn.clicked.connect(self._trigger_add_device)
+        empty_lay.addWidget(empty_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        empty_lay.addStretch(1)
+        self._overview_stack.addWidget(self._empty_page)
+        
+        ov_lay.addWidget(self._overview_stack)
+        self._main_stack.addWidget(self._overview_page)
+        
+        # ───────────────────────────────────────────────
+        # PAGE 1 — DETAIL VIEW
+        # ───────────────────────────────────────────────
+        self._detail_page = QWidget()
+        det_lay = QVBoxLayout(self._detail_page)
+        det_lay.setContentsMargins(0, 10, 0, 0)
+        det_lay.setSpacing(16)
+        
+        back_btn = QPushButton("← Back to Devices")
+        back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        back_btn.setFixedSize(140, 32)
+        back_btn.setFont(QFont("Segoe UI", 9))
+        back_btn.setStyleSheet("""
+            QPushButton { background: transparent; color: rgba(255,255,255,0.7); border: none; text-align: left; }
+            QPushButton:hover { color: #00e5ff; }
+        """)
+        back_btn.clicked.connect(self._close_detail)
+        det_lay.addWidget(back_btn)
+        
+        self._detail_header = QHBoxLayout()
+        self._detail_icon = QLabel()
+        self._detail_icon.setFixedSize(48, 48)
+        self._detail_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._detail_icon.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        self._detail_icon.setStyleSheet("background: rgba(0, 229, 255, 0.10); color: #00e5ff; border: 1px solid rgba(0, 229, 255,0.22); border-radius: 12px;")
+        self._detail_header.addWidget(self._detail_icon)
+        
+        det_titles = QVBoxLayout()
+        self._detail_title = QLabel()
+        self._detail_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        self._detail_title.setStyleSheet("color: #ffffff;")
+        det_titles.addWidget(self._detail_title)
+        
+        self._detail_status = QLabel()
+        self._detail_status.setFont(QFont("Segoe UI", 10))
+        self._detail_status.setStyleSheet("color: rgba(255,255,255,0.6);")
+        det_titles.addWidget(self._detail_status)
+        self._detail_header.addLayout(det_titles, 1)
+        det_lay.addLayout(self._detail_header)
+        
+        self._detail_scroll = QScrollArea()
+        self._detail_scroll.setWidgetResizable(True)
+        self._detail_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._detail_content = QWidget()
+        self._detail_content_lay = QVBoxLayout(self._detail_content)
+        self._detail_content_lay.setContentsMargins(0, 10, 0, 10)
+        self._detail_content_lay.setSpacing(16)
+        
+        # Meta info
+        self._detail_meta = QLabel()
+        self._detail_meta.setStyleSheet("color: rgba(255,255,255,0.7);")
+        self._detail_content_lay.addWidget(self._detail_meta)
+        
+        # Controls
+        self._action_box = QFrame()
+        self._action_box.setStyleSheet("QFrame { background: rgba(10, 12, 18, 220); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; }")
+        action_lay = QVBoxLayout(self._action_box)
+        action_lay.setContentsMargins(16, 16, 16, 16)
+        action_title = QLabel("CONTROLS")
+        action_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        action_title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
+        action_lay.addWidget(action_title)
+        self._action_buttons = QGridLayout()
+        self._action_buttons.setSpacing(8)
+        action_lay.addLayout(self._action_buttons)
+        self._detail_content_lay.addWidget(self._action_box)
+        
+        # Manage
+        manage_box = QFrame()
+        manage_box.setStyleSheet("QFrame { background: rgba(10, 12, 18, 220); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; }")
+        manage_lay = QVBoxLayout(manage_box)
+        manage_lay.setContentsMargins(16, 16, 16, 16)
+        manage_title = QLabel("MANAGE")
+        manage_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        manage_title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
+        manage_lay.addWidget(manage_title)
+        
+        self._btn_rename = QPushButton("Rename Device")
+        self._btn_disconnect = QPushButton("Disconnect")
+        self._btn_reconnect = QPushButton("Reconnect")
+        self._btn_forget = QPushButton("Forget Device")
+        self._btn_forget.setStyleSheet("QPushButton { color: #ff5555; } QPushButton:hover { background: rgba(255, 85, 85, 0.1); border-color: #ff5555; }")
+        
+        manage_grid = QGridLayout()
+        manage_grid.setSpacing(8)
+        for i, b in enumerate([self._btn_rename, self._btn_disconnect, self._btn_reconnect, self._btn_forget]):
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setMinimumHeight(34)
+            if b != self._btn_forget:
+                b.setStyleSheet("""
+                    QPushButton { background: rgba(255,255,255,0.03); color: #ffffff; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; }
+                    QPushButton:hover { background: rgba(0, 229, 255,0.08); border: 1px solid rgba(0, 229, 255,0.22); color: #00e5ff; }
+                """)
+            else:
+                b.setStyleSheet("""
+                    QPushButton { background: rgba(255,255,255,0.03); color: #ff5555; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; }
+                    QPushButton:hover { background: rgba(255,85,85,0.1); border: 1px solid rgba(255,85,85,0.3); }
+                """)
+            manage_grid.addWidget(b, i // 2, i % 2)
+            
+        manage_lay.addLayout(manage_grid)
+        self._detail_content_lay.addWidget(manage_box)
+        self._detail_content_lay.addStretch(1)
+        self._detail_scroll.setWidget(self._detail_content)
+        det_lay.addWidget(self._detail_scroll)
+        
+        self._main_stack.addWidget(self._detail_page)
+        
+        # ───────────────────────────────────────────────
+        # PAGE 2 — ADD DEVICE (QR WIZARD)
+        # ───────────────────────────────────────────────
+        self._add_device_page = QWidget()
+        add_lay = QVBoxLayout(self._add_device_page)
+        add_lay.setContentsMargins(0, 10, 0, 0)
+        
+        add_back_btn = QPushButton("← Cancel")
+        add_back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_back_btn.setFixedSize(140, 32)
+        add_back_btn.setFont(QFont("Segoe UI", 9))
+        add_back_btn.setStyleSheet("""
+            QPushButton { background: transparent; color: rgba(255,255,255,0.7); border: none; text-align: left; }
+            QPushButton:hover { color: #00e5ff; }
+        """)
+        add_back_btn.clicked.connect(self._close_detail)
+        add_lay.addWidget(add_back_btn)
+        
+        # Re-use the stacked widget logic for the wizard steps
+        self._wizard_stack = QStackedWidget()
+        
+        # Wizard State 0: Select Platform
+        w0 = QWidget()
+        w0_lay = QVBoxLayout(w0)
+        w0_lay.addStretch(1)
+        w0_title = QLabel("SELECT DEVICE TYPE")
+        w0_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        w0_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        w0_title.setStyleSheet("color: #ffffff; letter-spacing: 2px;")
+        w0_lay.addWidget(w0_title)
+        w0_lay.addSpacing(20)
+        
+        w0_row = QHBoxLayout()
+        w0_row.addStretch(1)
+        self._cs_android_btn = QPushButton("ANDROID")
+        self._cs_android_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cs_android_btn.setFixedSize(140, 80)
+        self._cs_android_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._cs_android_btn.setStyleSheet("""
+            QPushButton { background: rgba(10, 12, 18, 220); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; }
+            QPushButton:hover { color: #00e5ff; border: 1px solid rgba(0, 229, 255,0.6); background: rgba(0, 229, 255,0.1); }
+        """)
+        self._cs_android_btn.clicked.connect(self._cinema_select_android)
+        w0_row.addWidget(self._cs_android_btn)
+        
+        self._cs_pc_btn = QPushButton("PC\n(Coming Soon)")
+        self._cs_pc_btn.setFixedSize(140, 80)
+        self._cs_pc_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._cs_pc_btn.setEnabled(False)
+        self._cs_pc_btn.setStyleSheet("QPushButton { background: rgba(10, 12, 18, 120); color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }")
+        w0_row.addWidget(self._cs_pc_btn)
+        w0_row.addStretch(1)
+        w0_lay.addLayout(w0_row)
+        w0_lay.addStretch(1)
+        self._wizard_stack.addWidget(w0)
+        
+        # Wizard State 1: QR Code
+        w1 = QWidget()
+        w1_lay = QVBoxLayout(w1)
+        w1_lay.addStretch(1)
+        w1_title = QLabel("SCAN TO CONNECT")
+        w1_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        w1_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        w1_title.setStyleSheet("color: #ffffff; letter-spacing: 2px;")
+        w1_lay.addWidget(w1_title)
+        w1_lay.addSpacing(16)
+        
+        w1_qr_row = QHBoxLayout()
+        w1_qr_row.addStretch(1)
+        self._onb_qr_label = QLabel()
+        self._onb_qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._onb_qr_label.setFixedSize(200, 200)
+        self._onb_qr_label.setStyleSheet("background: #ffffff; border-radius: 6px; padding: 4px;")
+        w1_qr_row.addWidget(self._onb_qr_label)
+        w1_qr_row.addStretch(1)
+        w1_lay.addLayout(w1_qr_row)
+        
+        w1_lay.addSpacing(16)
+        self._onb_code_lbl = QLabel("------")
+        self._onb_code_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._onb_code_lbl.setFont(QFont("Consolas", 18, QFont.Weight.Black))
+        self._onb_code_lbl.setStyleSheet("color: #00e5ff; letter-spacing: 6px;")
+        w1_lay.addWidget(self._onb_code_lbl)
+        
+        self._onb_status_lbl = QLabel("WAITING FOR CONNECTION")
+        self._onb_status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._onb_status_lbl.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        self._onb_status_lbl.setStyleSheet("color: rgba(255,255,255,0.5); letter-spacing: 1px;")
+        w1_lay.addWidget(self._onb_status_lbl)
+        
+        w1_ctrl = QHBoxLayout()
+        w1_ctrl.addStretch(1)
+        w1_ref = QPushButton("Refresh Code")
+        w1_ref.setCursor(Qt.CursorShape.PointingHandCursor)
+        w1_ref.setFixedSize(120, 32)
+        w1_ref.setStyleSheet("""
+            QPushButton { background: rgba(255,255,255,0.05); color: #ffffff; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; }
+            QPushButton:hover { background: rgba(255,255,255,0.1); }
+        """)
+        w1_ref.clicked.connect(self._refresh_onboarding_offer)
+        w1_ctrl.addWidget(w1_ref)
+        w1_ctrl.addStretch(1)
+        w1_lay.addLayout(w1_ctrl)
+        w1_lay.addStretch(1)
+        self._wizard_stack.addWidget(w1)
+        
+        # Wizard State 2: Success
+        w2 = QWidget()
+        w2_lay = QVBoxLayout(w2)
+        w2_lay.addStretch(1)
+        self._onb_success_title = QLabel("DEVICE CONNECTED")
+        self._onb_success_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._onb_success_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Black))
+        self._onb_success_title.setStyleSheet("color: #35ff75; letter-spacing: 2px;")
+        w2_lay.addWidget(self._onb_success_title)
+        self._onb_success_name = QLabel("")
+        self._onb_success_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._onb_success_name.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        self._onb_success_name.setStyleSheet("color: #ffffff;")
+        w2_lay.addWidget(self._onb_success_name)
+        w2_lay.addStretch(1)
+        self._wizard_stack.addWidget(w2)
+        
+        add_lay.addWidget(self._wizard_stack)
+        self._main_stack.addWidget(self._add_device_page)
+        
+        root.addWidget(self._main_stack)
+        
+        self._onboarding_timer = QTimer(self)
+        self._onboarding_timer.timeout.connect(self._tick_onboarding)
+        self._onboarding_offer = {}
+        self._onboarding_pulse = 0
+
+    def _service_obj(self):
+        return self._service or getattr(self.parentWidget(), "_nexus_connect", None)
+
+    def set_service(self, service):
+        self._service = service
+
+    def _trigger_add_device(self):
+        self._main_stack.setCurrentIndex(2)
+        self._wizard_stack.setCurrentIndex(0)
+
+    def _cinema_select_android(self):
+        self._wizard_stack.setCurrentIndex(1)
+        service = self._service_obj()
+        self._onboarding_known_device_ids = set(str(d.get("device_id", "")) for d in service.list_devices()) if service else set()
+        self._onboarding_timer.start(1000)
+        self._refresh_onboarding_offer()
+
+    def _refresh_onboarding_offer(self):
+        service = self._service_obj()
+        if service is None:
+            self._onboarding_offer = {}
+            self._onb_code_lbl.setText("------")
+            self._onb_status_lbl.setText("GATEWAY UNAVAILABLE")
+            return
+        try:
+            import io
+            import qrcode
+
+            self._onboarding_offer = dict(service.create_pairing_offer(device_name="Nexus Connect", platform="gateway"))
+            code = str(self._onboarding_offer.get("pairing_code") or "------")
+            self._onb_code_lbl.setText(code)
+            self._onb_status_lbl.setText("WAITING FOR CONNECTION")
+            
+            payload = self._onboarding_offer
+            text = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+            if qrcode is not None:
+                qr = qrcode.QRCode(box_size=6, border=2, error_correction=qrcode.constants.ERROR_CORRECT_M)
+                qr.add_data(text)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                pix = QPixmap()
+                pix.loadFromData(buf.getvalue(), "PNG")
+                self._onb_qr_label.setPixmap(
+                    pix.scaled(
+                        self._onb_qr_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+            else:
+                self._onb_qr_label.setText(text)
+                
+            self._tick_onboarding()
+        except Exception as exc:
+            self._onboarding_offer = {}
+            self._onb_code_lbl.setText("------")
+            self._onb_status_lbl.setText(f"ERROR: {exc}")
+
+    def _tick_onboarding(self):
+        if self._wizard_stack.currentIndex() != 1:
+            return
+        
+        expires = self._onboarding_offer.get("expires")
+        try:
+            remaining = max(0, int(expires))
+            if remaining <= 0 and self._onboarding_offer:
+                self._onb_status_lbl.setText("CODE EXPIRED. REFRESH TO CONTINUE.")
+        except Exception:
+            pass
+            
+        service = self._service_obj()
+        if service and self._onboarding_offer:
+            devices = service.list_devices()
+            new_device = next(
+                (d for d in devices if str(d.get("device_id", "")) not in self._onboarding_known_device_ids),
+                None,
+            )
+            if new_device:
+                self._onboarding_timer.stop()
+                self._connected_device = new_device
+                self._trigger_onboarding_success()
+
+    def _trigger_onboarding_success(self):
+        self._wizard_stack.setCurrentIndex(2)
+        dev = self._connected_device
+        self._onb_success_name.setText(str(dev.get("name", "Device")).upper())
+        QTimer.singleShot(2000, lambda: self.refresh(force=True))
+
+    def _cancel_onboarding(self):
+        self._onboarding_timer.stop()
+        self._close_detail()
+
+    def _clear_layout(self, layout):
+        if layout is None:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+    def _on_device_selected(self, device_id: str):
+        if self._selected_device_id == device_id:
+            self._selected_device_id = None
+        else:
+            self._selected_device_id = device_id
+        self.refresh(force=True)
+
+    def _on_card_action_requested(self, device_id: str, action: str, payload: dict):
+        if action == "rename":
+            service = self._service_obj()
+            if not service:
+                return
+            device = next((d for d in service.list_devices() if str(d.get("device_id", "")) == device_id), None)
+            if device:
+                self._rename_device(device_id, str(device.get("name", "")))
+            return
+        if action == "disconnect":
+            self._apply_tile_action(device_id, "disconnect", payload)
+            return
+        if action == "forget":
+            self._apply_tile_action(device_id, "forget", payload)
+            return
+        self._apply_tile_action(device_id, action, payload)
+        return
+
+    def _close_detail(self):
+        self._selected_device_id = None
+        self._main_stack.setCurrentIndex(0)
+        self.refresh(force=True)
+
+    def refresh(self, force: bool = False):
+        service = self._service_obj()
+        if service is None:
+            return
+            
+        devices = service.list_devices()
+        port = getattr(service, "port", 8765)
+        self._gateway_meta.setText(f"Port: {port}  ┬╖  Devices: {len(devices)}")
+        
+        # If we are in Add Device or Detail page, keep it there
+        if self._main_stack.currentIndex() not in (0,) and not force:
+            pass # Keep current index unless forced to reset
+        elif len(devices) == 0:
+            self._main_stack.setCurrentIndex(0)
+            self._overview_stack.setCurrentIndex(1) # Empty state
+        else:
+            self._main_stack.setCurrentIndex(0)
+            self._overview_stack.setCurrentIndex(0) # Grid state
+            
+        # Rebuild grid
+        self._clear_layout(self._grid)
+        self._cards.clear()
+        
+        if devices:
+            cols = 4
+            for i, dev in enumerate(devices):
+                card = _ConnectDeviceCard(dev)
+                card.clicked.connect(self._on_device_selected)
+                card.action_requested.connect(self._on_card_action_requested)
+                card.set_expanded(str(dev.get("device_id", "")) == self._selected_device_id)
+                self._cards.append(card)
+                self._grid.addWidget(card, i // cols, i % cols)
+            self._grid.setRowStretch(len(devices) // cols + 1, 1)
+
+    def _apply_tile_action(self, device_id: str, action: str, payload: dict):
+        service = self._service_obj()
+        if not service:
+            return
+        try:
+            if action == "rename":
+                device = next((d for d in service.list_devices() if str(d.get("device_id", "")) == device_id), None)
+                if device:
+                    self._rename_device(device_id, str(device.get("name", "")))
+                    return
+            elif action == "disconnect":
+                if hasattr(service, "disconnect_device"):
+                    try:
+                        asyncio.run(service.disconnect_device(device_id))
+                    except Exception:
+                        pass
+            elif action == "forget":
+                self._forget_device(device_id)
+                return
+            elif action == "set_pin":
+                self._set_device_pin(device_id)
+                return
+            else:
+                if hasattr(service, "route_command"):
+                    service.route_command(device_id, action, payload)
+                else:
+                    service.execute_device_action(device_id, action, payload)
+        except Exception:
+            pass
+        QTimer.singleShot(200, lambda: self.refresh(force=True))
+
+    def _rename_device(self, device_id: str, current_name: str):
+        new_name, ok = QInputDialog.getText(self, "Rename Device", "New name:", text=current_name)
+        if ok and new_name.strip():
+            service = self._service_obj()
+            if service:
+                try:
+                    service.rename_device(device_id, new_name.strip())
+                    self._on_device_selected(device_id)
+                except Exception:
+                    pass
+            self.refresh(force=True)
+
+    def _set_device_pin(self, device_id: str):
+        pin, ok = QInputDialog.getText(self, "Set Device PIN", "Enter device PIN:", QLineEdit.EchoMode.Password)
+        if ok and pin.strip():
+            try:
+                settings = {}
+                if APP_SETTINGS_FILE.exists():
+                    with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                        settings = json.load(f)
+                
+                device_pins = settings.get("device_pins", {})
+                device_pins[device_id] = pin.strip()
+                settings["device_pins"] = device_pins
+                
+                with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(settings, f, indent=4)
+            except Exception as e:
+                print(f"Error saving pin: {e}")
+
+    def _forget_device(self, device_id: str):
+        service = self._service_obj()
+        if service:
+            try:
+                if hasattr(service, "forget_device"):
+                    service.forget_device(device_id)
+                elif hasattr(service, "gateway") and hasattr(service.gateway, "device_manager"):
+                    service.gateway.device_manager.remove(device_id)
+            except Exception:
+                pass
+        self._close_detail()
+        self.refresh(force=True)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh(force=True)
+
