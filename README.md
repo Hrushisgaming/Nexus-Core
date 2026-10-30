@@ -126,7 +126,7 @@
    - **macOS:** `python3 main.py`
 
    On first launch Nexus creates its data folder at:
-   - Windows: `%LOCALAPPDATA%\BrahmaAI`
+   - Windows: `%LOCALAPPDATA%\NexusCore`
    - macOS: `~/Library/Application Support/NexusCore`
 
 4. **Configure API Keys:**
@@ -190,7 +190,7 @@ Nexus Core Evo/
 
 ## 🔒 Security & Privacy
 
-- All long-term memories, credentials, and configuration files are stored locally in `%LOCALAPPDATA%\BrahmaAI\`.
+- All long-term memories, credentials, and configuration files are stored locally in `%LOCALAPPDATA%\NexusCore\`.
 - External tools run through permission sentries and the isolated Crucible sandbox.
 - Audio and video frames are only streamed during active conversation sessions.
 
