@@ -1,4 +1,4 @@
-package com.brahma.connect.core
+package com.nexus.connect.core
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -118,7 +118,7 @@ data class CommandResult(
     }
 }
 
-object BrahmaProtocol {
+object NexusProtocol {
     const val HELLO = "hello"
     const val PAIR_REQUEST = "pair_request"
     const val PAIR_APPROVED = "pair_approved"
