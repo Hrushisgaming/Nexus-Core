@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 import os
+import time
 import re
 import sys
 from datetime import datetime
