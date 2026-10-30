@@ -3455,7 +3455,7 @@ class BrahmaLive:
                 def _run_brahma_dev():
                     try:
                         import webbrowser
-                        from actions.brahma_dev_agent import run_dev_agent
+                        from actions.nexus_dev_agent import run_dev_agent
                         res = run_dev_agent({
                             "description": text,
                             "workspace_path": developer_workspace
@@ -3604,7 +3604,7 @@ class BrahmaLive:
             def _run_brahma_dev():
                 try:
                     import webbrowser
-                    from actions.brahma_dev_agent import run_dev_agent
+                    from actions.nexus_dev_agent import run_dev_agent
                     res = run_dev_agent({
                         "description": text,
                         "workspace_path": developer_workspace
