@@ -7,22 +7,22 @@ from dataclasses import field
 from pathlib import Path
 from typing import Any
 
-from .gateway.server import BrahmaGateway, BrahmaGatewayConfig
+from .gateway.server import NexusGateway, NexusGatewayConfig
 
 
 @dataclass(slots=True)
-class BrahmaConnectService:
+class NexusConnectService:
     """Small runtime wrapper around the gateway server."""
 
     base_dir: Path
-    config: BrahmaGatewayConfig | None = None
-    gateway: BrahmaGateway = field(init=False)
+    config: NexusGatewayConfig | None = None
+    gateway: NexusGateway = field(init=False)
     _thread: threading.Thread | None = field(init=False, default=None)
     _started: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
         self.base_dir = Path(self.base_dir)
-        self.gateway = BrahmaGateway(self.base_dir, self.config)
+        self.gateway = NexusGateway(self.base_dir, self.config)
 
     @property
     def app(self):
@@ -57,7 +57,7 @@ class BrahmaConnectService:
             asyncio.set_event_loop(self._loop)
             self._loop.run_until_complete(self.gateway.serve())
 
-        self._thread = threading.Thread(target=_runner, name="BrahmaConnectGateway", daemon=True)
+        self._thread = threading.Thread(target=_runner, name="NexusConnectGateway", daemon=True)
         self._thread.start()
         self._started = True
 
@@ -100,7 +100,7 @@ class BrahmaConnectService:
     def route_command(self, target: str, action: str, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
         return asyncio.run(self.gateway.route_command(target, action, parameters or {}))
 
-    async def disconnect_device(self, target: str, *, reason: str = "Disconnected by Brahma") -> dict[str, Any]:
+    async def disconnect_device(self, target: str, *, reason: str = "Disconnected by Nexus") -> dict[str, Any]:
         return await self.gateway.disconnect_device(target, reason=reason)
 
     async def reconnect_device(self, target: str) -> dict[str, Any]:
@@ -116,11 +116,11 @@ class BrahmaConnectService:
         return await self.gateway.approve_pending_request(pending_id)
 
 
-_SERVICE: BrahmaConnectService | None = None
+_SERVICE: NexusConnectService | None = None
 
 
-def get_service(base_dir: str | Path) -> BrahmaConnectService:
+def get_service(base_dir: str | Path) -> NexusConnectService:
     global _SERVICE
     if _SERVICE is None:
-        _SERVICE = BrahmaConnectService(Path(base_dir))
+        _SERVICE = NexusConnectService(Path(base_dir))
     return _SERVICE
