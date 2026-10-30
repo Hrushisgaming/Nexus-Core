@@ -6,6 +6,7 @@ import socket
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
+import shutil
 from typing import Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -21,14 +22,27 @@ from .pairing import PairingManager
 from .protocol import ProtocolTypes, build_message, validate_message, now_iso, new_request_id
 from .websocket import ConnectionHub
 from .mobile_portal import get_mobile_portal_html
+from core.user_paths import get_user_data_dir
 
 
 def _default_config_path(base_dir: Path) -> Path:
-    return Path(base_dir) / "config" / "nexus_connect.json"
+    return get_user_data_dir() / "config" / "nexus_connect.json"
 
 
 def _default_registry_path(base_dir: Path) -> Path:
-    return Path(base_dir) / "config" / "nexus_connect" / "devices.json"
+    user_config = get_user_data_dir() / "config"
+    registry_path = user_config / "nexus_connect" / "devices.json"
+    legacy_paths = (
+        user_config / "brahma_connect" / "devices.json",
+        Path(base_dir) / "config" / "brahma_connect" / "devices.json",
+    )
+    if not registry_path.exists():
+        for legacy_path in legacy_paths:
+            if legacy_path.exists():
+                registry_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(legacy_path, registry_path)
+                break
+    return registry_path
 
 
 @dataclass(slots=True)
@@ -56,14 +70,27 @@ class NexusGatewayConfig:
             "request_timeout_seconds": 30,
         }
         config_path = _default_config_path(base_dir)
-        if config_path.exists():
+        legacy_config_paths = (
+            get_user_data_dir() / "config" / "brahma_connect.json",
+            base_dir / "config" / "brahma_connect.json",
+        )
+        loaded_legacy_config = False
+        source_path = config_path if config_path.exists() else next(
+            (path for path in legacy_config_paths if path.exists()), None
+        )
+        if source_path is not None:
             try:
-                data.update(json.loads(config_path.read_text(encoding="utf-8")))
+                data.update(json.loads(source_path.read_text(encoding="utf-8")))
+                loaded_legacy_config = source_path != config_path
             except Exception:
                 pass
+        # The old mDNS name is accepted as an input, but new installs advertise
+        # Nexus Connect. GatewayDiscovery also advertises the legacy alias.
+        if data.get("service_name") == "_BRAHMA._tcp.local.":
+            data["service_name"] = "_NEXUS._tcp.local."
         if override:
             data.update({k: v for k, v in override.items() if v is not None})
-        return cls(
+        config = cls(
             host=str(data.get("host", "0.0.0.0")),
             port=int(data.get("port", 8765)),
             enabled=bool(data.get("enabled", True)),
@@ -74,6 +101,12 @@ class NexusGatewayConfig:
             config_path=config_path,
             registry_path=_default_registry_path(base_dir),
         )
+        if loaded_legacy_config and not config_path.exists():
+            try:
+                config.save()
+            except OSError:
+                pass
+        return config
 
     def to_dict(self) -> dict[str, Any]:
         return {
