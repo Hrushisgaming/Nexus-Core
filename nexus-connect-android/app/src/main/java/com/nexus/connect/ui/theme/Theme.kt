@@ -1,11 +1,11 @@
-package com.brahma.connect.ui.theme
+package com.nexus.connect.ui.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val BrahmaDarkColors = darkColorScheme(
+private val NexusDarkColors = darkColorScheme(
     primary = Color(0xFFFFFFFF),
     onPrimary = Color.Black,
     secondary = Color(0xFF00E5FF),
@@ -18,9 +18,9 @@ private val BrahmaDarkColors = darkColorScheme(
 )
 
 @Composable
-fun BrahmaConnectTheme(content: @Composable () -> Unit) {
+fun NexusConnectTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = BrahmaDarkColors,
+        colorScheme = NexusDarkColors,
         typography = androidx.compose.material3.Typography(),
         content = content,
     )
