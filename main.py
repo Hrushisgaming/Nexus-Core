@@ -137,7 +137,7 @@ API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
 APP_SETTINGS_FILE = get_user_data_dir() / "config" / "app_settings.json"
 logger = logging.getLogger("NexusCore")
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
-STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Nexus Core" / "startup.log"
+STARTUP_LOG     = get_user_data_dir() / "logs" / "startup.log"
 # Live (bidiGenerateContent) needs a native-audio Live model; text models such as
 # gemini-3.5-flash-lite are rejected with a 1008 error. Order = preference.
 # Override the first choice with:  NEXUS_LIVE_MODEL=models/gemini-3.1-flash-live-preview
@@ -154,12 +154,37 @@ LIVE_CONNECT_TIMEOUT = 12
 _SINGLE_INSTANCE_MUTEX = None
 
 
-def _live_model_candidates() -> list:
-    """LIVE_MODEL first, then the fallbacks, without duplicates."""
+def _live_model_candidates(client=None) -> list:
+    """Prefer native-audio Live models advertised by this API key.
+
+    Model discovery is best-effort: if the API does not expose model
+    capabilities (or discovery is unavailable), retain known fallbacks.
+    """
+    discovered = []
+    if client is not None:
+        try:
+            for model_info in client.models.list():
+                name = str(getattr(model_info, "name", "") or "").strip()
+                if not name:
+                    continue
+                lowered = name.lower()
+                if "live" not in lowered and "native-audio" not in lowered:
+                    continue
+                actions = getattr(model_info, "supported_actions", None)
+                if actions and not any("bidi" in str(action).lower() for action in actions):
+                    continue
+                if not name.startswith("models/"):
+                    name = f"models/{name}"
+                if name not in discovered:
+                    discovered.append(name)
+        except Exception as exc:
+            _startup_log(f"Gemini model discovery unavailable; using fallbacks: {exc}")
+
     out = []
-    for m in (LIVE_MODEL, *LIVE_MODEL_FALLBACKS):
-        if m and m not in out:
-            out.append(m)
+    for model in (LIVE_MODEL, *discovered, *LIVE_MODEL_FALLBACKS):
+        if model and model not in out:
+            out.append(model)
+    _startup_log(f"Gemini Live model candidates: {', '.join(out)}")
     return out
 
 
@@ -6818,7 +6843,7 @@ class BrahmaLive:
                 print("[NEXUS CORE] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
                 connect_cm, session, _live_model_used = await _connect_live_with_fallback(
-                    client, self._build_config, _live_model_candidates(), LIVE_CONNECT_TIMEOUT
+                    client, self._build_config, _live_model_candidates(client), LIVE_CONNECT_TIMEOUT
                 )
                 print(f"[NEXUS CORE] Live model: {_live_model_used}")
                 try:
