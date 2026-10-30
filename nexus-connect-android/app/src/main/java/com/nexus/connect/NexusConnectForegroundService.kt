@@ -1,4 +1,4 @@
-package com.brahma.connect
+package com.nexus.connect
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,30 +10,30 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.brahma.connect.commands.DeviceCommandHandler
-import com.brahma.connect.core.AgentStateStore
-import com.brahma.connect.core.ConnectionState
-import com.brahma.connect.network.BrahmaWebSocketClient
-import com.brahma.connect.pairing.PairingStorage
+import com.nexus.connect.commands.DeviceCommandHandler
+import com.nexus.connect.core.AgentStateStore
+import com.nexus.connect.core.ConnectionState
+import com.nexus.connect.network.NexusWebSocketClient
+import com.nexus.connect.pairing.PairingStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 
-class BrahmaConnectForegroundService : Service() {
+class NexusConnectForegroundService : Service() {
     private val scope = CoroutineScope(Job() + Dispatchers.IO)
     private lateinit var storage: PairingStorage
-    private lateinit var client: BrahmaWebSocketClient
+    private lateinit var client: NexusWebSocketClient
     private var started = false
 
     override fun onCreate() {
         super.onCreate()
         storage = PairingStorage(this)
-        client = BrahmaWebSocketClient(this, storage, DeviceCommandHandler(this))
+        client = NexusWebSocketClient(this, storage, DeviceCommandHandler(this))
         createNotificationChannel()
         try {
-            val notification = buildNotification("Brahma Connect", "Starting connection")
+            val notification = buildNotification("Nexus Connect", "Starting connection")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
@@ -87,18 +87,18 @@ class BrahmaConnectForegroundService : Service() {
     private fun updateNotification() {
         val state = AgentStateStore.connectionState.value
         val text = when (state) {
-            ConnectionState.CONNECTED -> "Connected to Brahma"
-            ConnectionState.CONNECTING -> "Connecting to Brahma"
+            ConnectionState.CONNECTED -> "Connected to Nexus"
+            ConnectionState.CONNECTING -> "Connecting to Nexus"
             ConnectionState.RECONNECTING -> "Reconnecting"
             ConnectionState.DISCONNECTED -> "Disconnected"
         }
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification("Brahma Connect", text))
+        manager.notify(NOTIFICATION_ID, buildNotification("Nexus Connect", text))
     }
 
     private fun buildNotification(title: String, text: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_brahma_launcher)
+            .setSmallIcon(R.drawable.ic_nexus_launcher)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
@@ -108,7 +108,7 @@ class BrahmaConnectForegroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(CHANNEL_ID, "Brahma Connect", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(CHANNEL_ID, "Nexus Connect", NotificationManager.IMPORTANCE_LOW)
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
     }
@@ -121,10 +121,10 @@ class BrahmaConnectForegroundService : Service() {
     }
 
     companion object {
-        const val ACTION_STOP = "com.brahma.connect.action.STOP"
-        const val ACTION_SEND_CHAT = "com.brahma.connect.action.SEND_CHAT"
-        const val EXTRA_CHAT_TEXT = "com.brahma.connect.extra.CHAT_TEXT"
-        private const val CHANNEL_ID = "brahma_connect"
+        const val ACTION_STOP = "com.nexus.connect.action.STOP"
+        const val ACTION_SEND_CHAT = "com.nexus.connect.action.SEND_CHAT"
+        const val EXTRA_CHAT_TEXT = "com.nexus.connect.extra.CHAT_TEXT"
+        private const val CHANNEL_ID = "nexus_connect"
         private const val NOTIFICATION_ID = 4201
     }
 }
