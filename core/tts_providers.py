@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+from core.api_keys import get_api_key
 from pathlib import Path
 from typing import Optional
 
@@ -50,7 +51,7 @@ class ElevenLabsTTSProvider(TTSProvider):
     DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Rachel
 
     def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY", "")
+        self.api_key = get_api_key("elevenlabs_api_key", "ELEVENLABS_API_KEY", api_key)
         self.voice_id = voice_id or self.DEFAULT_VOICE_ID
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
@@ -117,7 +118,7 @@ class GroqTTSProvider(TTSProvider):
     DEFAULT_VOICE_ID = "troy"  # Orpheus / Canopy Labs default
 
     def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: str = "playai-tts"):
-        self.api_key = api_key or os.environ.get("GROQ_API_KEY", "")
+        self.api_key = get_api_key("groq_api_key", "GROQ_API_KEY", api_key)
         self.voice_id = voice_id or self.DEFAULT_VOICE_ID
         self.model = model
         self._available = bool(self.api_key)
@@ -183,7 +184,7 @@ class FishAudioTTSProvider(TTSProvider):
     name = "fish_audio"
 
     def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: str = "fish-speech-1"):
-        self.api_key = api_key or os.environ.get("FISH_AUDIO_API_KEY", "")
+        self.api_key = get_api_key("fish_audio_api_key", "FISH_AUDIO_API_KEY", api_key)
         self.voice_id = voice_id or ""
         self.model = model
         self._available = bool(self.api_key)
