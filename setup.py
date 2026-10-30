@@ -169,7 +169,7 @@ def main():
     print("=" * 40)
     print("\nTo start Nexus Core:")
     print("  macOS/Linux: python3 main.py")
-    print("  Windows:     python main.py  or  start_brahma.bat")
+    print("  Windows:     python main.py  or  start_nexus.bat")
     print("\nManage API keys anytime in Settings → AI Providers.")
 
 
