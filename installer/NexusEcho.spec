@@ -1,16 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
-cwd = 'D:\\TiTech Prabha Solution\\Brahma AI\\Brahma AI\\Brahma-AI---Lite-main\\Brahma-AI---Lite-main'
+cwd = 'D:\\TiTech Prabha Solution\\Nexus AI\\Nexus AI\\Nexus-AI---Lite-main\\Nexus-AI---Lite-main'
 
 a = Analysis(
-    ['D:\\TiTech Prabha Solution\\Brahma AI\\Brahma AI\\Brahma-AI---Lite-main\\Brahma-AI---Lite-main\\main.py'],
+    ['D:\\TiTech Prabha Solution\\Nexus AI\\Nexus AI\\Nexus-AI---Lite-main\\Nexus-AI---Lite-main\\main.py'],
     pathex=[],
     binaries=[],
     datas=[
         (os.path.join(cwd, 'assets'), 'assets'),
         (os.path.join(cwd, 'config'), 'config'),
         (os.path.join(cwd, 'core'), 'core'),
-        (os.path.join(cwd, 'brahma_connect'), 'brahma_connect'),
+        (os.path.join(cwd, 'nexus_connect'), 'nexus_connect'),
         (os.path.join(cwd, 'actions'), 'actions'),
         (os.path.join(cwd, 'dashboard/static'), 'dashboard/static'),
         (os.path.join(cwd, 'smart_home'), 'smart_home'),
@@ -53,7 +53,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='BrahmaEcho',
+    name='NexusEcho',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -75,5 +75,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='BrahmaEcho'
+    name='NexusEcho'
 )
