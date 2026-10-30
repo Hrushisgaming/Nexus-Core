@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+from core.api_keys import get_api_key
 from typing import Optional
 
 logger = logging.getLogger("SearchProviders")
@@ -42,7 +43,7 @@ class TavilyProvider(SearchProvider):
     name = "tavily"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        self.api_key = get_api_key("tavily_api_key", "TAVILY_API_KEY", api_key)
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
         if not self.api_key:
@@ -97,7 +98,7 @@ class FirecrawlProvider(SearchProvider):
     name = "firecrawl"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("FIRECRAWL_API_KEY", "")
+        self.api_key = get_api_key("firecrawl_api_key", "FIRECRAWL_API_KEY", api_key)
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
         if not self.api_key:
@@ -148,7 +149,7 @@ class SerpAPIProvider(SearchProvider):
     name = "serpapi"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("SERPAPI_API_KEY", "")
+        self.api_key = get_api_key("serpapi_api_key", "SERPAPI_API_KEY", api_key)
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
         if not self.api_key:
