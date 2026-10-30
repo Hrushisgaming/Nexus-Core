@@ -64,6 +64,18 @@ class MCPServerInstance:
             if self.is_connected:
                 return True
 
+            # GUI-launched apps on macOS/Linux get a minimal PATH, so npx/uvx/node
+            # installed via Homebrew, nvm or uv are not found. Extend it.
+            extra = [
+                "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin",
+                str(Path.home() / ".local" / "bin"), str(Path.home() / ".cargo" / "bin"),
+                str(Path.home() / ".volta" / "bin"),
+            ]
+            nvm_dir = Path.home() / ".nvm" / "versions" / "node"
+            if nvm_dir.exists():
+                extra += [str(p / "bin") for p in sorted(nvm_dir.iterdir(), reverse=True)]
+            cur = os.environ.get("PATH", "")
+            os.environ["PATH"] = os.pathsep.join([p for p in extra if os.path.isdir(p) and p not in cur.split(os.pathsep)] + [cur])
             cmd_resolved = shutil.which(self.command) or self.command
             full_cmd = [cmd_resolved] + [str(a) for a in self.args]
 
