@@ -76,6 +76,44 @@ def _format_ddg(query: str, results: list[dict]) -> str:
         lines.append("")
     return "\n".join(lines).strip()
 
+def _provider_search(query: str) -> str:
+    """Use the engine chosen in Settings (tavily/firecrawl/serpapi) when its key is saved."""
+    from core.search_providers import get_search_provider
+    try:
+        from core.user_paths import get_user_data_dir
+        cfg = get_user_data_dir() / "config" / "app_settings.json"
+        engine = (json.loads(cfg.read_text(encoding="utf-8")).get("search_engine") or "").strip() if cfg.exists() else ""
+    except Exception:
+        engine = ""
+    order = [e for e in (engine, "tavily", "firecrawl", "serpapi") if e and e != "duckduckgo"]
+    seen = set()
+    for pid in order:
+        if pid in seen:
+            continue
+        seen.add(pid)
+        provider = get_search_provider(pid)
+        if not provider or not provider.available:
+            continue
+        res = provider.search(query)
+        if not isinstance(res, dict) or res.get("error") or not (res.get("results") or res.get("answer")):
+            continue
+        lines = [f"Search results for: {query} (via {res.get('provider', pid)})\n"]
+        if res.get("answer"):
+            lines += [str(res["answer"]), ""]
+        for i, r in enumerate(res.get("results") or [], 1):
+            if not isinstance(r, dict):
+                continue
+            title = r.get("title") or ""
+            body = r.get("content") or r.get("snippet") or r.get("description") or ""
+            url = r.get("url") or r.get("link") or ""
+            if title: lines.append(f"{i}. {title}")
+            if body:  lines.append(f"   {str(body)[:400]}")
+            if url:   lines.append(f"   {url}")
+            lines.append("")
+        return "\n".join(lines).strip()
+    raise RuntimeError("no configured search provider")
+
+
 def _compare(items: list[str], aspect: str) -> str:
     query = (
         f"Compare {', '.join(items)} in terms of {aspect}. "
@@ -145,6 +183,11 @@ def web_search(
                     if r.get("snippet"):
                         lines.append(f"  • {r['snippet']}")
             return "\n".join(lines).strip()
+
+    try:
+        return _provider_search(query)
+    except Exception as e:
+        print(f"[WebSearch] Configured provider unavailable ({e}) - using DDG/Gemini.")
 
     try:
         results = _ddg_search(query)
