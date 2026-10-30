@@ -5,11 +5,11 @@ from .discovery import GatewayDiscovery
 from .models import DeviceRecord, PairingOffer
 from .pairing import PairingManager
 from .protocol import ProtocolTypes, build_message
-from .server import BrahmaGateway, BrahmaGatewayConfig
+from .server import NexusGateway, NexusGatewayConfig
 
 __all__ = [
-    "BrahmaGateway",
-    "BrahmaGatewayConfig",
+    "NexusGateway",
+    "NexusGatewayConfig",
     "CapabilityManager",
     "CommandRouter",
     "DeviceManager",
