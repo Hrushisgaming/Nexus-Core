@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+from core.api_keys import get_api_key
 from pathlib import Path
 from typing import Optional
 
@@ -116,7 +117,7 @@ class GroqWhisperProvider(STTProvider):
     name = "groq_whisper"
 
     def __init__(self, api_key: Optional[str] = None, model: str = "whisper-large-v3"):
-        self.api_key = api_key or os.environ.get("GROQ_API_KEY", "")
+        self.api_key = get_api_key("groq_api_key", "GROQ_API_KEY", api_key)
         self.model = model
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
@@ -172,7 +173,7 @@ class ElevenLabsSTTProvider(STTProvider):
     name = "elevenlabs"
 
     def __init__(self, api_key: Optional[str] = None, model: str = "scribe_v1"):
-        self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY", "")
+        self.api_key = get_api_key("elevenlabs_api_key", "ELEVENLABS_API_KEY", api_key)
         self.model = model
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
