@@ -9,7 +9,7 @@ from __future__ import annotations
 
 def bind_runtime_globals(namespace: dict) -> None:
     """Bind application services and configuration used by legacy runtime methods."""
-    globals().update(namespace)
+    globals().update({name: value for name, value in namespace.items() if not name.startswith("__")})
 
 
 class BrahmaLive:
