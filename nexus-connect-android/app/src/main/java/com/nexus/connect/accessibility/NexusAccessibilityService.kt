@@ -1,4 +1,4 @@
-package com.brahma.connect.accessibility
+package com.nexus.connect.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
@@ -7,9 +7,9 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import com.brahma.connect.core.AgentStateStore
+import com.nexus.connect.core.AgentStateStore
 
-class BrahmaAccessibilityService : AccessibilityService() {
+class NexusAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Intentionally left blank for now.
     }
@@ -109,6 +109,6 @@ class BrahmaAccessibilityService : AccessibilityService() {
     }
     
     companion object {
-        var instance: BrahmaAccessibilityService? = null
+        var instance: NexusAccessibilityService? = null
     }
 }
