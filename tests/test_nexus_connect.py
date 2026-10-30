@@ -78,3 +78,71 @@ def test_command_router_reports_offline_device(tmp_path: Path):
 
     assert result["success"] is False
     assert "offline" in result["error"].lower()
+
+
+def test_legacy_connect_config_migrates_to_nexus_user_data(tmp_path, monkeypatch):
+    import json
+    from nexus_connect.gateway.server import NexusGatewayConfig
+
+    user_data = tmp_path / "user-data"
+    config_dir = user_data / "config"
+    config_dir.mkdir(parents=True)
+    legacy_config = config_dir / "brahma_connect.json"
+    legacy_config.write_text(json.dumps({
+        "host": "127.0.0.1",
+        "port": 9876,
+        "service_name": "_BRAHMA._tcp.local.",
+    }), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "nexus_connect.gateway.server.get_user_data_dir",
+        lambda: user_data,
+    )
+    config = NexusGatewayConfig.load(tmp_path / "bundle")
+
+    assert config.port == 9876
+    assert config.service_name == "_NEXUS._tcp.local."
+    assert (config_dir / "nexus_connect.json").exists()
+    assert config.registry_path == config_dir / "nexus_connect" / "devices.json"
+
+
+def test_gateway_discovery_advertises_nexus_and_legacy_service(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from nexus_connect.gateway.discovery import GatewayDiscovery
+
+    class FakeServiceInfo:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class FakeZeroconf:
+        def __init__(self, **kwargs):
+            self.registered = []
+            self.unregistered = []
+            self.closed = False
+
+        def register_service(self, info):
+            self.registered.append(info)
+
+        def unregister_service(self, info):
+            self.unregistered.append(info)
+
+        def close(self):
+            self.closed = True
+
+    fake_module = SimpleNamespace(
+        IPVersion=SimpleNamespace(All=object()),
+        ServiceInfo=FakeServiceInfo,
+        Zeroconf=FakeZeroconf,
+    )
+    monkeypatch.setitem(sys.modules, "zeroconf", fake_module)
+
+    discovery = GatewayDiscovery()
+    assert discovery.start(host="127.0.0.1", port=8765)
+    service_types = {item.type_ for item in discovery._service_infos}
+    assert service_types == {"_NEXUS._tcp.local.", "_BRAHMA._tcp.local."}
+
+    zeroconf = discovery._zeroconf
+    discovery.stop()
+    assert len(zeroconf.unregistered) == 2
+    assert zeroconf.closed is True
