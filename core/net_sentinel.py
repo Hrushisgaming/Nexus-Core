@@ -93,7 +93,7 @@ class NetSentinel:
         across Windows 10/11 (all languages), macOS (Darwin), and Linux.
         """
         host_ip = "127.0.0.1"
-        gateway_ip = "192.168.1.1"
+        gateway_ip = ""
         subnet_prefix = "192.168.1."
 
         # 1. Host IP detection via dummy UDP connect (zero network traffic sent, universal on all OSes)
@@ -131,7 +131,7 @@ class NetSentinel:
                 pass
 
             # Method 2: Multilingual ipconfig fallback
-            if gateway_ip == "192.168.1.1":
+            if not gateway_ip:
                 try:
                     out = subprocess.check_output(["ipconfig"], text=True, stderr=subprocess.DEVNULL)
                     for block in re.split(r"\n\s*\n", out):
@@ -193,8 +193,10 @@ class NetSentinel:
                     pass
 
         # Universal subnet fallback: if gateway is unknown, use host subnet .1
-        if (gateway_ip == "192.168.1.1" or not gateway_ip) and host_ip != "127.0.0.1":
+        if not gateway_ip and host_ip != "127.0.0.1":
             gateway_ip = f"{subnet_prefix}1"
+        if not gateway_ip:
+            gateway_ip = "192.168.1.1"
 
         return {
             "host_ip": host_ip,
