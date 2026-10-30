@@ -9282,8 +9282,8 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-    def set_brahma_connect_service(self, service):
-        self._brahma_connect = service
+    def set_nexus_connect_service(self, service):
+        self._nexus_connect = service
         if hasattr(self, "_devices_page"):
             self._devices_page.set_service(service)
             if service is not None:
@@ -10592,7 +10592,7 @@ class MainWindow(QMainWindow):
         stage.addWidget(self._command_panel)
 
         self._home_page = BrahmaHomePage()
-        self._devices_page = BrahmaConnectDevicesPage(self)
+        self._devices_page = NexusConnectDevicesPage(self)
         self._center_stack = QStackedWidget()
         self._center_stack.setStyleSheet("background: transparent; border: none;")
         self._center_stack.addWidget(w)
@@ -13543,7 +13543,7 @@ class SystemConnectivityPage(QWidget):
         if engine_id:
             self._set_setting("stt_engine", engine_id)
             # Apply to live voice engine
-            if self._ctrl() and hasattr(self._ctrl(), "_win") and hasattr(self._ctrl()._win, "_brahma_connect"):
+            if self._ctrl() and hasattr(self._ctrl(), "_win") and hasattr(self._ctrl()._win, "_nexus_connect"):
                 pass  # Will be applied via engine getter
             # Update live voice engine if accessible
             try:
@@ -14602,7 +14602,7 @@ class _ConnectDeviceCard(QFrame):
         super().mouseReleaseEvent(event)
 
 
-class BrahmaConnectDevicesPage(QFrame):
+class NexusConnectDevicesPage(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._service = None
@@ -14613,9 +14613,9 @@ class BrahmaConnectDevicesPage(QFrame):
         self._selected_device_id: str | None = None
         self._onboarding_known_device_ids: set[str] = set()
 
-        self.setObjectName("BrahmaConnectDevicesPage")
+        self.setObjectName("NexusConnectDevicesPage")
         self.setStyleSheet(f"""
-            QFrame#BrahmaConnectDevicesPage {{
+            QFrame#NexusConnectDevicesPage {{
                 background: transparent;
                 border: none;
             }}
@@ -14989,7 +14989,7 @@ class BrahmaConnectDevicesPage(QFrame):
         self._onboarding_pulse = 0
 
     def _service_obj(self):
-        return self._service or getattr(self.parentWidget(), "_brahma_connect", None)
+        return self._service or getattr(self.parentWidget(), "_nexus_connect", None)
 
     def set_service(self, service):
         self._service = service
@@ -15395,8 +15395,8 @@ class BrahmaUI:
     def _make_app_icon(self) -> QIcon:
         return _logo_icon()
 
-    def set_brahma_connect_service(self, service):
-        self._win.set_brahma_connect_service(service)
+    def set_nexus_connect_service(self, service):
+        self._win.set_nexus_connect_service(service)
 
 
     
