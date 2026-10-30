@@ -9,7 +9,7 @@ from .models import PairingOffer
 
 
 class PairingManager:
-    def __init__(self, service_name: str = "_BRAHMA._tcp.local.", ttl_seconds: int = 300):
+    def __init__(self, service_name: str = "_NEXUS._tcp.local.", ttl_seconds: int = 300):
         self.service_name = service_name
         self.ttl_seconds = max(60, int(ttl_seconds))
         self._offers: dict[str, PairingOffer] = {}
