@@ -1,4 +1,4 @@
-package com.brahma.connect.core
+package com.nexus.connect.core
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,7 +69,7 @@ object AgentStateStore {
     }
 }
 
-object BrahmaConnectCapabilities {
+object NexusConnectCapabilities {
     val INITIAL = listOf(
         "device_info",
         "battery",
