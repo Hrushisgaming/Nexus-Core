@@ -94,12 +94,6 @@ def analyze_error(
             "user_message":  "Trying a different approach, sir."
         }
 
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-3.5-flash-lite",
-        system_instruction=ERROR_ANALYST_PROMPT
-    )
-
     prompt = f"""Failed step:
 Tool: {step.get('tool')}
 Description: {step.get('description')}
@@ -112,6 +106,13 @@ Error:
 Attempt number: {attempt}"""
 
     try:
+        # Keep recovery deterministic when the user has not configured a key
+        # or the remote model is temporarily unavailable.
+        genai.configure(api_key=_get_api_key())
+        model = genai.GenerativeModel(
+            model_name="gemini-3.5-flash-lite",
+            system_instruction=ERROR_ANALYST_PROMPT
+        )
         response = model.generate_content(prompt)
         text     = response.text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
