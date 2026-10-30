@@ -5956,6 +5956,170 @@ class _DropCanvas(QWidget):
             z.mousePressEvent(e)
 
 
+class APIKeySettingsDialog(QDialog):
+    """Dialog to edit all API provider keys at once."""
+
+    def __init__(self, defaults: dict | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("API Keys — API Provider Settings")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(450)
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0a0c14, stop:1 #080a10);
+                color: #e8eef5;
+            }
+            QLabel { color: #e8eef5; background: transparent; border: none; }
+            QLineEdit {
+                background: rgba(0, 229, 255, 0.08);
+                color: #e8eef5;
+                border: 1px solid rgba(0, 229, 255, 0.25);
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-family: Consolas, monospace;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                border: 1px solid rgba(0, 229, 255, 0.6);
+                background: rgba(0, 229, 255, 0.12);
+            }
+            QPushButton {
+                background: rgba(0, 229, 255, 0.12);
+                color: #e8eef5;
+                border: 1px solid rgba(0, 229, 255, 0.35);
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.22);
+                border: 1px solid #00e5ff;
+            }
+            QPushButton:pressed {
+                background: rgba(0, 229, 255, 0.05);
+            }
+            QGroupBox {
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(0, 229, 255, 0.15);
+                border-radius: 12px;
+                margin-top: 10px;
+                font-weight: bold;
+                color: #00e5ff;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 4px;
+                color: #00e5ff;
+            }
+        """)
+        self._fields: dict[str, QLineEdit] = {}
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(30, 25, 30, 25)
+        lay.setSpacing(18)
+
+        title = QLabel("API Provider Keys")
+        title.setFont(QFont("Segoo UI", 18, QFont.Weight.Bold))
+        title.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
+        lay.addWidget(title)
+
+        sub = QLabel("Enter your API keys for each provider. Leave blank to disable.")
+        sub.setStyleSheet("color: #8a93a6; background: transparent; border: none; font-size: 11px;")
+        lay.addWidget(sub)
+        lay.addSpacing(10)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        scroll_lay = QVBoxLayout(scroll_content)
+        scroll_lay.setContentsMargins(0, 0, 0, 0)
+        scroll_lay.setSpacing(12)
+
+        defaults = defaults or {}
+
+        fields_spec = [
+            ("gemini_api_key", "Google Gemini", "Gemini API Key"),
+            ("openrouter_api_key", "OpenRouter", "OpenRouter API Key"),
+            ("nvidia_api_key", "NVIDIA NIM", "NVIDIA API Key"),
+            ("groq_api_key", "Groq", "Groq API Key"),
+            ("custom_ai_api_key", "Custom OpenAI-Compatible", "Custom API Key"),
+            ("tavily_api_key", "Tavily Search", "Tavily API Key"),
+            ("firecrawl_api_key", "Firecrawl", "Firecrawl API Key"),
+            ("serpapi_api_key", "SerpAPI", "SerpAPI API Key"),
+            ("anthropic_api_key", "Anthropic Claude", "Anthropic API Key"),
+        ]
+
+        for key_id, label, placeholder in fields_spec:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(10)
+
+            lbl = QLabel(label)
+            lbl.setFont(QFont("Segoo UI", 11, QFont.Weight.Bold))
+            lbl.setStyleSheet("color: #e8eef5; background: transparent; border: none;")
+            lbl.setMinimumWidth(150)
+            row.addWidget(lbl)
+
+            edit = QLineEdit()
+            edit.setText((defaults.get(key_id) or "").strip())
+            edit.setPlaceholderText(placeholder)
+            edit.setEchoMode(QLineEdit.EchoMode.Password)
+            row.addWidget(edit, 1)
+
+            row.addStretch()
+            scroll_lay.addRow(row)
+            self._fields[key_id] = edit
+
+        scroll.setWidget(scroll_content)
+        lay.addWidget(scroll, 1)
+
+        btn_lay = QHBoxLayout()
+        btn_lay.addStretch()
+
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.05);
+                color: #8a93a6;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 0.1); }
+        """)
+        btn_cancel.clicked.connect(self.reject)
+        btn_lay.addWidget(btn_cancel)
+
+        btn_save = QPushButton("Save API Keys")
+        btn_cancel.setFixedWidth(100)
+        btn_save.setFixedWidth(130)
+        btn_save.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #00e5ff, stop:1 #00a3a8);
+                color: #0a0c14;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #00a3a8, stop:1 #00e5ff); }
+        """)
+        btn_save.clicked.connect(self.accept)
+        btn_lay.addWidget(btn_save)
+        lay.addLayout(btn_lay)
+
+    def get_settings(self) -> dict:
+        result = {}
+        for key_id, edit in self._fields.items():
+            result[key_id] = edit.text().strip()
+        return result
+
+
 class SetupOverlay(QWidget):
     done = pyqtSignal(str, str, str)
 
@@ -9834,6 +9998,10 @@ class MainWindow(QMainWindow):
     def _save_app_settings(self, settings: dict):
         os.makedirs(CONFIG_DIR, exist_ok=True)
         APP_SETTINGS_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
+        try:
+            API_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
+        except Exception:
+            pass
         self._app_settings_cache = dict(settings)
 
     def _startup_animation_enabled(self) -> bool:
@@ -9989,26 +10157,34 @@ class MainWindow(QMainWindow):
         self._refresh_discord_card()
 
     def _load_api_defaults(self) -> dict:
-        if not API_FILE.exists():
-            return {
-                "gemini_api_key": "",
-                "openrouter_api_key": "",
-                "anthropic_api_key": "",
-                "os_system": platform.system(),
-            }
-        try:
-            data = json.loads(API_FILE.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                data.setdefault("anthropic_api_key", "")
-                return data
-        except Exception:
-            pass
-        return {
+        defaults = {
             "gemini_api_key": "",
             "openrouter_api_key": "",
             "anthropic_api_key": "",
+            "nvidia_api_key": "",
+            "groq_api_key": "",
+            "custom_ai_api_key": "",
+            "tavily_api_key": "",
+            "firecrawl_api_key": "",
+            "serpapi_api_key": "",
             "os_system": platform.system(),
         }
+        try:
+            if APP_SETTINGS_FILE.exists():
+                data = json.loads(APP_SETTINGS_FILE.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    defaults.update(data)
+                    data.setdefault("anthropic_api_key", "")
+                    data.setdefault("nvidia_api_key", "")
+                    data.setdefault("groq_api_key", "")
+                    data.setdefault("custom_ai_api_key", "")
+                    data.setdefault("tavily_api_key", "")
+                    data.setdefault("firecrawl_api_key", "")
+                    data.setdefault("serpapi_api_key", "")
+                    return data
+        except Exception:
+            pass
+        return defaults
 
     def _startup_enabled(self) -> bool:
         from core.platform_api import platform_api
@@ -14195,13 +14371,40 @@ class SystemConnectivityPage(QWidget):
 
     def _open_api_keys(self):
         if self._ctrl() and hasattr(self._ctrl(), "_win"):
-            self._ctrl()._win._show_setup(self._ctrl()._win._load_api_defaults())
+            self._ctrl()._win._open_api_key_settings()
+        else:
+            try:
+                data = {}
+                if API_FILE.exists():
+                    with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                dialog = APIKeySettingsDialog(data, parent=self)
+                if dialog.exec() == QDialog.DialogCode.Accepted:
+                    new_data = dialog.get_settings()
+                    with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
+                        json.dump(new_data, f, indent=4)
+                    if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                        self._ctrl().write_log("SYS: API keys updated.")
+                    self.refresh()
+            except Exception as e:
+                print(f"[Settings] Error saving API keys: {e}")
 
     def _test_provider(self, setting_key: str):
-        if setting_key == "gemini":
-            msg = "Google Gemini key detected." if self._load_api_defaults().get("gemini_api_key") else "Google Gemini key missing."
-        else:
-            msg = "OpenRouter key detected." if self._load_api_defaults().get("openrouter_api_key") else "OpenRouter key missing."
+        api = self._load_api_defaults()
+        key_map = {
+            "gemini": ("gemini_api_key", "Google Gemini"),
+            "openrouter": ("openrouter_api_key", "OpenRouter"),
+            "nvidia": ("nvidia_api_key", "NVIDIA NIM"),
+            "groq": ("groq_api_key", "Groq"),
+            "custom": ("custom_ai_api_key", "Custom AI"),
+            "tavily": ("tavily_api_key", "Tavily Search"),
+            "firecrawl": ("firecrawl_api_key", "Firecrawl"),
+            "serpapi": ("serpapi_api_key", "SerpAPI"),
+            "anthropic": ("anthropic_api_key", "Anthropic Claude"),
+        }
+        key_field, name = key_map.get(setting_key, ("gemini_api_key", "Google Gemini"))
+        val = api.get(key_field, "")
+        msg = f"{name} key detected." if val.strip() else f"{name} key missing."
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(f"SYS: {msg}")
         self.refresh()
@@ -16220,6 +16423,10 @@ class BrahmaUI:
     def _save_app_settings(self, settings: dict):
         os.makedirs(CONFIG_DIR, exist_ok=True)
         APP_SETTINGS_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
+        try:
+            API_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
+        except Exception:
+            pass
         self._app_settings_cache = dict(settings)
 
     def _save_launcher_position(self, x: int, y: int):
