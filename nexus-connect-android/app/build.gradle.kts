@@ -5,12 +5,12 @@ plugins {
 }
 
 android {
-    namespace = "com.brahma.connect"
+    namespace = "com.nexus.connect"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
 
     defaultConfig {
-        applicationId = "com.brahma.connect"
+        applicationId = "com.nexus.connect"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
