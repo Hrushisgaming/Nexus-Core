@@ -38,6 +38,7 @@ ARGS+=(
   --add-data "actions:actions"
   --add-data "memory:memory"
   --add-data "smart_home:smart_home"
+  --add-data "nexus_connect:nexus_connect"
   --add-data "plugins:plugins"
   --add-data "features:features"
   --add-data "skills:skills"
