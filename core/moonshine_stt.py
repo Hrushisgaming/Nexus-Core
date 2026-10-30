@@ -9,16 +9,20 @@ It is significantly faster than Whisper and ideal for real-time voice control.
 Features:
 - Local, offline speech-to-text (no API keys needed)
 - Auto-correction of common dictation errors
+- Auto-installs missing Python packages (moonshine_onnx, transformers)
 - Configurable model size (moonshine/base or moonshine/tiny)
-- Graceful fallback if dependencies are missing
+- Graceful fallback if installation fails
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger("MoonshineSTT")
 
@@ -94,14 +98,121 @@ _AUTOCORRECT_PAIRS = [
 ]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Auto-Install Support
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def _have_pip() -> bool:
+    """Check if pip is available as a Python module."""
+    try:
+        import pip  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _ensure_pip() -> tuple[bool, str]:
+    """Ensure pip is available. Returns (success, message)."""
+    if _have_pip():
+        return True, "pip already available"
+
+    # Try ensurepip (Python's built-in pip bootstrapper)
+    try:
+        import ensurepip  # noqa: F401
+        result = subprocess.run(
+            [sys.executable, "-m", "ensurepip", "--upgrade"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            return True, "pip installed via ensurepip"
+        return False, f"ensurepip failed: {result.stderr.strip()[:200]}"
+    except Exception as exc:
+        return False, f"ensurepip not available: {exc}"
+
+
+def _pip_install(packages: list[str]) -> tuple[bool, str]:
+    """Install packages via pip. Returns (success, message)."""
+    ok, msg = _ensure_pip()
+    if not ok:
+        return False, msg
+
+    try:
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--quiet"] + packages
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if result.returncode == 0:
+            return True, "installed successfully"
+        # Try without --quiet to capture better error
+        return False, result.stderr.strip()[-200:] if result.stderr else "pip install failed"
+    except Exception as exc:
+        return False, f"pip install error: {exc}"
+
+
+def install_moonshine(progress_cb: Callable[[str], None] | None = None) -> tuple[bool, str]:
+    """
+    Install moonshine_onnx and transformers via pip.
+    
+    Args:
+        progress_cb: Optional callback receiving progress strings.
+    
+    Returns:
+        (success, message) tuple.
+    """
+    def log(msg: str):
+        logger.info(f"[Moonshine Install] {msg}")
+        if progress_cb:
+            progress_cb(msg)
+
+    log("Checking pip...")
+    ok, msg = _ensure_pip()
+    if not ok:
+        log(f"pip not available: {msg}")
+        log("Trying to install pip via ensurepip...")
+        ok, msg = _ensure_pip()
+        if not ok:
+            return False, f"pip not available and could not be installed: {msg}"
+        log("pip installed successfully")
+
+    log("Installing moonshine_onnx and transformers (this may take a few minutes)...")
+    ok, msg = _pip_install(["moonshine_onnx", "transformers"])
+    if not ok:
+        return False, f"pip install failed: {msg}"
+
+    log("Installation complete!")
+    return True, "Moonshine installed successfully"
+
+
+def is_moonshine_available() -> bool:
+    """Check if Moonshine STT is available on this system."""
+    try:
+        import moonshine_onnx  # noqa: F401
+        import transformers  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Moonshine STT Engine
+# ═════════════════════════════════════════════════════════════════════════════
+
+
 class MoonshineSTT:
     """
     Moonshine-based speech-to-text engine with auto-correction.
-
+    
     Falls back gracefully if moonshine_onnx is not installed.
+    Auto-installs dependencies on first use if requested.
     """
 
-    def __init__(self, model_name: str = "moonshine/base", enable_autocorrect: bool = True):
+    def __init__(self, model_name: str = "moonshine/base", enable_autocorrect: bool = True, auto_install: bool = True):
         self.model_name = model_name
         self.enable_autocorrect = enable_autocorrect
         self._model = None
@@ -109,9 +220,9 @@ class MoonshineSTT:
         self._available = False
         self._init_error: Optional[str] = None
 
-        self._initialize()
+        self._initialize(auto_install=auto_install)
 
-    def _initialize(self) -> None:
+    def _initialize(self, auto_install: bool = True) -> None:
         """Attempt to load the Moonshine model."""
         try:
             import moonshine_onnx
@@ -121,12 +232,36 @@ class MoonshineSTT:
             self._processor = AutoTokenizer.from_pretrained("use-fs/moonshine-base")
             self._available = True
             logger.info(f"Moonshine STT initialized with model: {self.model_name}")
+            return
         except ImportError as exc:
-            self._init_error = (
-                "moonshine_onnx or transformers not installed. "
-                "Install with: pip install moonshine_onnx transformers"
-            )
-            logger.warning(self._init_error)
+            if auto_install:
+                logger.info("moonshine_onnx not found, attempting auto-install...")
+                ok, msg = install_moonshine()
+                if ok:
+                    # Retry import after install
+                    try:
+                        import moonshine_onnx
+                        from transformers import AutoTokenizer
+                        self._model = moonshine_onnx.load_model(self.model_name)
+                        self._processor = AutoTokenizer.from_pretrained("use-fs/moonshine-base")
+                        self._available = True
+                        logger.info(f"Moonshine STT installed and initialized: {self.model_name}")
+                        return
+                    except Exception as retry_exc:
+                        self._init_error = f"Moonshine installed but failed to load: {retry_exc}"
+                        logger.warning(self._init_error)
+                        return
+                else:
+                    self._init_error = f"moonshine_onnx not installed: {msg}"
+                    logger.warning(self._init_error)
+                    return
+            else:
+                self._init_error = (
+                    "moonshine_onnx or transformers not installed. "
+                    "Install with: pip install moonshine_onnx transformers"
+                )
+                logger.warning(self._init_error)
+                return
         except Exception as exc:
             self._init_error = f"Failed to load Moonshine model: {exc}"
             logger.warning(self._init_error)
@@ -209,13 +344,13 @@ _moonshine_stt: Optional[MoonshineSTT] = None
 
 
 def get_moonshine_stt(
-    model_name: str = "moonshine/base", enable_autocorrect: bool = True
+    model_name: str = "moonshine/base", enable_autocorrect: bool = True, auto_install: bool = True
 ) -> MoonshineSTT:
     """Get or create the Moonshine STT singleton."""
     global _moonshine_stt
     if _moonshine_stt is None:
         _moonshine_stt = MoonshineSTT(
-            model_name=model_name, enable_autocorrect=enable_autocorrect
+            model_name=model_name, enable_autocorrect=enable_autocorrect, auto_install=auto_install
         )
     return _moonshine_stt
 
@@ -239,6 +374,7 @@ def get_available_stt_engines() -> list[dict]:
             "description": "On-device speech-to-text with auto-correction. No API key needed.",
             "available": is_moonshine_available(),
             "default": True,
+            "can_install": not is_moonshine_available(),
         },
         {
             "id": "gemini_live",
@@ -246,6 +382,12 @@ def get_available_stt_engines() -> list[dict]:
             "description": "Cloud-based audio-to-audio via Google Gemini. Requires API key.",
             "available": True,  # Always available if Gemini key is set
             "default": False,
+            "can_install": False,
         },
     ]
     return engines
+
+
+def can_install_moonshine() -> bool:
+    """Check if pip is available to install moonshine."""
+    return _have_pip() or True  # ensurepip is usually available with Python

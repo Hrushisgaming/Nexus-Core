@@ -12834,15 +12834,49 @@ class SystemConnectivityPage(QWidget):
         )
         stt_lay.addWidget(self._stt_autocorrect_btn)
 
-        # Moonshine availability info
+        # Moonshine availability info + Install button
+        moonshine_lay = QHBoxLayout()
+        moonshine_lay.setContentsMargins(0, 0, 0, 0)
+        moonshine_lay.setSpacing(8)
+
         moonshine_info = QLabel()
         if is_moonshine_available():
             moonshine_info.setText("✅ Moonshine STT is installed and ready")
             moonshine_info.setStyleSheet(f"color: {C.GREEN}; font-size: 11px;")
         else:
-            moonshine_info.setText("⚠️ Moonshine not installed. Run: pip install moonshine_onnx transformers")
+            moonshine_info.setText("⚠️ Moonshine not installed — click below to auto-install")
             moonshine_info.setStyleSheet(f"color: #ff5555; font-size: 11px;")
-        stt_lay.addWidget(moonshine_info)
+        moonshine_lay.addWidget(moonshine_info)
+
+        # Install button (only shown when not available)
+        self._moonshine_install_btn = QPushButton("Install Moonshine")
+        self._moonshine_install_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._moonshine_install_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0, 229, 255, 0.12);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 229, 255, 0.35);
+                border-radius: 8px;
+                padding: 6px 14px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.22);
+                border: 1px solid #00e5ff;
+            }
+            QPushButton:disabled {
+                background: rgba(128, 128, 128, 0.15);
+                color: #666;
+                border: 1px solid rgba(128, 128, 128, 0.15);
+            }
+        """)
+        self._moonshine_install_btn.setVisible(not is_moonshine_available())
+        self._moonshine_install_btn.clicked.connect(self._install_moonshine)
+        moonshine_lay.addWidget(self._moonshine_install_btn)
+
+        moonshine_lay.addStretch()
+        stt_lay.addLayout(moonshine_lay)
 
         lay.addWidget(stt_card)
 
@@ -14587,6 +14621,40 @@ class SystemConnectivityPage(QWidget):
             pass
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(f"SYS: STT auto-correction {'enabled' if checked else 'disabled'}")
+
+    def _install_moonshine(self):
+        """Install Moonshine STT via pip."""
+        if not hasattr(self, "_moonshine_install_btn"):
+            return
+        self._moonshine_install_btn.setEnabled(False)
+        self._moonshine_install_btn.setText("Installing...")
+
+        try:
+            from core.moonshine_stt import install_moonshine
+            ok, msg = install_moonshine(progress_cb=self._moonshine_install_log)
+            if ok:
+                self._moonshine_install_btn.setText("Installed ✓")
+                self._moonshine_install_btn.setEnabled(False)
+                moonshine_info = getattr(self, "_moonshine_info", None)
+                if moonshine_info:
+                    moonshine_info.setText("✅ Moonshine STT installed and ready")
+                    moonshine_info.setStyleSheet(f"color: {C.GREEN}; font-size: 11px;")
+                if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                    self._ctrl().write_log("SYS: Moonshine STT installed successfully")
+                self.refresh()
+            else:
+                self._moonshine_install_btn.setText("Install Failed")
+                if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                    self._ctrl().write_log(f"SYS: Moonshine install failed: {msg}")
+        except Exception as e:
+            self._moonshine_install_btn.setText("Install Failed")
+            if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                self._ctrl().write_log(f"SYS: Moonshine install error: {e}")
+
+    def _moonshine_install_log(self, msg: str):
+        """Progress callback for moonshine install."""
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Moonshine install — {msg}")
 
     def _on_tts_engine_changed(self, text: str):
         """Handle TTS engine dropdown change."""
