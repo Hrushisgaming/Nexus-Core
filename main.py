@@ -647,27 +647,17 @@ def _looks_like_daily_briefing_request(text: str) -> bool:
 
 
 def _wakeword_detected(text: str) -> bool:
+    """True only when the assistant is addressed by name.
+
+    A bare "hey/hi/hello" no longer wakes a muted mic, otherwise ordinary
+    conversation in the room would keep un-muting it. "brahma" is kept as a
+    legacy wake word for existing users.
+    """
     t = re.sub(r"[^a-z0-9\s]+", " ", (text or "").lower())
-    words = [w for w in t.split() if w]
+    words = t.split()
     if not words:
         return False
-    phrases = (
-        "nexus core",
-        "hey nexus core",
-        "hi nexus core",
-        "hello nexus core",
-        "brahma evo",
-        "hey brahma evo",
-        "hi brahma evo",
-        "hello brahma evo",
-        "hey",
-        "hi",
-        "hello",
-    )
-    compact = " ".join(words)
-    if compact in phrases or any(p in compact for p in phrases):
-        return True
-    return any(word in {"nexus", "nexus core", "hey", "hi", "hello"} for word in words)
+    return any(word in {"nexus", "brahma"} for word in words)
 
 
 def _build_task_plan(text: str) -> list[str]:
@@ -5509,7 +5499,7 @@ class BrahmaLive:
             parts.append(mem_str)
         parts.append(sys_prompt)
         parts.append(
-            "Wake-word mode: if the microphone is muted, still listen for the words 'Nexus Core', 'hey', 'hi', and 'hello'. "
+            "Wake-word mode: if the microphone is muted, still listen only for the name 'Nexus' (as in 'Nexus Core' or 'hey Nexus'). "
             "When you hear one of these activation cues, keep the session friendly and concise, "
             "and wait for the user's next command. "
             "IMPORTANT: Do NOT speak an unprompted generic greeting (like 'Thank you, how can I help you?') upon connecting. "

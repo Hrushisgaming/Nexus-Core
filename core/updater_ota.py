@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 import subprocess
 
-GITHUB_REPO = "titechprabhasolutions/Brahma---personal"
+GITHUB_REPO = "Hrushisgaming/Nexus-Core"
 
 def get_current_version() -> str:
     try:
