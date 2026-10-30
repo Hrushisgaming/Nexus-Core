@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-logger = logging.getLogger("brahma_dev_agent")
+logger = logging.getLogger("nexus_dev_agent")
 logger.setLevel(logging.INFO)
 
 def get_base_dir() -> Path:
@@ -22,7 +22,7 @@ API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
 SETTINGS_PATH = get_user_data_dir() / "config" / "app_settings.json"
 
 # ==============================================================================
-# NATIVE CLAUDE-CODE TOOLS (REBRANDED FOR BRAHMA DEV)
+# NATIVE CLAUDE-CODE TOOLS (REBRANDED FOR NEXUS DEV)
 # ==============================================================================
 
 class NativeTools:
@@ -209,10 +209,10 @@ class NativeTools:
 
 
 # ==============================================================================
-# CLAUDE-CODE LEAKED SYSTEM PROMPT (REBRANDED FOR BRAHMA DEV)
+# CLAUDE-CODE LEAKED SYSTEM PROMPT (REBRANDED FOR NEXUS DEV)
 # ==============================================================================
 
-BRAHMA_DEV_SYSTEM_PROMPT = """You are Nexus Dev, the expert software engineering autonomous agent built natively into Nexus Core.
+NEXUS_DEV_SYSTEM_PROMPT = """You are Nexus Dev, the expert software engineering autonomous agent built natively into Nexus Core.
 You operate on the local user machine inside the user's project workspace.
 You have native access to developer tools to inspect codebases, execute terminal commands, edit existing files, write new code, and verify project functionality.
 
@@ -259,7 +259,7 @@ When your work is fully done and verified, provide your final response to the us
 # AUTONOMOUS HERMES-STYLE AGENT LOOP
 # ==============================================================================
 
-class BrahmaDevAgent:
+class NexusDevAgent:
     def __init__(self, workspace_dir: str | Path, speak: Optional[Callable[[str], None]] = None):
         self.workspace_dir = Path(workspace_dir).resolve()
         self.speak = speak
@@ -272,7 +272,7 @@ class BrahmaDevAgent:
             if msg.startswith("⚡") or msg.startswith("📝") or msg.startswith("✏️"):
                 clean = re.sub(r"[^\w\s\-\.\:\/]", "", msg).strip()
                 self.speak(clean)
-        print(f"[BrahmaDev] {msg}")
+        print(f"[NexusDev] {msg}")
 
     def _execute_tool(self, name: str, args: dict[str, Any]) -> str:
         tool_map = {
@@ -325,7 +325,7 @@ class BrahmaDevAgent:
 
                 client = genai.Client(api_key=gemini_key)
 
-                system_instruction = BRAHMA_DEV_SYSTEM_PROMPT
+                system_instruction = NEXUS_DEV_SYSTEM_PROMPT
                 contents = []
                 for msg in self.history:
                     if msg["role"] == "system":
@@ -361,9 +361,9 @@ class BrahmaDevAgent:
                                 break
 
                 if last_err:
-                    logger.warning(f"[BrahmaDev] Gemini calls exhausted: {last_err}")
+                    logger.warning(f"[NexusDev] Gemini calls exhausted: {last_err}")
         except Exception as e:
-            logger.warning(f"[BrahmaDev] Direct Gemini setup error: {e}")
+            logger.warning(f"[NexusDev] Direct Gemini setup error: {e}")
 
         # Check if openrouter key actually exists before falling back
         try:
@@ -381,8 +381,8 @@ class BrahmaDevAgent:
 
     def run(self, user_instruction: str, max_turns: int = 25) -> str:
         """Runs the autonomous Think -> Act -> Observe loop until completion."""
-        print(f"\n[BrahmaDev] Starting Developer Task in {self.workspace_dir}")
-        print(f"[BrahmaDev] Prompt: {user_instruction}\n")
+        print(f"\n[NexusDev] Starting Developer Task in {self.workspace_dir}")
+        print(f"[NexusDev] Prompt: {user_instruction}\n")
         
         system_info = (
             f"\n\nCURRENT ENVIRONMENT:\n"
@@ -390,13 +390,13 @@ class BrahmaDevAgent:
             f"- OS: {sys.platform} ({os.name})\n"
         )
         self.history = [
-            {"role": "system", "content": BRAHMA_DEV_SYSTEM_PROMPT + system_info},
+            {"role": "system", "content": NEXUS_DEV_SYSTEM_PROMPT + system_info},
             {"role": "user", "content": user_instruction}
         ]
 
         final_response = ""
         for turn in range(1, max_turns + 1):
-            print(f"--- [BrahmaDev] Turn {turn}/{max_turns} ---")
+            print(f"--- [NexusDev] Turn {turn}/{max_turns} ---")
             try:
                 reply = self._call_llm()
             except Exception as e:
@@ -434,7 +434,7 @@ class BrahmaDevAgent:
 def run_dev_agent(parameters: dict[str, Any], speak: Optional[Callable[[str], None]] = None) -> str:
     params = dict(parameters or {})
     description = str(params.get("description") or params.get("brief") or "").strip()
-    workspace = str(params.get("workspace_path") or params.get("output_dir") or Path.home() / "Desktop" / "BrahmaProjects").strip()
+    workspace = str(params.get("workspace_path") or params.get("output_dir") or Path.home() / "Desktop" / "NexusProjects").strip()
     
-    agent = BrahmaDevAgent(workspace_dir=workspace, speak=speak)
+    agent = NexusDevAgent(workspace_dir=workspace, speak=speak)
     return agent.run(description)
