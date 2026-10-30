@@ -6100,6 +6100,10 @@ class APIKeySettingsDialog(QDialog):
             ("serpapi_api_key", "SerpAPI", "SerpAPI API Key"),
             ("anthropic_api_key", "Anthropic Claude", "Anthropic API Key"),
             ("pollinations_api_key", "Pollinations (Images)", "Pollinations API Key (sk_...)"),
+            ("elevenlabs_api_key", "ElevenLabs (Voice)", "ElevenLabs API Key"),
+            ("fish_audio_api_key", "Fish Audio (Voice)", "Fish Audio API Key"),
+            ("cloudflare_api_key", "Cloudflare (Images)", "Cloudflare API Token"),
+            ("cloudflare_account_id", "Cloudflare Account ID", "Cloudflare Account ID"),
         ]
 
         for key_id, label, placeholder in fields_spec:
@@ -10255,6 +10259,10 @@ class MainWindow(QMainWindow):
             "firecrawl_api_key": "",
             "serpapi_api_key": "",
             "pollinations_api_key": "",
+            "elevenlabs_api_key": "",
+            "fish_audio_api_key": "",
+            "cloudflare_api_key": "",
+            "cloudflare_account_id": "",
             "os_system": platform.system(),
         }
         # api_keys.json first (first-run setup writes here), then app_settings.json;
@@ -14537,6 +14545,9 @@ class SystemConnectivityPage(QWidget):
             "serpapi": ("serpapi_api_key", "SerpAPI"),
             "anthropic": ("anthropic_api_key", "Anthropic Claude"),
             "pollinations": ("pollinations_api_key", "Pollinations"),
+            "elevenlabs": ("elevenlabs_api_key", "ElevenLabs"),
+            "fish_audio": ("fish_audio_api_key", "Fish Audio"),
+            "cloudflare": ("cloudflare_api_key", "Cloudflare"),
         }
         key_field, name = key_map.get(setting_key, ("gemini_api_key", "Google Gemini"))
         val = api.get(key_field, "")
