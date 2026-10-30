@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "brahma-connect-android"
+rootProject.name = "nexus-connect-android"
 include(":app")
