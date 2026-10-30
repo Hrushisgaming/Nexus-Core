@@ -152,7 +152,7 @@ def test_purge_selected(temp_junk_dir):
     )
 
     mock_report = ScanReport(
-        drive="C:\\",
+        drive=engine.get_root_drive_path(),
         total_bytes=100 * (1024 ** 3),
         used_bytes=50 * (1024 ** 3),
         free_bytes=50 * (1024 ** 3),
@@ -166,7 +166,7 @@ def test_purge_selected(temp_junk_dir):
 
     engine.last_scan_report = mock_report
 
-    result = engine.purge_selected(["mock_purge_target"])
+    result = engine.purge_selected(["mock_purge_target"], drive_path=engine.get_root_drive_path())
 
     assert result["success"] is True
     assert result["deleted_files"] == 6
@@ -229,7 +229,7 @@ def test_hud_assets_and_bridge():
 
     assert HUD_HTML_FILE.exists()
     content = HUD_HTML_FILE.read_text(encoding="utf-8")
-    assert "Brahma AI - Storage Sentinel" in content
+    assert "Nexus Core - Storage Sentinel" in content
     assert "drive-dropdown-menu" in content or "drive-select" in content
     assert "storage-sense" in content.lower()
     assert "spaceCleanerBridge" in content
