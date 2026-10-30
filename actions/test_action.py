@@ -11,4 +11,9 @@ def test_action(parameters: dict = None, player=None, speak=None, **kwargs):
     msg = f"Test action completed successfully with metric value: {metric_value}"
     if speak:
         speak(msg)
-    return msg
+    return msg
+
+# This is an intentionally faulty demo action for the self-healing showcase,
+# not a pytest test case. Pytest otherwise collects it from this module and
+# again when imported by test_self_heal.py.
+test_action.__test__ = False
