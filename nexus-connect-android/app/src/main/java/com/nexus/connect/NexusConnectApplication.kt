@@ -1,5 +1,5 @@
-package com.brahma.connect
+package com.nexus.connect
 
 import android.app.Application
 
-class BrahmaConnectApplication : Application()
+class NexusConnectApplication : Application()
