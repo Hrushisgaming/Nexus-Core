@@ -12,8 +12,8 @@ echo "=============================================="
 APP_NAME="NexusCore"
 
 # Read only the numeric version, not the entire VSVersionInfo() blob
-VERSION=$(cat version.txt 2>/dev/null | tr -d '\r\n' | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "1.0.0")
-VERSION="${VERSION:-1.0.0}"
+VERSION=$(cat app_version.txt 2>/dev/null | tr -d '\r\n' | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "1.0.1")
+VERSION="${VERSION:-1.0.1}"
 
 DMG_NAME="NexusCore-${VERSION}-macOS.dmg"
 
@@ -38,11 +38,13 @@ ARGS+=(
   --add-data "actions:actions"
   --add-data "memory:memory"
   --add-data "smart_home:smart_home"
+  --add-data "nexus_connect:nexus_connect"
   --add-data "plugins:plugins"
   --add-data "features:features"
   --add-data "skills:skills"
   --add-data "dashboard/static:dashboard/static"
   --add-data "version.txt:."
+  --add-data "app_version.txt:."
   --add-data "requirements.txt:."
   --hidden-import mediapipe
   --hidden-import cv2

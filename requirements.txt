@@ -1,41 +1,43 @@
-sounddevice
-google-genai
-google-generativeai
-pillow
-requests
-python-kasa
-beautifulsoup4
-duckduckgo-search
-playwright          
-pyautogui
-pyperclip
-pygetwindow       
-opencv-python
-numpy
-mediapipe
-mss
-Pillow
-psutil
-comtypes
-pycaw               
-instagrapi
-win10toast; sys_platform == "win32"          
-send2trash
-youtube-transcript-api
-pywinauto
-pyaudio
-openpyxl
-python-pptx
-python-docx
-reportlab
-discord.py
-fastapi
-uvicorn[standard]
-cryptography
-qrcode[pil]
-python-multipart
-PyQt6
-PyQt6-WebEngine
-edge-tts
-matplotlib
-speedtest-cli
+# Dependency versions captured from the successful Nexus Core CI install on
+# 2026-10-30 (Python 3.12). Keep platform-only integrations behind markers.
+sounddevice==0.5.6
+google-genai==2.34.0
+google-generativeai==0.8.6
+Pillow==13.0.0
+requests==2.34.2
+python-kasa==0.12.0
+zeroconf==0.151.5
+beautifulsoup4==4.15.0
+duckduckgo-search==8.1.1
+playwright==1.64.1
+pyautogui==0.9.54
+pyperclip==1.11.0
+pygetwindow==0.0.9
+opencv-python==5.0.0.93
+numpy==2.5.4
+mediapipe==1.2.0
+mss==10.2.0
+psutil==7.2.2
+comtypes==1.4.17; sys_platform == "win32"
+pycaw==20260927; sys_platform == "win32"
+instagrapi==3.2.2
+win10toast==0.9; sys_platform == "win32"
+send2trash==2.1.0
+youtube-transcript-api==1.2.4
+pywinauto==0.6.9; sys_platform == "win32"
+pyaudio==0.2.14
+openpyxl==3.1.5
+python-pptx==1.0.2
+python-docx==1.2.0
+reportlab==5.1.0
+discord.py==2.7.1
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+cryptography==50.0.2
+qrcode[pil]==8.2
+python-multipart==0.0.32
+PyQt6==6.12.0
+PyQt6-WebEngine==6.11.0
+edge-tts==7.3.1
+matplotlib==3.11.2
+speedtest-cli==2.1.3

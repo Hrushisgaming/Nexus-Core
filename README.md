@@ -33,8 +33,8 @@
   - Operating voltage safety callouts and ready-to-flash Arduino C++ firmware.
 
 ### 2. 🧬 Project Ultron — Self-Evolving Autonomous Skill Crucible
-- **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Nexus identifies the capability gap, writes a brand-new Python tool directly into `features/`, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
-- **Persistent Vault**: All forged skills are saved in your `features/` directory and hot-reloaded automatically.
+- **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Nexus identifies the capability gap, writes a brand-new Python tool into the writable per-user skills vault, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
+- **Persistent Vault**: All forged skills are saved in the writable per-user Nexus Core skills vault (`%LOCALAPPDATA%/NexusCore/skills` on Windows or `~/Library/Application Support/NexusCore/skills` on macOS) and hot-reloaded automatically.
 
 ### 3. 🛡️ Proactive Auto-Heal Engine
 - **Self-Repairing Codebase**: Background sentry catches runtime exceptions, analyzes tracebacks using LLM root-cause reasoning, applies dynamic patches to the faulty code, and presents an interactive HUD repair telemetry card without crashing the assistant.
@@ -87,7 +87,7 @@
 - **PowerPoint (`.pptx`)**: Build branded presentations with slide layouts, typography, and speaker notes.
 - **PDF Suite**: Convert, merge, extract, and assemble PDF deliverables.
 
-### 📱 Brahma Connect (Android Companion)
+### 📱 Nexus Connect (Android Companion)
 - **AI Phone Call Proxy**: Nexus screens incoming phone calls, talks to the caller, takes meeting notes, and delivers immediate desktop transcripts and summaries.
 - **Ecosystem Sync**: Device geolocation, SMS notifications, and battery status.
 
@@ -122,12 +122,12 @@
    ```
 
 3. **Launch:**
-   - **Windows:** `python setup.py` or `start_brahma.bat`
+   - **Windows:** `python setup.py` or `start_nexus.bat`
    - **macOS:** `python3 main.py`
 
    On first launch Nexus creates its data folder at:
-   - Windows: `%LOCALAPPDATA%\BrahmaAI`
-   - macOS: `~/Library/Application Support/BrahmaAI`
+   - Windows: `%LOCALAPPDATA%\NexusCore`
+   - macOS: `~/Library/Application Support/NexusCore`
 
 4. **Configure API Keys:**
    - Launch Nexus Core Evo.
@@ -183,14 +183,14 @@ Nexus Core Evo/
 │   ├── circuit_schematic.py    # Modular circuit schematic feature
 │   └── spotify_mcp.py          # Modular Spotify feature
 ├── smart_home/                 # Smart device provider & discovery services
-└── brahma-connect-android/     # Companion Android mobile application
+└── nexus-connect-android/     # Companion Android mobile application
 ```
 
 ---
 
 ## 🔒 Security & Privacy
 
-- All long-term memories, credentials, and configuration files are stored locally in `%LOCALAPPDATA%\BrahmaAI\`.
+- All long-term memories, credentials, and configuration files are stored locally in `%LOCALAPPDATA%\NexusCore\`.
 - External tools run through permission sentries and the isolated Crucible sandbox.
 - Audio and video frames are only streamed during active conversation sessions.
 
@@ -198,15 +198,7 @@ Nexus Core Evo/
 
 ## 📄 License
 
-**Personal & Private Local Use Only — No Distribution.**
-
-This project is licensed under the **Nexus Core Evo Source-Available Personal Use License**.
-
-- ✅ **Allowed:** You may download, clone, inspect, build, and run the software locally strictly on your own personal device for private, personal, educational, and research use.
-- 🚫 **Strictly Prohibited (No Distribution):** You may **NOT** distribute, redistribute, re-upload, mirror, share, transmit, sublicense, or publish this software, repository, binaries, or derivative works anywhere (including other Git hosts, public repositories, or cloud platforms). The only official distribution source is this repository.
-- 🚫 **Strictly Prohibited (No Commercial Use):** You may **NOT** sell, rent, monetize, bundle, commercialize, or host this software as a paid SaaS/cloud service.
-
-For full terms and legal conditions, see the [LICENSE](LICENSE) file. For commercial licensing inquiries, reach out via [Discord](https://discord.gg/gEYmJKKtq3).
+The original **Brahma AI Evo Source-Available Personal Use License** and its copyright attribution remain unchanged in the root [LICENSE](LICENSE) file. Nexus Core continues to preserve those original terms; this repository does not replace them with a new license.
 
 <div align="center">
 <b>Nexus Core Evo</b> • Built with intelligence, precision, and autonomy.

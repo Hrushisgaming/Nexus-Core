@@ -93,7 +93,7 @@ class NetSentinel:
         across Windows 10/11 (all languages), macOS (Darwin), and Linux.
         """
         host_ip = "127.0.0.1"
-        gateway_ip = "192.168.1.1"
+        gateway_ip = ""
         subnet_prefix = "192.168.1."
 
         # 1. Host IP detection via dummy UDP connect (zero network traffic sent, universal on all OSes)
@@ -131,7 +131,7 @@ class NetSentinel:
                 pass
 
             # Method 2: Multilingual ipconfig fallback
-            if gateway_ip == "192.168.1.1":
+            if not gateway_ip:
                 try:
                     out = subprocess.check_output(["ipconfig"], text=True, stderr=subprocess.DEVNULL)
                     for block in re.split(r"\n\s*\n", out):
@@ -149,22 +149,22 @@ class NetSentinel:
         elif sys.platform.startswith("linux"):
             # Method 1: /proc/net/route (0ms, no child process)
             try:
-                if os.path.exists("/proc/net/route"):
+                route_file = Path("/proc/net/route")
+                if route_file.exists():
                     import struct
-                    with open("/proc/net/route", "r") as f:
-                        for line in f.readlines()[1:]:
-                            fields = line.strip().split()
-                            if len(fields) >= 3 and fields[1] == "00000000":
-                                gw_hex = fields[2]
-                                gw_ip = socket.inet_ntoa(struct.pack("<L", int(gw_hex, 16)))
-                                if gw_ip and gw_ip != "0.0.0.0":
-                                    gateway_ip = gw_ip
-                                    break
+                    for line in route_file.read_text(encoding="utf-8", errors="ignore").splitlines()[1:]:
+                        fields = line.strip().split()
+                        if len(fields) >= 3 and fields[1] == "00000000":
+                            gw_hex = fields[2]
+                            gw_ip = socket.inet_ntoa(struct.pack("<L", int(gw_hex, 16)))
+                            if gw_ip and gw_ip != "0.0.0.0":
+                                gateway_ip = gw_ip
+                                break
             except Exception:
                 pass
 
             # Method 2: ip route show default
-            if gateway_ip == "192.168.1.1":
+            if not gateway_ip:
                 try:
                     out = subprocess.check_output(["ip", "-4", "route", "show", "default"], text=True, stderr=subprocess.DEVNULL)
                     m = re.search(r"via\s+([0-9.]+)", out)
@@ -193,8 +193,10 @@ class NetSentinel:
                     pass
 
         # Universal subnet fallback: if gateway is unknown, use host subnet .1
-        if (gateway_ip == "192.168.1.1" or not gateway_ip) and host_ip != "127.0.0.1":
+        if not gateway_ip and host_ip != "127.0.0.1":
             gateway_ip = f"{subnet_prefix}1"
+        if not gateway_ip:
+            gateway_ip = "192.168.1.1"
 
         return {
             "host_ip": host_ip,

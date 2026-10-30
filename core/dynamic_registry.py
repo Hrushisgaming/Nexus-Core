@@ -105,8 +105,13 @@ class DynamicToolRegistry:
 
     @classmethod
     def get_skills_directory(cls) -> Path:
-        FEATURES_DIR.mkdir(parents=True, exist_ok=True)
-        return FEATURES_DIR
+        """Return the writable per-user skill vault, never the app bundle.
+
+        Frozen macOS applications are installed in a signed, read-only bundle.
+        User-generated skills therefore belong in Application Support.
+        """
+        APPDATA_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+        return APPDATA_SKILLS_DIR
 
     @classmethod
     def initialize(cls) -> int:

@@ -88,7 +88,7 @@ from actions.file_controller   import file_controller
 from actions.office_builder     import create_presentation, create_spreadsheet
 from actions.docx_tools        import word_document
 from actions.pdf_tools         import create_pdf
-from actions.brahma_connect    import (
+from actions.nexus_connect     import (
     connect_list_devices,
     connect_get_device,
     connect_get_capabilities,
@@ -121,9 +121,9 @@ except ImportError:
         start_ig_daemon = None
 
 try:
-    from brahma_connect.service import get_service as get_brahma_connect_service
+    from nexus_connect.service import get_service as get_nexus_connect_service
 except Exception:
-    get_brahma_connect_service = None
+    get_nexus_connect_service = None
 
 
 def get_base_dir():
@@ -137,7 +137,7 @@ API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
 APP_SETTINGS_FILE = get_user_data_dir() / "config" / "app_settings.json"
 logger = logging.getLogger("NexusCore")
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
-STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Nexus Core" / "startup.log"
+STARTUP_LOG     = get_user_data_dir() / "logs" / "startup.log"
 # Live (bidiGenerateContent) needs a native-audio Live model; text models such as
 # gemini-3.5-flash-lite are rejected with a 1008 error. Order = preference.
 # Override the first choice with:  NEXUS_LIVE_MODEL=models/gemini-3.1-flash-live-preview
@@ -154,12 +154,33 @@ LIVE_CONNECT_TIMEOUT = 12
 _SINGLE_INSTANCE_MUTEX = None
 
 
-def _live_model_candidates() -> list:
-    """LIVE_MODEL first, then the fallbacks, without duplicates."""
+def _live_model_candidates(client=None) -> list:
+    """Prefer Live-capable models advertised by this API key, then safe fallbacks."""
+    discovered = []
+    if client is not None:
+        try:
+            for model_info in client.models.list():
+                name = str(getattr(model_info, "name", "") or "").strip()
+                if not name:
+                    continue
+                lowered = name.lower()
+                if "live" not in lowered and "native-audio" not in lowered:
+                    continue
+                actions = getattr(model_info, "supported_actions", None)
+                if actions and not any("bidi" in str(action).lower() for action in actions):
+                    continue
+                if not name.startswith("models/"):
+                    name = f"models/{name}"
+                if name not in discovered:
+                    discovered.append(name)
+        except Exception as exc:
+            _startup_log(f"Gemini model discovery unavailable; using fallbacks: {exc}")
+    preferred = (os.environ.get("NEXUS_LIVE_MODEL", "").strip(),)
     out = []
-    for m in (LIVE_MODEL, *LIVE_MODEL_FALLBACKS):
-        if m and m not in out:
-            out.append(m)
+    for model in (*preferred, *discovered, *LIVE_MODEL_FALLBACKS):
+        if model and model not in out:
+            out.append(model)
+    _startup_log(f"Gemini Live model candidates: {', '.join(out)}")
     return out
 
 
@@ -180,6 +201,7 @@ async def _connect_live_with_fallback(client, build_config, models, timeout):
             raise
         except Exception as exc:
             last_exc = exc
+            _startup_log(f"Gemini Live model {model} failed: {exc}")
             print(f"[NEXUS CORE] ⚠️ Live model {model} unavailable: {str(exc)[:160]}")
     raise last_exc if last_exc is not None else RuntimeError("No Live models configured")
 
@@ -2814,7 +2836,7 @@ class BrahmaLive:
 
             connected_devices = []
             try:
-                from actions.brahma_connect import connect_list_devices
+                from actions.nexus_connect import connect_list_devices
                 dev_res = json.loads(connect_list_devices(parameters={}, player=self.ui))
                 connected_devices = dev_res.get("devices", [])
             except Exception:
@@ -2880,7 +2902,7 @@ class BrahmaLive:
                     return
 
             if intent_res.intent == "mobile_connect" and source != "instagram":
-                if self._handle_brahma_connect_command(text, source=source or "local", parsed_intent=intent_res):
+                if self._handle_nexus_connect_command(text, source=source or "local", parsed_intent=intent_res):
                     return
 
             if intent_res.intent == "vision":
@@ -3694,7 +3716,7 @@ class BrahmaLive:
             print(f"[Registry] Match error: {e_dyn}")
 
         # Nexus Connect Mobile Routing (fallback intercept)
-        if source != "instagram" and self._handle_brahma_connect_command(text, source=source or "local"):
+        if source != "instagram" and self._handle_nexus_connect_command(text, source=source or "local"):
             return
 
         developer_settings = self.ui._load_app_settings() if hasattr(self.ui, "_load_app_settings") else {}
@@ -4077,7 +4099,7 @@ class BrahmaLive:
             self.ui.begin_task_workspace(text, _build_task_plan(text), source=source or "local")
         except Exception:
             pass
-        if source != "instagram" and self._handle_brahma_connect_command(text, source=source or "local"):
+        if source != "instagram" and self._handle_nexus_connect_command(text, source=source or "local"):
             return
         if self._handle_smart_home_command(text, source=source or "local"):
             return
@@ -4260,7 +4282,7 @@ class BrahmaLive:
         candidate = re.sub(r"\s+", " ", candidate)
         return candidate
 
-    def _handle_brahma_connect_command(self, text: str, source: str = "local", parsed_intent: Any = None) -> bool:
+    def _handle_nexus_connect_command(self, text: str, source: str = "local", parsed_intent: Any = None) -> bool:
         normalized = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s%]", " ", text.lower())).strip()
         
         action = None
@@ -6818,7 +6840,7 @@ class BrahmaLive:
                 print("[NEXUS CORE] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
                 connect_cm, session, _live_model_used = await _connect_live_with_fallback(
-                    client, self._build_config, _live_model_candidates(), LIVE_CONNECT_TIMEOUT
+                    client, self._build_config, _live_model_candidates(client), LIVE_CONNECT_TIMEOUT
                 )
                 print(f"[NEXUS CORE] Live model: {_live_model_used}")
                 try:
@@ -6929,26 +6951,26 @@ def main():
         threading.Thread(target=_start_dashboard_server, daemon=True).start()
         _startup_log("dashboard thread spawned")
 
-    brahma_connect = None
-    brahma_connect_enabled = False
-    if get_brahma_connect_service is not None:
+    nexus_connect = None
+    nexus_connect_enabled = False
+    if get_nexus_connect_service is not None:
         try:
-            brahma_connect = get_brahma_connect_service(BASE_DIR)
-            brahma_connect_enabled = bool(brahma_connect.gateway.config.enabled)
+            nexus_connect = get_nexus_connect_service(BASE_DIR)
+            nexus_connect_enabled = bool(nexus_connect.gateway.config.enabled)
         except Exception as exc:
             _startup_log(f"brahma connect init failed: {exc}")
             try:
                 ui.write_log(f"ERR: Nexus Connect failed to initialize: {exc}")
             except Exception:
                 pass
-            brahma_connect = None
+            nexus_connect = None
     try:
-        if brahma_connect is not None and hasattr(ui, "set_brahma_connect_service"):
-            ui.set_brahma_connect_service(brahma_connect)
+        if nexus_connect is not None and hasattr(ui, "set_nexus_connect_service"):
+            ui.set_nexus_connect_service(nexus_connect)
     except Exception:
         pass
-    if brahma_connect is not None and brahma_connect_enabled:
-        connect_port = int(getattr(brahma_connect.gateway.config, "port", 8765))
+    if nexus_connect is not None and nexus_connect_enabled:
+        connect_port = int(getattr(nexus_connect.gateway.config, "port", 8765))
         if _is_port_in_use(connect_port):
             _startup_log(f"brahma connect disabled: port {connect_port} already in use")
             try:
@@ -6956,10 +6978,10 @@ def main():
             except Exception:
                 pass
         else:
-            def _start_brahma_connect_server():
+            def _start_nexus_connect_server():
                 try:
                     _startup_log("brahma connect thread started")
-                    brahma_connect.start_background()
+                    nexus_connect.start_background()
                     _startup_log("brahma connect thread spawned")
                 except Exception as exc:
                     _startup_log(f"brahma connect thread error: {exc}")
@@ -6968,7 +6990,7 @@ def main():
                     except Exception:
                         pass
 
-            threading.Thread(target=_start_brahma_connect_server, daemon=True).start()
+            threading.Thread(target=_start_nexus_connect_server, daemon=True).start()
 
 
 

@@ -1,8 +1,11 @@
 name: Build Multi-Platform Installers
 
 on:
+  pull_request:
   workflow_dispatch:
   push:
+    branches:
+      - refactor/macos-stability-and-storage
     tags:
       - 'v*'
 
@@ -126,7 +129,7 @@ jobs:
             --add-data "assets:assets" \
             --add-data "config:config" \
             --add-data "core:core" \
-            --add-data "brahma_connect:brahma_connect" \
+            --add-data "nexus_connect:nexus_connect" \
             --add-data "actions:actions" \
             --add-data "memory:memory" \
             --add-data "plugins:plugins" \
@@ -136,6 +139,7 @@ jobs:
             --add-data "dashboard/static:dashboard/static" \
             --add-data "workspace_store.py:." \
             --add-data "version.txt:." \
+            --add-data "app_version.txt:." \
             --add-data "requirements.txt:." \
             main.py
 

@@ -103,6 +103,9 @@ def test_executor_auto_heal_error_recording(monkeypatch):
         raise ValueError("Simulated tool crash for Auto-Heal test")
 
     monkeypatch.setattr("agent.executor._call_tool", failing_tool)
+    # Keep this unit test focused on error recording; replanning is a separate
+    # network-backed workflow and must not require a Gemini key in CI.
+    monkeypatch.setattr("agent.executor.replan", lambda *args, **kwargs: {"steps": []})
 
     executor = AgentExecutor()
     executor.execute(goal="test auto heal recording", speak=None, player=None)

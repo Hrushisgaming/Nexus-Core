@@ -629,14 +629,14 @@ class ShoppingAgent:
         """
         Dispatches 1-click carting or checkout navigation.
         - mode='pc': Opens in default browser or Playwright session.
-        - mode='phone': Dispatches deep link via Brahma Connect to the mobile app!
+        - mode='phone': Dispatches deep link via Nexus Connect to the mobile app!
         """
         if not item_url:
             return {"success": False, "error": "No product URL provided."}
 
         if mode == "phone":
             try:
-                from actions.brahma_connect import connect_execute
+                from actions.nexus_connect import connect_execute
                 res = connect_execute(parameters={"action": "open_url", "url": item_url})
                 data = json.loads(res)
                 return {
@@ -646,7 +646,7 @@ class ShoppingAgent:
                     "message": f"Opened product in your {platform.capitalize()} mobile app, ready to purchase.",
                 }
             except Exception as exc:
-                logger.warning(f"Failed to dispatch to phone via Brahma Connect: {exc}")
+                logger.warning(f"Failed to dispatch to phone via Nexus Connect: {exc}")
 
         # PC Fallback / Default
         try:

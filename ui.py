@@ -76,6 +76,7 @@ from core.tts_providers import get_available_tts_providers
 from core.search_providers import get_available_search_providers
 from core.image_providers import get_available_image_providers
 from sound_manager import sound_mgr
+from ui_diagnostics import FirstRunDiagnosticsDialog
 
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -10452,7 +10453,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-    def set_brahma_connect_service(self, service):
+    def set_nexus_connect_service(self, service):
         self._brahma_connect = service
         if hasattr(self, "_devices_page"):
             self._devices_page.set_service(service)
@@ -16543,6 +16544,15 @@ class BrahmaUI:
             self._workspace_sidebar.hide_workspace(animate=False)
         self.set_dashboard_page(getattr(self._win, "_current_page", "dashboard") == "dashboard")
         self._apply_developer_mode_ui()
+        if not self._load_app_settings().get("first_run_diagnostics_complete", False):
+            try:
+                diagnostics = FirstRunDiagnosticsDialog(self._win)
+                diagnostics.exec()
+            except Exception as exc:
+                print(f"First-run diagnostics could not be shown: {exc}")
+            settings = self._load_app_settings()
+            settings["first_run_diagnostics_complete"] = True
+            self._save_app_settings(settings)
         if show_immediately:
             self._launcher.hide()
             if self._should_play_boot_sequence():
@@ -16556,8 +16566,8 @@ class BrahmaUI:
     def _make_app_icon(self) -> QIcon:
         return _logo_icon()
 
-    def set_brahma_connect_service(self, service):
-        self._win.set_brahma_connect_service(service)
+    def set_nexus_connect_service(self, service):
+        self._win.set_nexus_connect_service(service)
 
 
     
