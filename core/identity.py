@@ -11,7 +11,15 @@ def get_base_dir() -> Path:
 
 class IdentityService:
     def __init__(self):
-        self.config_file = get_base_dir() / "config" / "identity.json"
+        from core.user_paths import get_user_data_dir
+        self.config_file = get_user_data_dir() / "config" / "identity.json"
+        legacy = get_base_dir() / "config" / "identity.json"
+        if not self.config_file.exists() and legacy.exists():
+            try:
+                self.config_file.parent.mkdir(parents=True, exist_ok=True)
+                self.config_file.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+            except Exception:
+                self.config_file = legacy
         self.data: Dict[str, Any] = {
             "owner": {
                 "name": "",

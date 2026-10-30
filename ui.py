@@ -1412,7 +1412,12 @@ def qcol(h: str, a: int = 255) -> QColor:
 
 
 def _logo_icon() -> QIcon:
-    for candidate in (APP_ICON_PNG, LOGO_FILE, LOGO_ICO):
+    candidates = [APP_ICON_PNG, LOGO_FILE, LOGO_ICO]
+    if sys.platform == "darwin":
+        # macOS expects ~10% transparent padding around the artwork; the full-bleed
+        # PNG renders noticeably larger than other Dock icons.
+        candidates.insert(0, BASE_DIR / "assets" / "nexus_app_icon_mac.png")
+    for candidate in candidates:
         if candidate.exists():
             icon = QIcon(str(candidate))
             if not icon.isNull():
@@ -1575,6 +1580,37 @@ def _default_app_settings() -> dict:
         # Advanced AI Settings
         "advanced_ai_enabled": False,
     }
+
+
+def _read_json_dict(path) -> dict:
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_settings_files(settings: dict) -> None:
+    """Write app_settings.json and api_keys.json without ever dropping saved keys.
+
+    api_keys.json is merged on top of what is already stored, so a settings save
+    that does not carry the API keys (most of them) cannot wipe the Gemini key or
+    os_system and send the user back to first-run setup.
+    """
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    APP_SETTINGS_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
+    try:
+        merged = _read_json_dict(API_FILE)
+        merged.update(settings)
+        if not merged.get("os_system"):
+            merged["os_system"] = platform.system()
+        API_FILE.write_text(json.dumps(merged, indent=4), encoding="utf-8")
+    except Exception:
+        pass
+
+
+_PROVIDER_KEY_FIELDS = ("gemini_api_key", "openrouter_api_key", "anthropic_api_key",
+                        "nvidia_api_key", "groq_api_key", "custom_ai_api_key")
 
 
 def _default_discord_settings() -> dict:
@@ -10052,12 +10088,7 @@ class MainWindow(QMainWindow):
         return dict(settings)
 
     def _save_app_settings(self, settings: dict):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        APP_SETTINGS_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
-        try:
-            API_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
-        except Exception:
-            pass
+        _write_settings_files(settings)
         self._app_settings_cache = dict(settings)
 
     def _startup_animation_enabled(self) -> bool:
@@ -10213,7 +10244,7 @@ class MainWindow(QMainWindow):
         self._refresh_discord_card()
 
     def _load_api_defaults(self) -> dict:
-        defaults = {
+        merged = {
             "gemini_api_key": "",
             "openrouter_api_key": "",
             "anthropic_api_key": "",
@@ -10226,23 +10257,14 @@ class MainWindow(QMainWindow):
             "pollinations_api_key": "",
             "os_system": platform.system(),
         }
-        try:
-            if APP_SETTINGS_FILE.exists():
-                data = json.loads(APP_SETTINGS_FILE.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    defaults.update(data)
-                    data.setdefault("anthropic_api_key", "")
-                    data.setdefault("nvidia_api_key", "")
-                    data.setdefault("groq_api_key", "")
-                    data.setdefault("custom_ai_api_key", "")
-                    data.setdefault("tavily_api_key", "")
-                    data.setdefault("firecrawl_api_key", "")
-                    data.setdefault("serpapi_api_key", "")
-                    data.setdefault("pollinations_api_key", "")
-                    return data
-        except Exception:
-            pass
-        return defaults
+        # api_keys.json first (first-run setup writes here), then app_settings.json;
+        # a non-empty saved value is never replaced by an empty one.
+        for source in (_read_json_dict(API_FILE), _read_json_dict(APP_SETTINGS_FILE)):
+            for k, v in source.items():
+                if isinstance(v, str) and not v.strip() and merged.get(k):
+                    continue
+                merged[k] = v
+        return merged
 
     def _open_api_keys(self):
         """Open the API-keys dialog and merge the result into saved settings."""
@@ -11372,13 +11394,8 @@ class MainWindow(QMainWindow):
                 self._result_card.set_body("Action completed")
 
     def _check_config(self) -> bool:
-        if not API_FILE.exists(): return False
-        try:
-            d = json.loads(API_FILE.read_text(encoding="utf-8"))
-            return (bool(d.get("gemini_api_key")) and
-                    bool(d.get("os_system")))
-        except Exception:
-            return False
+        saved = self._load_api_defaults()
+        return any(str(saved.get(k, "")).strip() for k in _PROVIDER_KEY_FIELDS)
 
     def _apply_scan_state(self, enabled: bool, text: str = ""):
         if enabled:
@@ -11591,17 +11608,13 @@ class MainWindow(QMainWindow):
     # Change signature:
     def _on_setup_done(self, key: str, or_key: str, os_name: str):
         try:
-            os.makedirs(CONFIG_DIR, exist_ok=True)
-            existing = self._load_api_defaults()
-            API_FILE.write_text(
-                json.dumps({
-                    "gemini_api_key":    key,
-                    "openrouter_api_key": or_key,
-                    "anthropic_api_key": existing.get("anthropic_api_key", ""),
-                    "os_system":         os_name,
-                }, indent=4),
-                encoding="utf-8",
-            )
+            existing = self._load_app_settings()
+            existing.update({
+                "gemini_api_key":     key,
+                "openrouter_api_key": or_key,
+                "os_system":          os_name,
+            })
+            self._save_app_settings(existing)
             self._ready = True
             self._api_ready = True
             if self._overlay:
@@ -14504,9 +14517,7 @@ class SystemConnectivityPage(QWidget):
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 merged = dict(data)
                 merged.update(dialog.get_settings())
-                os.makedirs(CONFIG_DIR, exist_ok=True)
-                APP_SETTINGS_FILE.write_text(json.dumps(merged, indent=4), encoding="utf-8")
-                API_FILE.write_text(json.dumps(merged, indent=4), encoding="utf-8")
+                _write_settings_files(merged)
                 if self._ctrl() and hasattr(self._ctrl(), "write_log"):
                     self._ctrl().write_log("SYS: API keys updated.")
                 self.refresh()
@@ -16583,12 +16594,7 @@ class BrahmaUI:
         return dict(settings)
 
     def _save_app_settings(self, settings: dict):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        APP_SETTINGS_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
-        try:
-            API_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
-        except Exception:
-            pass
+        _write_settings_files(settings)
         self._app_settings_cache = dict(settings)
 
     def _save_launcher_position(self, x: int, y: int):
