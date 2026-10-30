@@ -6073,7 +6073,7 @@ class APIKeySettingsDialog(QDialog):
             row.addWidget(edit, 1)
 
             row.addStretch()
-            scroll_lay.addRow(row)
+            scroll_lay.addWidget(row)
             self._fields[key_id] = edit
 
         scroll.setWidget(scroll_content)
@@ -14412,7 +14412,7 @@ class SystemConnectivityPage(QWidget):
         else:
             try:
                 data = {}
-                if API_FILE.exists():
+                if APP_SETTINGS_FILE.exists():
                     with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)
                 dialog = APIKeySettingsDialog(data, parent=self)
