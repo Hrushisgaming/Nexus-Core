@@ -640,7 +640,8 @@ def main():
         plugin_manager = None
 
     def runner():
-        from core.live_runtime import BrahmaLive
+        from core.live_runtime import BrahmaLive, bind_runtime_globals
+        bind_runtime_globals(globals())
         _startup_log("runner waiting api key")
         ui.wait_for_api_key()
         _startup_log("runner api key ready")
