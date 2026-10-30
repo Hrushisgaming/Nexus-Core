@@ -33,7 +33,7 @@
   - Operating voltage safety callouts and ready-to-flash Arduino C++ firmware.
 
 ### 2. 🧬 Project Ultron — Self-Evolving Autonomous Skill Crucible
-- **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Nexus identifies the capability gap, writes a brand-new Python tool directly into `features/`, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
+- **On-the-Fly Code Synthesis**: When asked to execute a task outside its built-in toolkit, Nexus identifies the capability gap, writes a brand-new Python tool into the writable per-user skills vault, tests it inside an isolated sandbox ("The Crucible"), and auto-registers it dynamically without restarting the application.
 - **Persistent Vault**: All forged skills are saved in the writable per-user Nexus Core skills vault (`%LOCALAPPDATA%/NexusCore/skills` on Windows or `~/Library/Application Support/NexusCore/skills` on macOS) and hot-reloaded automatically.
 
 ### 3. 🛡️ Proactive Auto-Heal Engine
