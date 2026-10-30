@@ -1,4 +1,4 @@
-package com.brahma.connect.ui
+package com.nexus.connect.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,8 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.brahma.connect.core.AgentStateStore
-import com.brahma.connect.core.ChatMessage
+import com.nexus.connect.core.AgentStateStore
+import com.nexus.connect.core.ChatMessage
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -59,7 +59,7 @@ fun ChatScreen(
             CenterAlignedTopAppBar(
                 title = { 
                     Text(
-                        "Brahma Agent", 
+                        "Nexus Agent", 
                         color = Color.White, 
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleLarge
@@ -106,7 +106,7 @@ fun ChatScreen(
                         .weight(1f)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color(0xFF1A1A1A)),
-                    placeholder = { Text("Message Brahma...", color = Color.Gray) },
+                    placeholder = { Text("Message Nexus...", color = Color.Gray) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.Transparent,
