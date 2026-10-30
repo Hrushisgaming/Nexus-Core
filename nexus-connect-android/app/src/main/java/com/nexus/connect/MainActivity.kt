@@ -1,4 +1,4 @@
-package com.brahma.connect
+package com.nexus.connect
 
 import android.Manifest
 import android.content.Intent
@@ -9,10 +9,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import com.brahma.connect.core.AgentStateStore
-import com.brahma.connect.pairing.PairingStorage
-import com.brahma.connect.ui.BrahmaConnectApp
-import com.brahma.connect.ui.theme.BrahmaConnectTheme
+import com.nexus.connect.core.AgentStateStore
+import com.nexus.connect.pairing.PairingStorage
+import com.nexus.connect.ui.NexusConnectApp
+import com.nexus.connect.ui.theme.NexusConnectTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var storage: PairingStorage
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
             }
         } else {
             pendingServiceStart = false
-            AgentStateStore.setError("Notification permission is required for Brahma Connect.")
+            AgentStateStore.setError("Notification permission is required for Nexus Connect.")
             AgentStateStore.setStatus("Notification permission denied")
         }
     }
@@ -42,8 +42,8 @@ class MainActivity : ComponentActivity() {
         storage.loadGatewayHint()?.let {
             AgentStateStore.setPairingOffer(it)
             AgentStateStore.setGateway(
-                com.brahma.connect.core.GatewayEndpoint(
-                    name = "Brahma PC",
+                com.nexus.connect.core.GatewayEndpoint(
+                    name = "Nexus PC",
                     host = it.host,
                     port = it.port,
                 )
@@ -52,8 +52,8 @@ class MainActivity : ComponentActivity() {
         maybeStartService()
         ensureCameraPermission()
         setContent {
-            BrahmaConnectTheme {
-                BrahmaConnectApp(
+            NexusConnectTheme {
+                NexusConnectApp(
                     onRequestCameraPermission = {
                         cameraPermission.launch(Manifest.permission.CAMERA)
                     },
@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
     private fun startGatewayService() {
         val endpoint = AgentStateStore.gateway.value
         if (endpoint != null || AgentStateStore.credential.value != null) {
-            val intent = Intent(this, BrahmaConnectForegroundService::class.java)
+            val intent = Intent(this, NexusConnectForegroundService::class.java)
             ContextCompat.startForegroundService(this, intent)
         }
     }
