@@ -1,6 +1,6 @@
-package com.brahma.connect.pairing
+package com.nexus.connect.pairing
 
-import com.brahma.connect.core.PairingOffer
+import com.nexus.connect.core.PairingOffer
 import org.json.JSONObject
 
 object PairingPayloadParser {
