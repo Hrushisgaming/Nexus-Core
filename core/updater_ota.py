@@ -21,7 +21,7 @@ def get_current_version() -> str:
             return version_file.read_text(encoding='utf-8').strip()
     except Exception:
         pass
-    return "1.0.0"
+    return "1.0.1"
 
 def parse_semver(ver: str) -> tuple:
     if ver.startswith('v'):
