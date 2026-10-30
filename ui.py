@@ -2858,7 +2858,14 @@ from ui_popup_components import (BackgroundWidget, RemoteKeyOverlay, DailyBriefi
 from ui_gestures import _SysMetrics, _GestureRenderCanvas, GestureCameraPreview
 from ui_workspace import TaskDock, WorkspaceSidebar, InlineChatWorkspace
 from ui_overlays import (VoiceWaveformVisualizer, CommandBar, OmniCommandPalette, DeveloperModeDialog, ScanningOverlay, BootSequenceOverlay, IncomingAlertDialog, UltronMalfunctionDialog, MeetingOverlay, FloatingLauncher, FloatingGestureCard)
-from ui_settings_pages import (\n    SystemConnectivitySidebar, SettingsHubPage, SystemConnectivityPage,\n    SmartDevicesSection, _ConnectDeviceCard, NexusConnectDevicesPage,\n)\nfrom ui_main_window import MainWindow\n\n\nclass BrahmaUI:
+from ui_settings_pages import (
+    SystemConnectivitySidebar, SettingsHubPage, SystemConnectivityPage,
+    SmartDevicesSection, _ConnectDeviceCard, NexusConnectDevicesPage,
+)
+from ui_main_window import MainWindow
+
+
+class BrahmaUI:
     def __init__(self, face_path: str, size=None, *, show_immediately: bool = True):
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
