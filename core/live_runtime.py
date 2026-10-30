@@ -1,11 +1,16 @@
 """Gemini Live voice runtime for Nexus Core.
 
-The runtime class is isolated from the application entry point. A temporary
-namespace bridge keeps legacy integrations available while remaining methods
-are progressively extracted into focused services.
+The entry point injects its already-loaded dependencies before constructing
+the runtime. This avoids importing main.py a second time when the app runs as
+__main__ while keeping the runtime class isolated in its own module.
 """
-import main as _main
-globals().update({name: value for name, value in vars(_main).items() if not name.startswith("__")})
+from __future__ import annotations
+
+
+def bind_runtime_globals(namespace: dict) -> None:
+    """Bind application services and configuration used by legacy runtime methods."""
+    globals().update(namespace)
+
 
 class BrahmaLive:
 
