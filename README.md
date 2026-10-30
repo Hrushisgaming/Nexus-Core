@@ -198,9 +198,7 @@ Nexus Core Evo/
 
 ## 📄 License
 
-The original upstream **Brahma AI Evo Source-Available Personal Use License** and its copyright attribution are preserved verbatim in [LICENSE-BRAHMA-AI-EVO](LICENSE-BRAHMA-AI-EVO). The root [LICENSE](LICENSE) file points to those retained terms; it does not replace or expand them.
-
-Any separate permission from the original copyright holders to continue this fork is governed by the terms of that permission and is not represented as a new open-source license here.
+The original **Brahma AI Evo Source-Available Personal Use License** and its copyright attribution remain unchanged in the root [LICENSE](LICENSE) file. Nexus Core continues to preserve those original terms; this repository does not replace them with a new license.
 
 <div align="center">
 <b>Nexus Core Evo</b> • Built with intelligence, precision, and autonomy.
