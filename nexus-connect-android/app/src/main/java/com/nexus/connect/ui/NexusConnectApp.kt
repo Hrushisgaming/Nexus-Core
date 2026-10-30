@@ -1,4 +1,4 @@
-package com.brahma.connect.ui
+package com.nexus.connect.ui
 
 import android.Manifest
 import android.content.Intent
@@ -52,15 +52,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.brahma.connect.BrahmaConnectForegroundService
-import com.brahma.connect.core.AgentStateStore
-import com.brahma.connect.core.ConnectionState
-import com.brahma.connect.core.DeviceCredential
-import com.brahma.connect.core.GatewayEndpoint
-import com.brahma.connect.core.PairingOffer
-import com.brahma.connect.network.BrahmaGatewayDiscovery
-import com.brahma.connect.pairing.PairingPayloadParser
-import com.brahma.connect.pairing.PairingStorage
+import com.nexus.connect.NexusConnectForegroundService
+import com.nexus.connect.core.AgentStateStore
+import com.nexus.connect.core.ConnectionState
+import com.nexus.connect.core.DeviceCredential
+import com.nexus.connect.core.GatewayEndpoint
+import com.nexus.connect.core.PairingOffer
+import com.nexus.connect.network.NexusGatewayDiscovery
+import com.nexus.connect.pairing.PairingPayloadParser
+import com.nexus.connect.pairing.PairingStorage
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -102,14 +102,14 @@ fun HolographicBackground() {
 }
 
 @Composable
-fun BrahmaConnectApp(
+fun NexusConnectApp(
     onRequestCameraPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onStartService: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val discovery = remember { BrahmaGatewayDiscovery(context) }
+    val discovery = remember { NexusGatewayDiscovery(context) }
     val storage = remember { PairingStorage(context) }
     val connectionState by AgentStateStore.connectionState.collectAsState()
     val gateway by AgentStateStore.gateway.collectAsState()
@@ -207,7 +207,7 @@ fun BrahmaConnectApp(
                         onDismiss = { showManual = false },
                         onConnect = {
                             val p = manualPort.toIntOrNull() ?: 8765
-                            AgentStateStore.setGateway(GatewayEndpoint(name = "Brahma PC", host = manualHost.trim(), port = p))
+                            AgentStateStore.setGateway(GatewayEndpoint(name = "Nexus PC", host = manualHost.trim(), port = p))
                             AgentStateStore.setStatus("Manual endpoint selected")
                             onStartService()
                             showManual = false
@@ -243,13 +243,13 @@ fun BrahmaConnectApp(
                     onScanned = { raw ->
                         val offer = PairingPayloadParser.parse(raw)
                         if (offer == null) {
-                            scanError = "That QR code does not look like a Brahma pairing code."
+                            scanError = "That QR code does not look like a Nexus pairing code."
                             AgentStateStore.setError(scanError)
                         } else {
                             scanError = null
                             storage.saveGatewayHint(offer)
                             AgentStateStore.setPairingOffer(offer)
-                            AgentStateStore.setGateway(GatewayEndpoint(name = "Brahma PC", host = offer.host, port = offer.port))
+                            AgentStateStore.setGateway(GatewayEndpoint(name = "Nexus PC", host = offer.host, port = offer.port))
                             AgentStateStore.setStatus("Pairing payload loaded")
                             navController.popBackStack()
                         }
@@ -270,8 +270,8 @@ fun BrahmaConnectApp(
                         logs = logs,
                         status = status,
                         onDisconnect = {
-                            context.startService(Intent(context, BrahmaConnectForegroundService::class.java).apply {
-                                action = BrahmaConnectForegroundService.ACTION_STOP
+                            context.startService(Intent(context, NexusConnectForegroundService::class.java).apply {
+                                action = NexusConnectForegroundService.ACTION_STOP
                             })
                             navController.navigate("welcome") { popUpTo(0) }
                         },
@@ -290,9 +290,9 @@ fun BrahmaConnectApp(
                 ChatScreen(
                     onBack = { navController.popBackStack() },
                     onSendMessage = { text ->
-                        val intent = Intent(context, BrahmaConnectForegroundService::class.java).apply {
-                            action = BrahmaConnectForegroundService.ACTION_SEND_CHAT
-                            putExtra(BrahmaConnectForegroundService.EXTRA_CHAT_TEXT, text)
+                        val intent = Intent(context, NexusConnectForegroundService::class.java).apply {
+                            action = NexusConnectForegroundService.ACTION_SEND_CHAT
+                            putExtra(NexusConnectForegroundService.EXTRA_CHAT_TEXT, text)
                         }
                         context.startService(intent)
                     }
@@ -323,7 +323,7 @@ fun GlassCard(content: @Composable () -> Unit) {
 @Composable
 fun WelcomeScreen(onNext: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("BRAHMA", style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+        Text("NEXUS", style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
         Text("CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Light, color = androidx.compose.ui.graphics.Color.White)
         Spacer(modifier = Modifier.height(60.dp))
         GlassCard {
@@ -342,7 +342,7 @@ fun AboutScreen(onNext: () -> Unit) {
         GlassCard {
             Text("Hardware Bridge", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(16.dp))
-            Text("This agent acts as a secure physical bridge between your Android device and your PC's Brahma AI.", color = androidx.compose.ui.graphics.Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text("This agent acts as a secure physical bridge between your Android device and your PC's Nexus AI.", color = androidx.compose.ui.graphics.Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Spacer(modifier = Modifier.height(24.dp))
             Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
                 Text("Next")
@@ -397,7 +397,7 @@ private fun StartupPermissionsScreen(
     ) {
         Text("SETUP REQUIRED", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(8.dp))
-        Text("Enable the permissions Brahma Connect needs to control your phone reliably.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Enable the permissions Nexus Connect needs to control your phone reliably.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(20.dp))
         Card(colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), contentColor = androidx.compose.ui.graphics.Color.White), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))) {
             Column(Modifier.padding(18.dp)) {
@@ -440,7 +440,7 @@ private fun DiscoveryScreen(
     status: String,
     error: String?,
     onConnect: (() -> Unit)?,
-    onFindBrahma: () -> Unit,
+    onFindNexus: () -> Unit,
     onScanQr: () -> Unit,
     onEnterIp: () -> Unit,
 ) {
@@ -448,9 +448,9 @@ private fun DiscoveryScreen(
         modifier = Modifier.fillMaxSize().padding(24.dp).background(androidx.compose.ui.graphics.Color.Transparent).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("BRAHMA CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White)
+        Text("NEXUS CONNECT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White)
         Spacer(Modifier.height(8.dp))
-        Text("Connect this device to Brahma AI.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Connect this device to Nexus AI.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
         Card(colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), contentColor = androidx.compose.ui.graphics.Color.White), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))) {
             Column(Modifier.padding(20.dp)) {
@@ -470,7 +470,7 @@ private fun DiscoveryScreen(
             Button(onClick = onConnect, modifier = Modifier.fillMaxWidth()) { Text("Connect") }
             Spacer(Modifier.height(12.dp))
         }
-        Button(onClick = onFindBrahma, modifier = Modifier.fillMaxWidth()) { Text("Find Brahma") }
+        Button(onClick = onFindNexus, modifier = Modifier.fillMaxWidth()) { Text("Find Nexus") }
         Spacer(Modifier.height(12.dp))
         FilledTonalButton(onClick = onScanQr, modifier = Modifier.fillMaxWidth()) { Text("Scan QR") }
         Spacer(Modifier.height(12.dp))
@@ -489,9 +489,9 @@ private fun PairingPendingScreen(
     onCancel: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text("CONNECT TO BRAHMA?", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+        Text("CONNECT TO NEXUS?", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(8.dp))
-        Text("${gateway?.name ?: "Brahma PC"}\n${gateway?.host ?: offer.host}:${offer.port}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("${gateway?.name ?: "Nexus PC"}\n${gateway?.host ?: offer.host}:${offer.port}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(20.dp))
         Card(colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), contentColor = androidx.compose.ui.graphics.Color.White), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))) {
             Column(Modifier.padding(16.dp)) {
@@ -523,13 +523,13 @@ private fun ConnectedScreen(
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).background(androidx.compose.ui.graphics.Color.Transparent).verticalScroll(rememberScrollState()),
     ) {
-        Text("BRAHMA CONNECT", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White)
+        Text("NEXUS CONNECT", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White)
         Spacer(Modifier.height(8.dp))
         Text("● Connected", color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(20.dp))
         Card(colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f), contentColor = androidx.compose.ui.graphics.Color.White), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))) {
             Column(Modifier.padding(16.dp)) {
-                Text(gateway?.name ?: "Brahma PC", fontWeight = FontWeight.Bold)
+                Text(gateway?.name ?: "Nexus PC", fontWeight = FontWeight.Bold)
                 Text(credential.deviceName)
                 Text("Battery status is reported by the agent.")
                 Text("Network: Wi-Fi")
@@ -554,7 +554,7 @@ private fun ConnectedScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Brahma Chat", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text("Nexus Chat", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text("Synchronized with your PC", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
                 }
