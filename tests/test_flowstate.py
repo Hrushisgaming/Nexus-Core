@@ -52,12 +52,26 @@ def test_flowstate_manager_lifecycle(tmp_path: Path):
     assert len(ws_list) == 1
     assert ws_list[0]["name"] == "Alpha Workspace"
 
+    # Isolate restoration from the real CI process list. The snapshot's
+    # actual running processes may all already be open and are correctly skipped.
+    fake_app = tmp_path / "restorable-app"
+    fake_app.write_text("test executable placeholder", encoding="utf-8")
+    stored = manager._load_all()
+    stored["Alpha Workspace"]["apps"] = [{
+        "name": "restorable-app",
+        "exe_path": str(fake_app),
+        "title": "Restorable App",
+        "cwd": "",
+    }]
+    manager._save_all(stored)
+
     # 3. Restore workspace (mocking subprocess.Popen)
-    with patch("subprocess.Popen") as mock_popen:
-        restored = manager.restore_workspace("Alpha Workspace")
-        assert restored["success"] is True
-        assert restored["name"] == "Alpha Workspace"
-        assert len(restored["restored_items"]) >= 1
+    with patch("psutil.process_iter", return_value=[]):
+        with patch("subprocess.Popen") as mock_popen:
+            restored = manager.restore_workspace("Alpha Workspace")
+            assert restored["success"] is True
+            assert restored["name"] == "Alpha Workspace"
+            assert len(restored["restored_items"]) >= 1
 
     # 4. Restore non-existent workspace
     missing = manager.restore_workspace("Non Existent One")
