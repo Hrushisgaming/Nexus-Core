@@ -163,8 +163,9 @@ def test_inspect_router_structure():
     }):
         with patch.object(sentinel, "scan_device_ports", return_value={"open_ports": [80, 22, 53]}):
             with patch.object(sentinel, "ping_target", return_value={"success": True, "avg_latency_ms": 1.5}):
-                with patch("subprocess.check_output", return_value="192.168.0.1  28-87-ba-d0-ec-ba  dynamic"):
-                    res = sentinel.inspect_router()
+                with patch.object(sentinel, "get_arp_table", return_value={"192.168.0.1": "28-87-BA-D0-EC-BA"}):
+                    with patch.object(sentinel, "probe_http", return_value={"title": "TP-Link Archer", "server": "", "snippet": "", "status_code": 200}):
+                        res = sentinel.inspect_router()
                     assert res["success"] is True
                     assert res["gateway_ip"] == "192.168.0.1"
                     assert res["mac_address"] == "28-87-BA-D0-EC-BA"
