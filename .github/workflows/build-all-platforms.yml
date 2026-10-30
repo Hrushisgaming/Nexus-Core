@@ -126,7 +126,7 @@ jobs:
             --add-data "assets:assets" \
             --add-data "config:config" \
             --add-data "core:core" \
-            --add-data "brahma_connect:brahma_connect" \
+            --add-data "nexus_connect:nexus_connect" \
             --add-data "actions:actions" \
             --add-data "memory:memory" \
             --add-data "plugins:plugins" \
