@@ -198,6 +198,9 @@ class LiveVoiceEngine:
         # STT executor for non-blocking transcription
         self._stt_executor = None
 
+        # Mute state
+        self._muted = False
+
         # Metrics
         self.last_speech_start_time = 0.0
         self.last_speech_stop_time = 0.0
@@ -245,6 +248,11 @@ class LiveVoiceEngine:
         if autocorrect is not None:
             self.stt_autocorrect = autocorrect
             logger.info(f"[LiveVoice] STT autocorrect set to: {self.stt_autocorrect}")
+
+    def set_muted(self, muted: bool) -> None:
+        """Mute or unmute microphone input."""
+        self._muted = bool(muted)
+        logger.info(f"[LiveVoice] Microphone {'muted' if self._muted else 'unmuted'}")
 
     # ── TTS Configuration ────────────────────────────────────────────────────
     def get_tts_config(self) -> dict:
@@ -764,6 +772,8 @@ class LiveVoiceEngine:
 
         def callback(indata, frames, time_info, status):
             if not self._running:
+                return
+            if self._muted:
                 return
             pcm_bytes = indata.tobytes()
             self.feed_pcm_audio(pcm_bytes, source="local_mic")

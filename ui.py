@@ -10504,6 +10504,9 @@ class MainWindow(QMainWindow):
         self._style_mute_btn()
         if hasattr(self, "_taskbar_waveform") and self._taskbar_waveform:
             self._taskbar_waveform.set_muted(self._muted)
+        # Also mute the live voice engine's mic input
+        if hasattr(self, "_lve") and self._lve is not None:
+            self._lve.set_muted(self._muted)
         if self._muted:
             self._apply_state("MUTED")
             self._log.append_log("SYS: Microphone muted.")

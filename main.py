@@ -2446,6 +2446,7 @@ class BrahmaLive:
         try:
             from core.live_voice_engine import LiveVoiceEngine
             _lve = LiveVoiceEngine.get_instance()
+            self._lve = _lve
             _lve.on_user_transcript = lambda txt, interim: self.ui.set_live_subtitles("YOU", txt, interim)
             _lve.on_ai_transcript = lambda txt, interim: self.ui.set_live_subtitles("NEXUS", txt, interim)
         except Exception:
