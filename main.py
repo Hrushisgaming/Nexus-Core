@@ -145,8 +145,12 @@ _SINGLE_INSTANCE_MUTEX = None
 
 
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    try:
+        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("gemini_api_key", "")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return ""
 
 
 def _is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
@@ -6756,10 +6760,15 @@ class BrahmaLive:
         except Exception:
             pass
 
-        client = genai.Client(
-            api_key=_get_api_key(),
-            http_options={"api_version": "v1beta"}
-        )
+        api_key = self._get_api_key()
+        if not api_key:
+            logger.error("[LiveVoice] No Gemini API key configured. Voice features disabled.")
+            self.ui.set_live_subtitles("NEXUS", "Please set your Gemini API key in Settings → AI Providers.", True)
+            while self._running:
+                await asyncio.sleep(5.0)
+            return
+
+        client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
 
         while True:
             try:
