@@ -16566,7 +16566,7 @@ class BrahmaUI:
     def _make_app_icon(self) -> QIcon:
         return _logo_icon()
 
-    def set_brahma_connect_service(self, service):
+    def set_nexus_connect_service(self, service):
         self._win.set_nexus_connect_service(service)
 
 
