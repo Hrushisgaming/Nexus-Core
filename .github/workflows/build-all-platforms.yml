@@ -136,6 +136,7 @@ jobs:
             --add-data "dashboard/static:dashboard/static" \
             --add-data "workspace_store.py:." \
             --add-data "version.txt:." \
+            --add-data "app_version.txt:." \
             --add-data "requirements.txt:." \
             main.py
 
