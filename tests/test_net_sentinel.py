@@ -80,7 +80,7 @@ def test_wake_on_lan():
     """Verifies Wake-on-LAN magic packet generation and UDP broadcast."""
     sentinel = get_net_sentinel()
 
-    with patch("socket.socket") as mock_sock_cls:
+    with patch("core.net_sentinel.socket.socket") as mock_sock_cls:
         mock_sock = MagicMock()
         mock_sock_cls.return_value.__enter__.return_value = mock_sock
 
@@ -131,7 +131,7 @@ def test_scan_device_ports():
             return 0
         return 10061
 
-    with patch("socket.socket") as mock_sock_cls:
+    with patch("core.net_sentinel.socket.socket") as mock_sock_cls:
         mock_sock = MagicMock()
         mock_sock.connect_ex.side_effect = fake_connect
         mock_sock_cls.return_value = mock_sock
@@ -474,7 +474,7 @@ def test_cross_platform_gateway_discovery():
 eth0	00000000	0101A8C0	0003	0	0	100	00000000	0	0	0
 """
     with patch("sys.platform", "linux"):
-        with patch("socket.socket") as mock_sock:
+        with patch("core.net_sentinel.socket.socket") as mock_sock:
             mock_s = MagicMock()
             mock_s.getsockname.return_value = ("192.168.1.120", 0)
             mock_sock.return_value.__enter__.return_value = mock_s
@@ -494,7 +494,7 @@ destination: default
       flags: <UP,GATEWAY,DONE,STATIC,PRCLONING,GLOBAL>
 """
     with patch("sys.platform", "darwin"):
-        with patch("socket.socket") as mock_sock:
+        with patch("core.net_sentinel.socket.socket") as mock_sock:
             mock_s = MagicMock()
             mock_s.getsockname.return_value = ("192.168.1.45", 0)
             mock_sock.return_value.__enter__.return_value = mock_s
@@ -528,7 +528,7 @@ def test_broadcast_online_notification():
     """Verifies UDP discovery beacon and SSDP M-SEARCH broadcast generation."""
     sentinel = get_net_sentinel()
 
-    with patch("socket.socket") as mock_sock_cls:
+    with patch("core.net_sentinel.socket.socket") as mock_sock_cls:
         mock_sock = MagicMock()
         mock_sock.getsockname.return_value = ("192.168.1.100", 0)
         mock_sock_cls.return_value.__enter__.return_value = mock_sock
@@ -545,7 +545,7 @@ def test_notify_single_device():
     """Verifies targeted unicast notification packet transmission and Smart TV probes."""
     sentinel = get_net_sentinel()
 
-    with patch("socket.socket") as mock_sock_cls, \
+    with patch("core.net_sentinel.socket.socket") as mock_sock_cls, \
          patch("urllib.request.urlopen") as mock_urlopen, \
          patch.object(sentinel, "ping_target", return_value={"success": True, "avg_latency_ms": 3.2}):
 
@@ -661,7 +661,7 @@ def test_action_and_feature_connect_all_integration():
 
 def test_mobile_companion_portal():
     """Verifies that the zero-install mobile companion portal HTML is generated with correct endpoints."""
-    from brahma_connect.gateway.mobile_portal import get_mobile_portal_html
+    from nexus_connect.gateway.mobile_portal import get_mobile_portal_html
     html = get_mobile_portal_html(host_ip="192.168.0.112", port=8765)
     assert "BRAHMA AI" in html
     assert "Mobile Companion Node" in html
