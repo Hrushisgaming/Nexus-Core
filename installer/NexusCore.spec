@@ -58,6 +58,7 @@ excluded_files = [
     'long_term.json',
     'nutrition_log.json',
     'nexus_connect.json',
+    'brahma_connect.json',
     'devices.json'
 ]
 
