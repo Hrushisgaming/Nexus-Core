@@ -66,7 +66,7 @@ class InstallThread(QThread):
             self.status.emit("Configuring application shortcuts and permissions...")
             
             exe_path = os.path.join(self.target_dir, 'BrahmaEvo.exe')
-            ico_path = os.path.join(self.target_dir, 'assets', 'Brahma_Lite_Logo.ico')
+            ico_path = os.path.join(self.target_dir, 'assets', 'nexus_app_icon.ico')
             if not os.path.exists(ico_path):
                 # Fallback to any ico in assets
                 assets_dir = os.path.join(self.target_dir, 'assets')

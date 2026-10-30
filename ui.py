@@ -85,6 +85,7 @@ APP_SETTINGS_FILE = CONFIG_DIR / "app_settings.json"
 DISCORD_SETTINGS_FILE = CONFIG_DIR / "discord_bot.json"
 LOGO_FILE  = BASE_DIR / "assets" / "nexus_core_logo.png"
 LOGO_ICO   = BASE_DIR / "assets" / "nexus_lite_logo.ico"
+APP_ICON_PNG = BASE_DIR / "assets" / "nexus_app_icon.png"
 BACKGROUND_IMAGE_FILE = BASE_DIR / "assets" / "nexus_background.png"
 MODEL_DOWNLOAD_URL = "https://storage.googleapis.com/mediapipe-assets/hand_landmarker.task"
 
@@ -1407,7 +1408,12 @@ def qcol(h: str, a: int = 255) -> QColor:
 
 
 def _logo_icon() -> QIcon:
-    return QIcon(str(LOGO_ICO if LOGO_ICO.exists() else LOGO_FILE))
+    for candidate in (APP_ICON_PNG, LOGO_FILE, LOGO_ICO):
+        if candidate.exists():
+            icon = QIcon(str(candidate))
+            if not icon.isNull():
+                return icon
+    return QIcon()
 
 
 def _logo_pixmap(size: int) -> QPixmap:
@@ -6053,6 +6059,7 @@ class APIKeySettingsDialog(QDialog):
             ("firecrawl_api_key", "Firecrawl", "Firecrawl API Key"),
             ("serpapi_api_key", "SerpAPI", "SerpAPI API Key"),
             ("anthropic_api_key", "Anthropic Claude", "Anthropic API Key"),
+            ("pollinations_api_key", "Pollinations (Images)", "Pollinations API Key (sk_...)"),
         ]
 
         for key_id, label, placeholder in fields_spec:
@@ -6072,8 +6079,7 @@ class APIKeySettingsDialog(QDialog):
             edit.setEchoMode(QLineEdit.EchoMode.Password)
             row.addWidget(edit, 1)
 
-            row.addStretch()
-            scroll_lay.addWidget(row)
+            scroll_lay.addLayout(row)
             self._fields[key_id] = edit
 
         scroll.setWidget(scroll_content)
@@ -9343,6 +9349,29 @@ class FloatingLauncher(QWidget):
                 trail.pop(0)
         self.update()
 
+    _ICON_SIZE = 46
+
+    def _icon_pixmap(self):
+        """App icon, scaled once for this screen. Drawn whole (never clipped to a circle)."""
+        if hasattr(self, "_icon_pm_cache"):
+            return self._icon_pm_cache
+        pm = None
+        try:
+            src = QPixmap(str(APP_ICON_PNG))
+            if not src.isNull():
+                dpr = max(1.0, float(self.devicePixelRatioF()))
+                px = int(round(self._ICON_SIZE * dpr))
+                pm = src.scaled(
+                    px, px,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                pm.setDevicePixelRatio(dpr)
+        except Exception:
+            pm = None
+        self._icon_pm_cache = pm
+        return pm
+
     def paintEvent(self, event):
         import math
         painter = QPainter(self)
@@ -9351,6 +9380,7 @@ class FloatingLauncher(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         w, h = self.width(), self.height()
         cx, cy = w / 2.0, h / 2.0
+        icon_pm = self._icon_pixmap()
 
         ar, ag, ab = self._STATE_THEMES.get(self._state, (255, 255, 255))
         breath = self._breath_val
@@ -9420,14 +9450,16 @@ class FloatingLauncher(QWidget):
         core_grad.setColorAt(1.0, QColor(ar, ag, ab, 30))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(core_grad))
-        painter.drawEllipse(QPointF(cx + gx * 0.5, cy + gy * 0.5), core_r, core_r)
+        if icon_pm is None:
+            painter.drawEllipse(QPointF(cx + gx * 0.5, cy + gy * 0.5), core_r, core_r)
 
         # Glowing Core Rim
         rim_alpha = min(255, int((110 + breath * 80 + self._audio_lvl * 60) * hover_boost))
         rim_pen = QPen(QColor(ar, ag, ab, rim_alpha), 1.2)
         painter.setPen(rim_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(QPointF(cx + gx * 0.5, cy + gy * 0.5), core_r, core_r)
+        if icon_pm is None:
+            painter.drawEllipse(QPointF(cx + gx * 0.5, cy + gy * 0.5), core_r, core_r)
 
         # ── 5. Orbiting Micro-Particle Comet Trails ──
         for i in range(len(self._particle_trails)):
@@ -9446,23 +9478,41 @@ class FloatingLauncher(QWidget):
                 painter.setBrush(QBrush(QColor(head_c.red(), head_c.green(), head_c.blue(), head_alpha)))
                 painter.drawEllipse(QPointF(hx, hy), 1.6, 1.6)
 
-        # ── 6. Emblem: Hindi "ब्रह्मा" + Status Dot with Parallax ──
-        text_alpha = min(255, int((215 + breath * 40) * hover_boost))
-        painter.setPen(QPen(QColor(0, 0, 0, 180)))
-        painter.setFont(QFont("Nirmala UI", 11, QFont.Weight.Bold))
-        painter.drawText(QRectF(cx - 21.0 + gx, cy - 13.0 + gy, 44.0, 22.0), Qt.AlignmentFlag.AlignCenter, "\u092C\u094D\u0930\u0939\u094D\u092E\u093E")
+        # ── 6. Emblem: the Nexus app icon (whole, uncropped) + Status Dot ──
+        if icon_pm is not None:
+            size = float(self._ICON_SIZE)
+            ix = cx - size / 2.0 + gx * 0.5
+            iy = cy - size / 2.0 + gy * 0.5
+            radius = size * 0.22
+            # soft contact shadow so the icon lifts off the glow
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(0, 0, 0, 80)))
+            painter.drawRoundedRect(QRectF(ix + 0.5, iy + 2.0, size, size), radius, radius)
+            painter.drawPixmap(QPointF(ix, iy), icon_pm)
+            # state beacon on the icon's lower-right corner
+            dot_alpha = min(255, int((170 + breath * 85) * hover_boost))
+            bx, by = ix + size - 3.0, iy + size - 3.0
+            painter.setBrush(QBrush(QColor(8, 10, 16, 235)))
+            painter.drawEllipse(QPointF(bx, by), 4.6, 4.6)
+            painter.setBrush(QBrush(QColor(ar, ag, ab, dot_alpha)))
+            painter.drawEllipse(QPointF(bx, by), 3.0, 3.0)
+        else:
+            text_alpha = min(255, int((215 + breath * 40) * hover_boost))
+            painter.setPen(QPen(QColor(0, 0, 0, 180)))
+            painter.setFont(QFont("Nirmala UI", 11, QFont.Weight.Bold))
+            painter.drawText(QRectF(cx - 21.0 + gx, cy - 13.0 + gy, 44.0, 22.0), Qt.AlignmentFlag.AlignCenter, "\u092C\u094D\u0930\u0939\u094D\u092E\u093E")
 
-        # Crisp glowing text
-        painter.setPen(QPen(QColor(ar, ag, ab, text_alpha)))
-        painter.setFont(QFont("Nirmala UI", 11, QFont.Weight.Bold))
-        painter.drawText(QRectF(cx - 22.0 + gx, cy - 14.0 + gy, 44.0, 22.0), Qt.AlignmentFlag.AlignCenter, "\u092C\u094D\u0930\u0939\u094D\u092E\u093E")
+            # Crisp glowing text
+            painter.setPen(QPen(QColor(ar, ag, ab, text_alpha)))
+            painter.setFont(QFont("Nirmala UI", 11, QFont.Weight.Bold))
+            painter.drawText(QRectF(cx - 22.0 + gx, cy - 14.0 + gy, 44.0, 22.0), Qt.AlignmentFlag.AlignCenter, "\u092C\u094D\u0930\u0939\u094D\u092E\u093E")
 
-        # Tiny breathing status beacon directly below text
-        dot_alpha = min(255, int((150 + breath * 105) * hover_boost))
-        dot_color = QColor(ar, ag, ab, dot_alpha)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(dot_color))
-        painter.drawEllipse(QPointF(cx + gx, cy + 12.0 + gy), 2.0, 2.0)
+            # Tiny breathing status beacon directly below text
+            dot_alpha = min(255, int((150 + breath * 105) * hover_boost))
+            dot_color = QColor(ar, ag, ab, dot_alpha)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(dot_color))
+            painter.drawEllipse(QPointF(cx + gx, cy + 12.0 + gy), 2.0, 2.0)
 
         painter.end()
 
@@ -10167,6 +10217,7 @@ class MainWindow(QMainWindow):
             "tavily_api_key": "",
             "firecrawl_api_key": "",
             "serpapi_api_key": "",
+            "pollinations_api_key": "",
             "os_system": platform.system(),
         }
         try:
@@ -10181,10 +10232,29 @@ class MainWindow(QMainWindow):
                     data.setdefault("tavily_api_key", "")
                     data.setdefault("firecrawl_api_key", "")
                     data.setdefault("serpapi_api_key", "")
+                    data.setdefault("pollinations_api_key", "")
                     return data
         except Exception:
             pass
         return defaults
+
+    def _open_api_keys(self):
+        """Open the API-keys dialog and merge the result into saved settings."""
+        try:
+            current = self._load_api_defaults()
+            dialog = APIKeySettingsDialog(current, parent=self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            merged = self._load_app_settings()
+            merged.update(current)
+            merged.update(dialog.get_settings())
+            self._save_app_settings(merged)
+            try:
+                self._log.append_log("SYS: API keys updated.")
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[Settings] Error saving API keys: {e}")
 
     def _startup_enabled(self) -> bool:
         from core.platform_api import platform_api
@@ -12304,8 +12374,8 @@ class SystemConnectivityPage(QWidget):
         if not key:
             return "Not set"
         if len(key) <= 8:
-            return "ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó"
-        return f"{key[:4]}ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó{key[-4:]}"
+            return "••••••••"
+        return f"{key[:4]}••••••••{key[-4:]}"
 
     def _provider_row(self, name: str, key: str, model: str, setting_key: str):
         row = QFrame()
@@ -12693,11 +12763,18 @@ class SystemConnectivityPage(QWidget):
             "custom-model",
             "custom",
         )
+        self._pollinations_row, self._pollinations_status, self._pollinations_key = self._provider_row(
+            "Pollinations (Images)",
+            self._api_defaults.get("pollinations_api_key", ""),
+            "flux",
+            "pollinations",
+        )
         lay1.addWidget(self._gemini_row)
         lay1.addWidget(self._or_row)
         lay1.addWidget(self._nvidia_row)
         lay1.addWidget(self._groq_row)
         lay1.addWidget(self._custom_row)
+        lay1.addWidget(self._pollinations_row)
         controls = QHBoxLayout()
         controls.setSpacing(12)
         self._default_provider = QComboBox()
@@ -14407,25 +14484,28 @@ class SystemConnectivityPage(QWidget):
                 pass
 
     def _open_api_keys(self):
-        if self._ctrl() and hasattr(self._ctrl(), "_win"):
-            self._ctrl()._win._open_api_keys()
-        else:
-            try:
-                data = {}
-                if APP_SETTINGS_FILE.exists():
-                    with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                dialog = APIKeySettingsDialog(data, parent=self)
-                if dialog.exec() == QDialog.DialogCode.Accepted:
-                    new_data = dialog.get_settings()
-                    with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
-                        json.dump(new_data, f, indent=4)
-                    API_FILE.write_text(json.dumps(new_data, indent=4), encoding="utf-8")
-                    if self._ctrl() and hasattr(self._ctrl(), "write_log"):
-                        self._ctrl().write_log("SYS: API keys updated.")
-                    self.refresh()
-            except Exception as e:
-                print(f"[Settings] Error saving API keys: {e}")
+        win = getattr(self._ctrl(), "_win", None) if self._ctrl() else None
+        try:
+            if win is not None and hasattr(win, "_open_api_keys"):
+                win._open_api_keys()
+                self.refresh()
+                return
+            data = {}
+            if APP_SETTINGS_FILE.exists():
+                with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            dialog = APIKeySettingsDialog(data, parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                merged = dict(data)
+                merged.update(dialog.get_settings())
+                os.makedirs(CONFIG_DIR, exist_ok=True)
+                APP_SETTINGS_FILE.write_text(json.dumps(merged, indent=4), encoding="utf-8")
+                API_FILE.write_text(json.dumps(merged, indent=4), encoding="utf-8")
+                if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+                    self._ctrl().write_log("SYS: API keys updated.")
+                self.refresh()
+        except Exception as e:
+            print(f"[Settings] Error saving API keys: {e}")
 
     def _test_provider(self, setting_key: str):
         api = self._load_api_defaults()
@@ -14439,6 +14519,7 @@ class SystemConnectivityPage(QWidget):
             "firecrawl": ("firecrawl_api_key", "Firecrawl"),
             "serpapi": ("serpapi_api_key", "SerpAPI"),
             "anthropic": ("anthropic_api_key", "Anthropic Claude"),
+            "pollinations": ("pollinations_api_key", "Pollinations"),
         }
         key_field, name = key_map.get(setting_key, ("gemini_api_key", "Google Gemini"))
         val = api.get(key_field, "")
@@ -14800,6 +14881,9 @@ class SystemConnectivityPage(QWidget):
             self._groq_key.setText(self._provider_key_preview(api.get("groq_api_key", "")))
             self._custom_status.setText("Connected" if api.get("custom_ai_api_key") else "Not connected")
             self._custom_key.setText(self._provider_key_preview(api.get("custom_ai_api_key", "")))
+            if hasattr(self, "_pollinations_status"):
+                self._pollinations_status.setText("Connected" if api.get("pollinations_api_key") else "Not connected")
+                self._pollinations_key.setText(self._provider_key_preview(api.get("pollinations_api_key", "")))
             
             prov = app.get("default_ai_provider", "Gemini")
             is_offline = bool(app.get("offline_mode_enabled", False))
@@ -15561,7 +15645,7 @@ class _ConnectDeviceCard(QFrame):
 
         platform = str(device.get("platform", "UNKNOWN")).upper()
         status = "ONLINE" if bool(device.get("online")) else "OFFLINE"
-        self._status_label = QLabel(f"{platform} ΓÇó {status}")
+        self._status_label = QLabel(f"{platform} • {status}")
         self._status_label.setFont(QFont("Segoe UI", 8))
         self._status_label.setStyleSheet("color: rgba(255,255,255,0.55);")
         layout.addWidget(self._status_label)

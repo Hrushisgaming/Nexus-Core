@@ -126,15 +126,23 @@ def generate_image(
 
     # Encode URL
     encoded_prompt = urllib.parse.quote(enhanced_prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true"
+    try:
+        from core.image_providers import get_pollinations_api_key
+        poll_key = get_pollinations_api_key()
+    except Exception:
+        poll_key = ""
+    if poll_key:
+        url = f"https://gen.pollinations.ai/image/{encoded_prompt}?nologo=true"
+    else:
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true"
 
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-        )
+        req_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        if poll_key:
+            req_headers["Authorization"] = f"Bearer {poll_key}"
+        req = urllib.request.Request(url, headers=req_headers)
 
         t0 = time.time()
         with urllib.request.urlopen(req, timeout=30) as resp:

@@ -120,8 +120,8 @@ EOF
     chmod +x "$APP_BUNDLE/Contents/MacOS/BrahmaEvo"
 
     # Copy Icon if available
-    if [ -f "$INSTALL_DIR/assets/Brahma_Lite_Logo.ico" ]; then
-        cp "$INSTALL_DIR/assets/Brahma_Lite_Logo.ico" "$APP_BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+    if [ -f "$INSTALL_DIR/assets/nexus_app_icon.icns" ]; then
+        cp "$INSTALL_DIR/assets/nexus_app_icon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null || true
     fi
 
     echo -e "${GREEN}✓ Created macOS application bundle: $APP_BUNDLE${NC}"
@@ -134,8 +134,8 @@ else
     mkdir -p "$ICONS_DIR"
 
     # Copy Icon
-    if [ -f "$INSTALL_DIR/assets/Brahma_Lite_Logo.ico" ]; then
-        cp "$INSTALL_DIR/assets/Brahma_Lite_Logo.ico" "$ICONS_DIR/brahma-evo.ico" 2>/dev/null || true
+    if [ -f "$INSTALL_DIR/assets/nexus_app_icon.ico" ]; then
+        cp "$INSTALL_DIR/assets/nexus_app_icon.ico" "$ICONS_DIR/brahma-evo.ico" 2>/dev/null || true
     fi
 
     # Create .desktop file

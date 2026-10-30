@@ -1,5 +1,6 @@
 from core.user_paths import get_user_data_dir
 from typing import Any, Optional
+import logging
 import os
 
 # Hardware acceleration & WebGL flags for smooth rendering in Chromium.
@@ -133,6 +134,8 @@ def get_base_dir():
 
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = get_user_data_dir() / "config" / "api_keys.json"
+APP_SETTINGS_FILE = get_user_data_dir() / "config" / "app_settings.json"
+logger = logging.getLogger("NexusCore")
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 STARTUP_LOG     = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "Nexus Core" / "startup.log"
 LIVE_MODEL          = "models/gemini-3.5-flash-lite"
@@ -194,7 +197,7 @@ def _ensure_desktop_shortcut() -> None:
         desktop_dir.mkdir(parents=True, exist_ok=True)
         shortcut_path = desktop_dir / "Nexus Core.lnk"
         script_path = BASE_DIR / "main.py"
-        icon_path = BASE_DIR / "assets" / "Nexus_Lite_Logo.ico"
+        icon_path = BASE_DIR / "assets" / "nexus_app_icon.ico"
 
         if not icon_path.exists():
             icon_path = None

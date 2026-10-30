@@ -15,11 +15,32 @@ Common interface:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Optional
 
 logger = logging.getLogger("ImageProviders")
+
+
+def get_pollinations_api_key() -> str:
+    """Pollinations key from env or the app's saved settings (empty string if none)."""
+    env_key = (os.environ.get("POLLINATIONS_API_KEY") or "").strip()
+    if env_key:
+        return env_key
+    try:
+        from core.user_paths import get_user_data_dir
+        cfg_dir = get_user_data_dir() / "config"
+        for name in ("app_settings.json", "api_keys.json"):
+            path = cfg_dir / name
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                key = str((data or {}).get("pollinations_api_key", "") or "").strip()
+                if key:
+                    return key
+    except Exception:
+        pass
+    return ""
 
 
 class ImageProvider:
@@ -107,14 +128,15 @@ class NVIDIAImageProvider(ImageProvider):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Pollinations Image Generation (Free, no API key)
+# Pollinations Image Generation (works without a key; an API key unlocks gen.pollinations.ai)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 class PollinationsImageProvider(ImageProvider):
     name = "pollinations"
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None):
+        self.api_key = (api_key or get_pollinations_api_key()).strip()
         self.default_model = model or "community/scriptsnsenses-sys/flux-2-dev-free"
         self.models = [
             "flux",
@@ -140,15 +162,20 @@ class PollinationsImageProvider(ImageProvider):
         try:
             import requests
             model_id = model or self.default_model
-            # Pollinations image URL format
-            url = f"https://image.pollinations.ai/prompt/{prompt}"
             params = {
                 "model": model_id,
                 "width": 1024,
                 "height": 1024,
                 "nologo": "true",
             }
-            resp = requests.get(url, params=params, timeout=30)
+            headers = {}
+            if self.api_key:
+                # Keyed requests go through the unified endpoint with Bearer auth
+                url = f"https://gen.pollinations.ai/image/{prompt}"
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            else:
+                url = f"https://image.pollinations.ai/prompt/{prompt}"
+            resp = requests.get(url, params=params, headers=headers, timeout=30)
             if resp.status_code == 200:
                 return {
                     "image_url": resp.url,

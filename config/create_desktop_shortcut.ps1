@@ -14,7 +14,7 @@ $Shortcut.WorkingDirectory = $RootDir
 $Shortcut.WindowStyle = 7
 $Shortcut.Description = 'Launch Nexus Core'
 
-$IconPath = Join-Path $RootDir "assets\Brahma_Lite_Logo.ico"
+$IconPath = Join-Path $RootDir "assets\nexus_app_icon.ico"
 if (Test-Path $IconPath) {
     $Shortcut.IconLocation = "$IconPath,0"
 }

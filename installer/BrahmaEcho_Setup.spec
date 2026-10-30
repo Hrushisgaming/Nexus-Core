@@ -41,6 +41,6 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=True,
-    icon=os.path.join(cwd, 'assets/Brahma_Lite_Logo.ico') if __import__('os').path.exists(__import__('os').path.join(cwd, 'assets/Brahma_Lite_Logo.ico')) else None,
+    icon=os.path.join(cwd, 'assets/nexus_app_icon.ico') if __import__('os').path.exists(__import__('os').path.join(cwd, 'assets/nexus_app_icon.ico')) else None,
     version=os.path.join(cwd, 'version_setup.txt')
 )

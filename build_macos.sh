@@ -28,8 +28,8 @@ echo "[2/5] Building BrahmaEvo.app with PyInstaller..."
 ARGS=(--noconfirm --clean --windowed --name "$APP_NAME")
 
 # Only add --icon if an .icns exists
-if [ -f "assets/Brahma_Lite_Logo.icns" ]; then
-  ARGS+=(--icon=assets/Brahma_Lite_Logo.icns)
+if [ -f "assets/nexus_app_icon.icns" ]; then
+  ARGS+=(--icon=assets/nexus_app_icon.icns)
 fi
 
 ARGS+=(
