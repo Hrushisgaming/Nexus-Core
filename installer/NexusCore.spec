@@ -12,7 +12,7 @@ a = Analysis(
         (os.path.join(cwd, 'assets'), 'assets'),
         (os.path.join(cwd, 'config'), 'config'),
         (os.path.join(cwd, 'core'), 'core'),
-        (os.path.join(cwd, 'brahma_connect'), 'brahma_connect'),
+        (os.path.join(cwd, 'nexus_connect'), 'nexus_connect'),
         (os.path.join(cwd, 'actions'), 'actions'),
         (os.path.join(cwd, 'dashboard/static'), 'dashboard/static'),
         (os.path.join(cwd, 'smart_home'), 'smart_home'),
@@ -57,7 +57,7 @@ excluded_files = [
     'calendar_events.json',
     'long_term.json',
     'nutrition_log.json',
-    'brahma_connect.json',
+    'nexus_connect.json',
     'devices.json'
 ]
 
