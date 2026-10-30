@@ -1,4 +1,4 @@
-package com.brahma.connect.commands
+package com.nexus.connect.commands
 
 import android.Manifest
 import android.content.Context
@@ -10,9 +10,9 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.ContextCompat
-import com.brahma.connect.core.BrahmaConnectCapabilities
-import com.brahma.connect.core.CommandResult
-import com.brahma.connect.device.AndroidDeviceInfoProvider
+import com.nexus.connect.core.NexusConnectCapabilities
+import com.nexus.connect.core.CommandResult
+import com.nexus.connect.device.AndroidDeviceInfoProvider
 
 class DeviceCommandHandler(private val context: Context) {
     private val infoProvider = AndroidDeviceInfoProvider(context)
@@ -54,7 +54,7 @@ class DeviceCommandHandler(private val context: Context) {
                 "battery" to battery.first,
                 "charging" to battery.second,
                 "wifi_state" to if (infoProvider.wifiEnabled()) "connected" else "disconnected",
-                "capabilities" to BrahmaConnectCapabilities.INITIAL,
+                "capabilities" to NexusConnectCapabilities.INITIAL,
             ),
         )
     }
@@ -205,9 +205,9 @@ class DeviceCommandHandler(private val context: Context) {
         if (pin.isNullOrBlank()) {
             return CommandResult(false, errorCode = "MISSING_PIN", error = "PIN is required to unlock phone.")
         }
-        val service = com.brahma.connect.accessibility.BrahmaAccessibilityService.instance
+        val service = com.nexus.connect.accessibility.NexusAccessibilityService.instance
         if (service == null) {
-            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Brahma Accessibility Service is not enabled.")
+            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Nexus Accessibility Service is not enabled.")
         }
         val success = service.unlockPhone(pin)
         return if (success) {
@@ -302,9 +302,9 @@ class DeviceCommandHandler(private val context: Context) {
     }
 
     private fun uiDump(): CommandResult {
-        val service = com.brahma.connect.accessibility.BrahmaAccessibilityService.instance
+        val service = com.nexus.connect.accessibility.NexusAccessibilityService.instance
         if (service == null) {
-            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Brahma Accessibility Service is not enabled.")
+            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Nexus Accessibility Service is not enabled.")
         }
         val result = service.dumpUiTree()
         return if (result.containsKey("error")) {
@@ -315,9 +315,9 @@ class DeviceCommandHandler(private val context: Context) {
     }
 
     private fun uiTap(parameters: Map<String, Any?>): CommandResult {
-        val service = com.brahma.connect.accessibility.BrahmaAccessibilityService.instance
+        val service = com.nexus.connect.accessibility.NexusAccessibilityService.instance
         if (service == null) {
-            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Brahma Accessibility Service is not enabled.")
+            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Nexus Accessibility Service is not enabled.")
         }
         val x = (parameters["x"] as? Number)?.toInt()
         val y = (parameters["y"] as? Number)?.toInt()
@@ -329,9 +329,9 @@ class DeviceCommandHandler(private val context: Context) {
     }
 
     private fun uiSwipe(parameters: Map<String, Any?>): CommandResult {
-        val service = com.brahma.connect.accessibility.BrahmaAccessibilityService.instance
+        val service = com.nexus.connect.accessibility.NexusAccessibilityService.instance
         if (service == null) {
-            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Brahma Accessibility Service is not enabled.")
+            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Nexus Accessibility Service is not enabled.")
         }
         val x1 = (parameters["x1"] as? Number)?.toInt()
         val y1 = (parameters["y1"] as? Number)?.toInt()
@@ -346,9 +346,9 @@ class DeviceCommandHandler(private val context: Context) {
     }
 
     private fun uiType(parameters: Map<String, Any?>): CommandResult {
-        val service = com.brahma.connect.accessibility.BrahmaAccessibilityService.instance
+        val service = com.nexus.connect.accessibility.NexusAccessibilityService.instance
         if (service == null) {
-            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Brahma Accessibility Service is not enabled.")
+            return CommandResult(false, errorCode = "ACCESSIBILITY_DISABLED", error = "Nexus Accessibility Service is not enabled.")
         }
         val text = parameters["text"]?.toString()
         if (text.isNullOrEmpty()) {
