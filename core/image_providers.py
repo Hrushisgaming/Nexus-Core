@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from core.api_keys import get_api_key
 from typing import Optional
 
 logger = logging.getLogger("ImageProviders")
@@ -67,7 +68,7 @@ class NVIDIAImageProvider(ImageProvider):
     name = "nvidia"
 
     def __init__(self, api_key: Optional[str] = None, model: str = "nvidia/nvidia-nim-image"):
-        self.api_key = api_key or os.environ.get("NVIDIA_API_KEY", "")
+        self.api_key = get_api_key("nvidia_api_key", "NVIDIA_API_KEY", api_key)
         self.default_model = model
         self.models = [
             "nvidia/nvidia-nim-image",
@@ -201,8 +202,8 @@ class CloudflareImageProvider(ImageProvider):
     name = "cloudflare"
 
     def __init__(self, api_key: Optional[str] = None, account_id: Optional[str] = None, model: str = "@cf/stabilityai/stable-diffusion-xl-base-1.0"):
-        self.api_key = api_key or os.environ.get("CLOUDFLARE_API_KEY", "")
-        self.account_id = account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+        self.api_key = get_api_key("cloudflare_api_key", "CLOUDFLARE_API_KEY", api_key)
+        self.account_id = get_api_key("cloudflare_account_id", "CLOUDFLARE_ACCOUNT_ID", account_id)
         self.default_model = model
         self.models = [
             "@cf/stabilityai/stable-diffusion-xl-base-1.0",
