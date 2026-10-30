@@ -808,10 +808,8 @@ class LiveVoiceEngine:
 
         client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
         model_candidates = [
+            "models/gemini-3.5-flash-lite",
             "models/gemini-3.5-transcribe-live",
-            "models/gemini-3.5-flash-live",
-            "models/gemini-2.5-flash-live",
-            "models/gemini-2.0-flash-live",
         ]
 
         while self._running:
