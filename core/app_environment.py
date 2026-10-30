@@ -37,7 +37,6 @@ SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
 LIVE_CONNECT_TIMEOUT = 12
-_SINGLE_INSTANCE_MUTEX = None
 
 
 def _live_model_candidates(client=None) -> list:
