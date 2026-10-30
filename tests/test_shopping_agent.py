@@ -143,7 +143,7 @@ def test_execute_cart_or_buy():
         mock_web.assert_called_once_with("https://amazon.in/dp/test")
 
     # Mobile mode test with mocked brahma_connect
-    with patch("actions.brahma_connect.connect_execute", return_value='{"success": true}') as mock_connect:
+    with patch("actions.nexus_connect.connect_execute", return_value='{"success": true}') as mock_connect:
         res_mobile = agent.execute_cart_or_buy("https://flipkart.com/item/test", platform="flipkart", mode="phone")
         assert res_mobile["success"] is True
         assert res_mobile["target"] == "phone"
