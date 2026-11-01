@@ -1,6 +1,7 @@
 from core.user_paths import get_user_data_dir
 from core import ssl_certs as _ssl_certs
 _ssl_certs.apply()
+from core import voice_settings as _voice_settings
 from typing import Any, Optional
 import logging
 import os
@@ -186,7 +187,11 @@ def _live_model_candidates(client=None) -> list:
                     discovered.append(name)
         except Exception as exc:
             _startup_log(f"Gemini model discovery unavailable; using fallbacks: {exc}")
-    preferred = (os.environ.get("NEXUS_LIVE_MODEL", "").strip(),)
+    try:
+        _user_model = _voice_settings.gemini_live_model()
+    except Exception:
+        _user_model = ""
+    preferred = (os.environ.get("NEXUS_LIVE_MODEL", "").strip(), _user_model)
     out = []
     for model in (*preferred, *discovered, *LIVE_MODEL_FALLBACKS):
         if model and model not in out:
@@ -5364,13 +5369,35 @@ class BrahmaLive:
             # Gemini Live duplex tool execution will vocalize completion via send_tool_response
             return
 
+        try:
+            from core import voice_output
+            if voice_output.external_voice_ready():
+                def _external():
+                    ok = False
+                    try:
+                        self.set_speaking(True)
+                        ok = voice_output.speak_external(text)
+                    except Exception as exc:
+                        print(f"[Nexus Speak] External voice failed: {exc}")
+                    finally:
+                        self.set_speaking(False)
+                    if not ok:
+                        self._speak_native(text)
+                threading.Thread(target=_external, daemon=True, name="external-tts").start()
+                return
+        except Exception as exc:
+            print(f"[Nexus Speak] Voice engine check failed: {exc}")
+        self._speak_native(text)
+
+    def _speak_native(self, text: str):
+        """Speak through the Gemini Live voice (or the offline fallback)."""
         if self.session and self._loop:
             # Route text through Gemini Live API for the unified native Charon voice
             import asyncio
             async def _send():
                 try:
                     prompt = (
-                        f"Deliver this update aloud to the user right now in your Charon voice. "
+                        f"Deliver this update aloud to the user right now in your own voice. "
                         f"Speak directly to the user as Nexus Core without saying thank you or acknowledging this prompt:\n{text}"
                     )
                     content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
@@ -5541,7 +5568,7 @@ class BrahmaLive:
         parts.append(
             "CRITICAL PROTOCOL FOR SYSTEM ANNOUNCEMENTS & DIRECT SPEECH: "
             "When given an input asking you to deliver or speak an update, briefing, announcement, or direct speech to the user, "
-            "you MUST deliver the provided message aloud to the user in your natural Charon voice immediately and faithfully. "
+            "you MUST deliver the provided message aloud to the user in your natural voice immediately and faithfully. "
             "Never reply with 'Thank you for the briefing', never acknowledge the prompt, never add conversational filler like 'Okay, I got it', "
             "and do not call tools unless explicitly needed. Speak the update directly to the user as their AI assistant Nexus Core."
         )
@@ -5580,7 +5607,7 @@ class BrahmaLive:
             session_resumption=types.SessionResumptionConfig(handle=getattr(self, '_resume_handle', None)),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Charon")
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_voice_settings.gemini_voice_name())
                 )
             ),
         )

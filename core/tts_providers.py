@@ -7,7 +7,7 @@ Supports:
 - ElevenLabs (cloud, high quality voices)
 - Groq TTS (cloud, fast)
 - Fish Audio (cloud, voice cloning)
-- Gemini Live (built-in audio output)
+- Gemini Live (built-in native voice, default engine)
 
 Common interface:
     synthesize(text: str) -> bytes  # Returns MP3/WAV audio bytes
@@ -29,6 +29,10 @@ class TTSProvider:
     """Base class for TTS providers."""
 
     name: str = "base"
+    label: str = ""                 # display name in Settings
+    native: bool = False            # True = audio comes from the model itself (no synthesize())
+    default_model: str = ""
+    suggested_models: list[str] = []
     available: bool = False
     init_error: Optional[str] = None
     voices: list[dict] = []
@@ -47,12 +51,16 @@ class TTSProvider:
 
 class ElevenLabsTTSProvider(TTSProvider):
     name = "elevenlabs"
+    label = "ElevenLabs"
+    default_model = "eleven_turbo_v2_5"
+    suggested_models = ["eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_multilingual_v2", "eleven_v3"]
 
     DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Rachel
 
-    def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: Optional[str] = None):
         self.api_key = get_api_key("elevenlabs_api_key", "ELEVENLABS_API_KEY", api_key)
         self.voice_id = voice_id or self.DEFAULT_VOICE_ID
+        self.model = model or self.default_model
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
         self.voices = [
@@ -88,7 +96,7 @@ class ElevenLabsTTSProvider(TTSProvider):
             }
             payload = {
                 "text": text,
-                "model_id": "eleven_turbo_v2_5",
+                "model_id": self.model,
                 "voice_settings": {
                     "stability": 0.5,
                     "similarity_boost": 0.75,
@@ -114,6 +122,9 @@ class ElevenLabsTTSProvider(TTSProvider):
 
 class GroqTTSProvider(TTSProvider):
     name = "groq_tts"
+    label = "Groq TTS"
+    default_model = "playai-tts"
+    suggested_models = ["playai-tts", "canopylabs/orpheus-v1-english"]
 
     DEFAULT_VOICE_ID = "troy"  # Orpheus / Canopy Labs default
 
@@ -182,6 +193,9 @@ class GroqTTSProvider(TTSProvider):
 
 class FishAudioTTSProvider(TTSProvider):
     name = "fish_audio"
+    label = "Fish Audio"
+    default_model = "fish-speech-1"
+    suggested_models = ["fish-speech-1", "s1"]
 
     def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: str = "fish-speech-1"):
         self.api_key = get_api_key("fish_audio_api_key", "FISH_AUDIO_API_KEY", api_key)
@@ -234,12 +248,63 @@ class FishAudioTTSProvider(TTSProvider):
         return self.voices
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Gemini Live (built-in native voice) - the default engine
+# ══════════════════════════════════════════════════════════════════════════════
+
+GEMINI_VOICES = [
+    "Charon", "Puck", "Kore", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr",
+    "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+    "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+    "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+    "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
+]
+
+
+class GeminiLiveTTSProvider(TTSProvider):
+    """The voice built into the Gemini Live session. Audio is produced by the model, not synthesized here."""
+
+    name = "gemini_live"
+    label = "Gemini Live (built-in)"
+    native = True
+    default_model = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+    suggested_models = [
+        "models/gemini-2.5-flash-native-audio-preview-12-2025",
+        "models/gemini-2.5-flash-native-audio-latest",
+        "models/gemini-3.1-flash-live-preview",
+    ]
+    DEFAULT_VOICE_ID = "Charon"
+
+    def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: Optional[str] = None):
+        self.api_key = get_api_key("gemini_api_key", "GEMINI_API_KEY", api_key)
+        self.voice_id = voice_id or self.DEFAULT_VOICE_ID
+        self.model = model or self.default_model
+        self._available = bool(self.api_key)
+        self._init_error: Optional[str] = None if self.api_key else "Gemini API key not set"
+        self.voices = [{"id": v, "name": v, "description": "Gemini prebuilt voice"} for v in GEMINI_VOICES]
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @property
+    def init_error(self) -> Optional[str]:
+        return self._init_error
+
+    def synthesize(self, text: str, voice_id: Optional[str] = None) -> bytes:
+        raise RuntimeError("Gemini Live speaks natively inside the live session")
+
+    def get_voices(self) -> list[dict]:
+        return self.voices
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Registry
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 _PROVIDER_REGISTRY: dict[str, type[TTSProvider]] = {
+    "gemini_live": GeminiLiveTTSProvider,
     "elevenlabs": ElevenLabsTTSProvider,
     "groq_tts": GroqTTSProvider,
     "fish_audio": FishAudioTTSProvider,
@@ -268,17 +333,27 @@ def get_available_tts_providers() -> list[dict]:
             providers.append({
                 "id": pid,
                 "name": cls.name,
+                "label": cls.label or cls.name,
+                "native": cls.native,
                 "available": instance.available,
                 "init_error": instance.init_error,
                 "voices": instance.voices,
+                "default_voice": getattr(instance, "voice_id", "") or "",
+                "default_model": cls.default_model,
+                "models": list(cls.suggested_models),
             })
         except Exception as exc:
             providers.append({
                 "id": pid,
                 "name": cls.name,
+                "label": cls.label or cls.name,
+                "native": cls.native,
                 "available": False,
                 "init_error": str(exc),
                 "voices": [],
+                "default_voice": "",
+                "default_model": cls.default_model,
+                "models": list(cls.suggested_models),
             })
     return providers
 

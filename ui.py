@@ -1575,13 +1575,16 @@ def _default_app_settings() -> dict:
         "stt_engine": "moonshine",
         "stt_autocorrect": True,
         # TTS Engine Settings
-        "tts_engine": "elevenlabs",
+        "tts_engine": "gemini_live",
+        "tts_voices": {},
+        "tts_models": {},
         "tts_voice_id": "pNInz6obpgDQGcFmaJgB",
         # Search Engine Settings
         "search_engine": "tavily",
         # Image Generation Settings
         "image_engine": "pollinations",
         "image_model": "community/scriptsnsenses-sys/flux-2-dev-free",
+        "image_models": {},
         # Advanced AI Settings
         "advanced_ai_enabled": False,
     }
@@ -13007,38 +13010,48 @@ class SystemConnectivityPage(QWidget):
         tts_lay = tts_card.layout()
 
         tts_engine_row = QHBoxLayout()
-        tts_engine_row.addWidget(QLabel("TTS Engine"))
+        tts_engine_row.addWidget(QLabel("Voice Engine"))
         self._tts_engine_combo = QComboBox()
         tts_providers = get_available_tts_providers()
+        self._tts_provider_info = {p["id"]: p for p in tts_providers}
         for p in tts_providers:
-            label = p["name"]
+            label = p.get("label") or p["name"]
             if not p["available"]:
                 label += " (not configured)"
             self._tts_engine_combo.addItem(label, p["id"])
-        current_tts = self._load_app_settings().get("tts_engine", "elevenlabs")
+        current_tts = self._load_app_settings().get("tts_engine", "gemini_live")
         idx = self._tts_engine_combo.findData(current_tts)
-        if idx >= 0:
-            self._tts_engine_combo.setCurrentIndex(idx)
-        self._tts_engine_combo.currentTextChanged.connect(self._on_tts_engine_changed)
+        self._tts_engine_combo.setCurrentIndex(idx if idx >= 0 else 0)
         tts_engine_row.addWidget(self._tts_engine_combo, 1)
         tts_lay.addLayout(tts_engine_row)
 
-        # Voice selection
+        # Voice: pick from the list or type any voice name / id
         tts_voice_row = QHBoxLayout()
         tts_voice_row.addWidget(QLabel("Voice"))
         self._tts_voice_combo = QComboBox()
-        current_voice = self._load_app_settings().get("tts_voice_id", "pNInz6obpgDQGcFmaJgB")
-        # Populate with default voices from first available provider
-        for p in tts_providers:
-            if p["available"]:
-                for v in p.get("voices", []):
-                    self._tts_voice_combo.addItem(f"{v['name']} ({v['id']})", v["id"])
-        _voice_idx = self._tts_voice_combo.findData(current_voice)
-        if _voice_idx >= 0:
-            self._tts_voice_combo.setCurrentIndex(_voice_idx)
-        self._tts_voice_combo.currentIndexChanged.connect(lambda: self._set_setting("tts_voice_id", self._tts_voice_combo.currentData()))
+        self._tts_voice_combo.setEditable(True)
         tts_voice_row.addWidget(self._tts_voice_combo, 1)
         tts_lay.addLayout(tts_voice_row)
+
+        # Model: pick a suggestion or type any model id / name
+        tts_model_row = QHBoxLayout()
+        tts_model_row.addWidget(QLabel("Model"))
+        self._tts_model_combo = QComboBox()
+        self._tts_model_combo.setEditable(True)
+        tts_model_row.addWidget(self._tts_model_combo, 1)
+        tts_lay.addLayout(tts_model_row)
+
+        self._tts_hint = QLabel("")
+        self._tts_hint.setWordWrap(True)
+        self._tts_hint.setStyleSheet("color: rgba(255,255,255,0.45); font-size: 11px;")
+        tts_lay.addWidget(self._tts_hint)
+
+        self._tts_fill_fields(self._tts_engine_combo.currentData())
+        self._tts_engine_combo.currentIndexChanged.connect(lambda _i: self._on_tts_engine_changed(""))
+        self._tts_voice_combo.activated.connect(lambda _i: self._save_tts_voice())
+        self._tts_voice_combo.lineEdit().editingFinished.connect(self._save_tts_voice)
+        self._tts_model_combo.activated.connect(lambda _i: self._save_tts_model())
+        self._tts_model_combo.lineEdit().editingFinished.connect(self._save_tts_model)
 
         lay.addWidget(tts_card)
 
@@ -13082,22 +13095,21 @@ class SystemConnectivityPage(QWidget):
         idx = self._image_engine_combo.findData(current_image)
         if idx >= 0:
             self._image_engine_combo.setCurrentIndex(idx)
-        self._image_engine_combo.currentTextChanged.connect(lambda: self._set_setting("image_engine", self._image_engine_combo.currentData()))
         image_engine_row.addWidget(self._image_engine_combo, 1)
         image_lay.addLayout(image_engine_row)
 
-        # Pollinations model selection
+        # Image model: pick a suggestion or type any model id for the selected engine
         image_model_row = QHBoxLayout()
-        image_model_row.addWidget(QLabel("Pollinations Model"))
+        image_model_row.addWidget(QLabel("Image Model"))
         self._image_model_combo = QComboBox()
-        self._image_model_combo.addItems(["flux", "flux-pro", "flux-dev", "turbo", "community/scriptsnsenses-sys/flux-2-dev-free"])
-        current_image_model = self._load_app_settings().get("image_model", "community/scriptsnsenses-sys/flux-2-dev-free")
-        idx = self._image_model_combo.findText(current_image_model)
-        if idx >= 0:
-            self._image_model_combo.setCurrentIndex(idx)
-        self._image_model_combo.currentTextChanged.connect(lambda t: self._set_setting("image_model", t))
+        self._image_model_combo.setEditable(True)
         image_model_row.addWidget(self._image_model_combo, 1)
         image_lay.addLayout(image_model_row)
+        self._image_provider_info = {p["id"]: p for p in image_providers}
+        self._image_fill_model(self._image_engine_combo.currentData())
+        self._image_engine_combo.currentIndexChanged.connect(lambda _i: self._on_image_engine_changed())
+        self._image_model_combo.activated.connect(lambda _i: self._save_image_model())
+        self._image_model_combo.lineEdit().editingFinished.connect(self._save_image_model)
 
         lay.addWidget(image_card)
 
@@ -14785,20 +14797,138 @@ class SystemConnectivityPage(QWidget):
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(f"SYS: Moonshine install — {msg}")
 
-    def _on_tts_engine_changed(self, text: str):
-        """Handle TTS engine dropdown change."""
+    def _image_fill_model(self, engine_id):
+        info = getattr(self, "_image_provider_info", {}).get(engine_id, {})
+        settings = self._load_app_settings()
+        per = settings.get("image_models") if isinstance(settings.get("image_models"), dict) else {}
+        legacy = settings.get("image_model") if engine_id == "pollinations" else ""
+        cur = per.get(engine_id) or legacy or (info.get("models") or [""])[0]
+        self._image_model_combo.blockSignals(True)
+        self._image_model_combo.clear()
+        for m in info.get("models", []):
+            self._image_model_combo.addItem(m, m)
+        i = self._image_model_combo.findData(cur)
+        if i >= 0:
+            self._image_model_combo.setCurrentIndex(i)
+        else:
+            self._image_model_combo.setEditText(str(cur))
+        self._image_model_combo.blockSignals(False)
+
+    def _on_image_engine_changed(self):
+        engine_id = self._image_engine_combo.currentData()
+        if engine_id:
+            self._set_setting("image_engine", engine_id)
+            self._image_fill_model(engine_id)
+
+    def _save_image_model(self):
+        engine_id = self._image_engine_combo.currentData()
+        text = self._image_model_combo.currentText().strip()
+        if not engine_id:
+            return
+        current = self._load_app_settings().get("image_models")
+        data = dict(current) if isinstance(current, dict) else {}
+        if text:
+            data[engine_id] = text
+        else:
+            data.pop(engine_id, None)
+        self._set_setting("image_models", data)
+        if engine_id == "pollinations":
+            self._set_setting("image_model", text)
+
+    def _tts_fill_fields(self, engine_id):
+        info = getattr(self, "_tts_provider_info", {}).get(engine_id, {})
+        settings = self._load_app_settings()
+        voices = settings.get("tts_voices") if isinstance(settings.get("tts_voices"), dict) else {}
+        models = settings.get("tts_models") if isinstance(settings.get("tts_models"), dict) else {}
+        for combo in (self._tts_voice_combo, self._tts_model_combo):
+            combo.blockSignals(True)
+            combo.clear()
+        for v in info.get("voices", []):
+            name = v.get("name") or v.get("id")
+            self._tts_voice_combo.addItem(f"{name} ({v['id']})" if v.get("id") and v["id"] != name else str(name), v.get("id"))
+        cur_voice = voices.get(engine_id) or (settings.get("tts_voice_id") if engine_id == "elevenlabs" else "") or info.get("default_voice") or ""
+        i = self._tts_voice_combo.findData(cur_voice)
+        if i >= 0:
+            self._tts_voice_combo.setCurrentIndex(i)
+        else:
+            self._tts_voice_combo.setEditText(str(cur_voice))
+        for m in info.get("models", []):
+            self._tts_model_combo.addItem(m, m)
+        cur_model = models.get(engine_id) or info.get("default_model") or ""
+        i = self._tts_model_combo.findData(cur_model)
+        if i >= 0:
+            self._tts_model_combo.setCurrentIndex(i)
+        else:
+            self._tts_model_combo.setEditText(str(cur_model))
+        for combo in (self._tts_voice_combo, self._tts_model_combo):
+            combo.blockSignals(False)
+        if info.get("native"):
+            self._tts_hint.setText("Built-in Gemini voice. Voice and model changes apply the next time Nexus reconnects (restart to be sure).")
+        else:
+            self._tts_hint.setText("Used for Nexus's own announcements and alerts. Live conversation replies still use the Gemini voice. Type any voice id or model name.")
+
+    def _tts_current_voice_value(self) -> str:
+        text = self._tts_voice_combo.currentText().strip()
+        i = self._tts_voice_combo.findText(text)
+        if i >= 0 and self._tts_voice_combo.itemData(i):
+            return str(self._tts_voice_combo.itemData(i))
+        return text
+
+    def _save_tts_dict(self, key: str, engine_id: str, value: str):
+        current = self._load_app_settings().get(key)
+        data = dict(current) if isinstance(current, dict) else {}
+        if value:
+            data[engine_id] = value
+        else:
+            data.pop(engine_id, None)
+        self._set_setting(key, data)
+
+    def _save_tts_voice(self):
+        engine_id = self._tts_engine_combo.currentData()
+        value = self._tts_current_voice_value()
+        if not engine_id:
+            return
+        saved = self._load_app_settings().get("tts_voices")
+        if isinstance(saved, dict) and saved.get(engine_id, "") == value:
+            return
+        self._save_tts_dict("tts_voices", engine_id, value)
+        if engine_id == "elevenlabs":
+            self._set_setting("tts_voice_id", value)
+        try:
+            from core.live_voice_engine import live_voice_engine as lve
+            lve.set_tts_config(voice_id=value)
+        except Exception:
+            pass
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Voice set to {value or 'default'} ({engine_id})")
+
+    def _save_tts_model(self):
+        engine_id = self._tts_engine_combo.currentData()
+        text = self._tts_model_combo.currentText().strip()
+        if not engine_id:
+            return
+        saved = self._load_app_settings().get("tts_models")
+        if isinstance(saved, dict) and saved.get(engine_id, "") == text:
+            return
+        self._save_tts_dict("tts_models", engine_id, text)
+        if self._ctrl() and hasattr(self._ctrl(), "write_log"):
+            self._ctrl().write_log(f"SYS: Voice model set to {text or 'default'} ({engine_id})")
+
+    def _on_tts_engine_changed(self, text: str = ""):
+        """Handle voice engine dropdown change."""
         if not hasattr(self, "_tts_engine_combo"):
             return
         engine_id = self._tts_engine_combo.currentData()
         if engine_id:
             self._set_setting("tts_engine", engine_id)
+            self._tts_fill_fields(engine_id)
             try:
                 from core.live_voice_engine import live_voice_engine as lve
                 lve.set_tts_config(engine=engine_id)
             except Exception:
                 pass
             if self._ctrl() and hasattr(self._ctrl(), "write_log"):
-                self._ctrl().write_log(f"SYS: TTS engine set to {engine_id}")
+                self._ctrl().write_log(f"SYS: Voice engine set to {engine_id}")
 
     def _toggle_attention_message_prompts(self, checked: bool):
         self._set_setting("attention_message_prompts", bool(checked))

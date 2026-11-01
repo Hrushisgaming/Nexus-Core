@@ -139,6 +139,14 @@ class VoiceActivityDetector:
         self.silence_frames_count = 0
 
 
+def _gemini_voice_name() -> str:
+    try:
+        from core.voice_settings import gemini_voice_name
+        return gemini_voice_name()
+    except Exception:
+        return "Charon"
+
+
 class LiveVoiceEngine:
     """
     Central real-time bidirectional live voice streaming engine.
@@ -191,7 +199,7 @@ class LiveVoiceEngine:
         self._stt_audio_buffer: List[bytes] = []
 
         # TTS Engine selection: "elevenlabs", "groq_tts", "fish_audio", or "gemini_live"
-        self.tts_engine: str = "elevenlabs" if _TTS_PROVIDERS_AVAILABLE else "gemini_live"
+        self.tts_engine: str = "gemini_live"
         self.tts_voice_id: Optional[str] = None
         self._tts_provider = None
 
@@ -565,7 +573,7 @@ class LiveVoiceEngine:
             system_instruction=sys_prompt,
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Charon")
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_gemini_voice_name())
                 )
             ),
         )
@@ -584,7 +592,7 @@ class LiveVoiceEngine:
         await self.session.send_client_content(turns=[content], turn_complete=True)
 
     async def speak_live_text(self, text: str):
-        """Asks Gemini Live to speak an explicit statement or confirmation in its Charon voice."""
+        """Asks Gemini Live to speak an explicit statement or confirmation in its own voice."""
         self.broadcast_control_json({
             "type": "transcript",
             "role": "model",
@@ -596,7 +604,7 @@ class LiveVoiceEngine:
         from google.genai import types
         self.set_state("THINKING")
         prompt = (
-            f"Deliver this exact update aloud to the user right now in your Charon voice. "
+            f"Deliver this exact update aloud to the user right now in your own voice. "
             f"Speak directly to the user as Nexus Core without saying thank you or acknowledging this prompt:\n{text}"
         )
         content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])

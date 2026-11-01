@@ -131,7 +131,8 @@ def _render_with_providers(prompt: str, forced: Optional[str] = None) -> tuple:
         if provider is None or not provider.available:
             errors.append(f"{pid}: not configured")
             continue
-        model = settings.get("image_model") if pid == "pollinations" else None
+        per = settings.get("image_models") if isinstance(settings.get("image_models"), dict) else {}
+        model = (per.get(pid) or (settings.get("image_model") if pid == "pollinations" else None) or None)
         result = provider.generate(prompt, model=model) or {}
         if result.get("error"):
             errors.append(f"{pid}: {result['error']}")
