@@ -3,6 +3,11 @@ import sys
 from pathlib import Path
 
 
+def crash_log_path() -> Path:
+    """FATAL_CRASH.log lives in the user data dir (the app bundle / cwd may be read-only)."""
+    return get_user_data_dir() / "FATAL_CRASH.log"
+
+
 def get_user_data_dir() -> Path:
     """Return the platform-appropriate user data directory for Nexus Core.
 

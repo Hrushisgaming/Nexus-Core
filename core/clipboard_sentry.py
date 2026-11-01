@@ -25,13 +25,6 @@ class ClipboardSentry:
     def start(self):
         if self._running:
             return
-        # Pyperclip's macOS clipboard backend can enter AppKit/NSPasteboard.
-        # This monitor runs on a Python worker thread, but AppKit pasteboard
-        # access must stay on the GUI thread. Disable background polling on
-        # macOS until the monitor is driven by a main-thread Qt clipboard bridge.
-        import sys
-        if sys.platform == "darwin":
-            return
         self._running = True
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
@@ -76,6 +69,8 @@ class ClipboardSentry:
 
     def _monitor_loop(self):
         import pyperclip
+        from core.clipboard_compat import apply
+        apply()
         try:
             self._last_clip = (pyperclip.paste() or "").strip()
         except Exception:

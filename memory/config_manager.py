@@ -37,8 +37,8 @@ def save_settings(data: Dict[str, Any]) -> None:
     current = load_settings()
     current.update(data)
     try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=4)
+        from core.atomic_io import atomic_write_json
+        atomic_write_json(SETTINGS_FILE, current, indent=4)
     except Exception as e:
         print(f"[CONFIG] Error saving settings: {e}")
 

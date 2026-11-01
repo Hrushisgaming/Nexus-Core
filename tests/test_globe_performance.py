@@ -36,10 +36,13 @@ def test_chromium_gpu_flags():
     assert "QTWEBENGINE_CHROMIUM_FLAGS" in os.environ
     flags = os.environ["QTWEBENGINE_CHROMIUM_FLAGS"]
     assert "--enable-gpu-rasterization" in flags
-    assert "--enable-zero-copy" in flags
-    assert "--ignore-gpu-blocklist" in flags
-    assert "--disable-frame-rate-limit" in flags
-    assert "--disable-gpu-vsync" in flags
+    if sys.platform != "darwin":
+        # macOS intentionally uses a conservative flag set: zero-copy / vsync-off /
+        # blocklist overrides were implicated in a Metal command-buffer hang.
+        assert "--enable-zero-copy" in flags
+        assert "--ignore-gpu-blocklist" in flags
+        assert "--disable-frame-rate-limit" in flags
+        assert "--disable-gpu-vsync" in flags
     if sys.platform == "win32":
         assert "--use-angle=d3d11" in flags
     elif sys.platform == "darwin":

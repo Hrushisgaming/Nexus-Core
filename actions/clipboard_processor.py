@@ -6,6 +6,11 @@ Allows the AI to instantly read whatever text the user has copied to their Windo
 """
 
 import pyperclip
+try:
+    from core.clipboard_compat import apply as _clip_apply
+    _clip_apply()
+except Exception:
+    pass
 
 def process_clipboard(parameters: dict | None = None, player=None) -> str:
     """Reads the current text from the clipboard."""

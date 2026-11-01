@@ -23,6 +23,10 @@ if sys.platform == "win32":
     _base_chromium_flags += " --use-angle=d3d11"
 elif sys.platform.startswith("linux"):
     _base_chromium_flags += " --no-sandbox --disable-dev-shm-usage"
+if sys.platform == "darwin":
+    _base_chromium_flags = "--enable-gpu-rasterization --use-angle=metal"
+if os.environ.get("NEXUS_SAFE_GPU") == "1":
+    _base_chromium_flags = "--disable-gpu --disable-gpu-compositing"
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _base_chromium_flags)
 import random
 import re
@@ -1584,11 +1588,8 @@ def _default_app_settings() -> dict:
 
 
 def _read_json_dict(path) -> dict:
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    from core.atomic_io import read_json_dict
+    return read_json_dict(path)
 
 
 def _write_settings_files(settings: dict) -> None:
@@ -1599,13 +1600,14 @@ def _write_settings_files(settings: dict) -> None:
     os_system and send the user back to first-run setup.
     """
     os.makedirs(CONFIG_DIR, exist_ok=True)
-    APP_SETTINGS_FILE.write_text(json.dumps(settings, indent=4), encoding="utf-8")
+    from core.atomic_io import atomic_write_text
+    atomic_write_text(APP_SETTINGS_FILE, json.dumps(settings, indent=4))
     try:
         merged = _read_json_dict(API_FILE)
         merged.update(settings)
         if not merged.get("os_system"):
             merged["os_system"] = platform.system()
-        API_FILE.write_text(json.dumps(merged, indent=4), encoding="utf-8")
+        atomic_write_text(API_FILE, json.dumps(merged, indent=4))
     except Exception:
         pass
 
@@ -3152,6 +3154,8 @@ class CodeBlockWidget(QFrame):
         except Exception:
             try:
                 import pyperclip
+                from core.clipboard_compat import apply as _clip_apply
+                _clip_apply()
                 pyperclip.copy(self._raw_code)
             except Exception:
                 pass
@@ -5652,6 +5656,8 @@ class BrahmaResultWing(QFrame):
         if self._raw_result_text:
             try:
                 import pyperclip
+                from core.clipboard_compat import apply as _clip_apply
+                _clip_apply()
                 pyperclip.copy(self._raw_result_text)
                 self._btn_copy.setText("✓ Copied!")
                 QTimer.singleShot(1500, lambda: self._btn_copy.setText("📋 Copy Result"))
@@ -7090,8 +7096,8 @@ class SetupOverlay(QWidget):
                     with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
                         settings = json.load(f)
                 settings["app_theme"] = hex_col
-                with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(settings, f, indent=4)
+                from core.atomic_io import atomic_write_json
+                atomic_write_json(APP_SETTINGS_FILE, settings, indent=4)
                 C.load_theme(hex_col)
             except:
                 pass
@@ -10082,13 +10088,7 @@ class MainWindow(QMainWindow):
         if self._app_settings_cache is not None:
             return dict(self._app_settings_cache)
         settings = _default_app_settings()
-        if APP_SETTINGS_FILE.exists():
-            try:
-                data = json.loads(APP_SETTINGS_FILE.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    settings.update(data)
-            except Exception:
-                pass
+        settings.update(_read_json_dict(APP_SETTINGS_FILE))
         self._app_settings_cache = dict(settings)
         return dict(settings)
 
@@ -12803,6 +12803,20 @@ class SystemConnectivityPage(QWidget):
         lay1.addWidget(self._groq_row)
         lay1.addWidget(self._custom_row)
         lay1.addWidget(self._pollinations_row)
+        # Search / voice / image keys: show real saved status instead of nothing.
+        self._extra_rows = {}
+        for _name, _field, _note, _sk in (
+            ("Tavily Search", "tavily_api_key", "web search", "tavily"),
+            ("Firecrawl", "firecrawl_api_key", "web search", "firecrawl"),
+            ("SerpAPI", "serpapi_api_key", "web search", "serpapi"),
+            ("Anthropic Claude", "anthropic_api_key", "claude", "anthropic"),
+            ("ElevenLabs (Voice)", "elevenlabs_api_key", "text to speech", "elevenlabs"),
+            ("Fish Audio (Voice)", "fish_audio_api_key", "text to speech", "fish_audio"),
+            ("Cloudflare (Images)", "cloudflare_api_key", "image generation", "cloudflare"),
+        ):
+            _row, _st, _kl = self._provider_row(_name, self._api_defaults.get(_field, ""), _note, _sk)
+            self._extra_rows[_field] = (_st, _kl)
+            lay1.addWidget(_row)
         controls = QHBoxLayout()
         controls.setSpacing(12)
         self._default_provider = QComboBox()
@@ -13529,8 +13543,8 @@ class SystemConnectivityPage(QWidget):
                         d["instagram_sessionid"] = ""
                         d["instagram_user_id"] = ""
                         d["instagram_browser_authenticated"] = False
-                        with open(cfg_path, "w", encoding="utf-8") as f:
-                            json.dump(d, f, indent=4)
+                        from core.atomic_io import atomic_write_json
+                        atomic_write_json(cfg_path, d, indent=4)
                     except Exception:
                         pass
                 
@@ -13640,8 +13654,8 @@ class SystemConnectivityPage(QWidget):
                                         data["instagram_user_id"] = uid
                                         data["instagram_browser_authenticated"] = True
                                         target_file.parent.mkdir(parents=True, exist_ok=True)
-                                        with open(target_file, "w", encoding="utf-8") as f:
-                                            json.dump(data, f, indent=4)
+                                        from core.atomic_io import atomic_write_json
+                                        atomic_write_json(target_file, data, indent=4)
                                     except Exception:
                                         pass
 
@@ -13762,8 +13776,8 @@ class SystemConnectivityPage(QWidget):
                 cfg["instagram_browser_authenticated"] = True
                 try:
                     target_file.parent.mkdir(parents=True, exist_ok=True)
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        json.dump(cfg, f, indent=4)
+                    from core.atomic_io import atomic_write_json
+                    atomic_write_json(target_file, cfg, indent=4)
                 except Exception:
                     pass
 
@@ -13885,8 +13899,8 @@ class SystemConnectivityPage(QWidget):
                 d["instagram_username"] = username
                 d["instagram_password"] = password
                 target_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(target_file, "w", encoding="utf-8") as f:
-                    json.dump(d, f, indent=4)
+                from core.atomic_io import atomic_write_json
+                atomic_write_json(target_file, d, indent=4)
             except Exception:
                 pass
             
@@ -14385,8 +14399,8 @@ class SystemConnectivityPage(QWidget):
             return
         settings["app_theme"] = new_theme
         try:
-            with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=4)
+            from core.atomic_io import atomic_write_json
+            atomic_write_json(APP_SETTINGS_FILE, settings, indent=4)
         except Exception as e:
             print(f"Error saving theme: {e}")
         import subprocess
@@ -14506,8 +14520,8 @@ class SystemConnectivityPage(QWidget):
                     with open(APP_SETTINGS_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)
                 data[key] = value
-                with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=4)
+                from core.atomic_io import atomic_write_json
+                atomic_write_json(APP_SETTINGS_FILE, data, indent=4)
             except Exception:
                 pass
 
@@ -14910,6 +14924,9 @@ class SystemConnectivityPage(QWidget):
             self._groq_key.setText(self._provider_key_preview(api.get("groq_api_key", "")))
             self._custom_status.setText("Connected" if api.get("custom_ai_api_key") else "Not connected")
             self._custom_key.setText(self._provider_key_preview(api.get("custom_ai_api_key", "")))
+            for _field, (_st, _kl) in getattr(self, "_extra_rows", {}).items():
+                _st.setText("Connected" if str(api.get(_field, "") or "").strip() else "Not connected")
+                _kl.setText(self._provider_key_preview(api.get(_field, "")))
             if hasattr(self, "_pollinations_status"):
                 self._pollinations_status.setText("Connected" if api.get("pollinations_api_key") else "Not connected")
                 self._pollinations_key.setText(self._provider_key_preview(api.get("pollinations_api_key", "")))
@@ -16383,8 +16400,8 @@ class BrahmaConnectDevicesPage(QFrame):
                 device_pins[device_id] = pin.strip()
                 settings["device_pins"] = device_pins
                 
-                with open(APP_SETTINGS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(settings, f, indent=4)
+                from core.atomic_io import atomic_write_json
+                atomic_write_json(APP_SETTINGS_FILE, settings, indent=4)
             except Exception as e:
                 print(f"Error saving pin: {e}")
 
@@ -16491,6 +16508,11 @@ class BrahmaUI:
         self._win.discord_config_changed.connect(self._on_discord_config_changed)
         self._win.on_chat_event = self._on_chat_event
         self._app.aboutToQuit.connect(self._discord_service.stop)
+        try:
+            from core.atomic_io import install_exit_watchdog
+            install_exit_watchdog(self._app)
+        except Exception:
+            pass
         self._launcher = FloatingLauncher()
         self._command_bar = CommandBar()
         self._workspace_sidebar = WorkspaceSidebar()
@@ -16603,14 +16625,7 @@ class BrahmaUI:
         if self._app_settings_cache is not None:
             return dict(self._app_settings_cache)
         settings = _default_app_settings()
-        if APP_SETTINGS_FILE.exists():
-            try:
-                data = json.loads(APP_SETTINGS_FILE.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    for k, v in data.items():
-                        settings[k] = v
-            except Exception:
-                pass
+        settings.update(_read_json_dict(APP_SETTINGS_FILE))
         self._app_settings_cache = dict(settings)
         return dict(settings)
 
@@ -16932,7 +16947,9 @@ class BrahmaUI:
             kwargs = {"cwd": str(BASE_DIR)}
             if _OS == "Windows":
                 kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            subprocess.Popen(args, **kwargs)
+            _p = subprocess.Popen(args, **kwargs)
+            from core.atomic_io import PROTECTED_PIDS
+            PROTECTED_PIDS.add(_p.pid)
         except Exception as exc:
             self._win.write_log(f"ERR: Restart failed: {exc}")
         self._app.quit()

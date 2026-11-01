@@ -21,6 +21,11 @@ from typing import Optional
 
 try:
     import pyperclip
+    try:
+        from core.clipboard_compat import apply as _clip_apply
+        _clip_apply()
+    except Exception:
+        pass
     _HAS_PYPERCLIP = True
 except ImportError:
     _HAS_PYPERCLIP = False

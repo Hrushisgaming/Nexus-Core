@@ -20,6 +20,10 @@ elif _sys.platform == "darwin":
     _base_chromium_flags += " --use-angle=metal"
 else:
     _base_chromium_flags += " --use-angle=egl"
+if _sys.platform == "darwin":
+    _base_chromium_flags = "--enable-gpu-rasterization --use-angle=metal"
+if os.environ.get("NEXUS_SAFE_GPU") == "1":
+    _base_chromium_flags = "--disable-gpu --disable-gpu-compositing"
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _base_chromium_flags)
 
 try:
@@ -55,6 +59,11 @@ import time
 import traceback
 import os
 import pyperclip
+try:
+    from core.clipboard_compat import apply as _clip_apply
+    _clip_apply()
+except Exception:
+    pass
 from pathlib import Path
 
 try:
@@ -6916,6 +6925,15 @@ def main():
                 return
         except Exception as _mex:
             _startup_log(f"Mutex check skipped: {_mex}")
+    else:
+        try:
+            from core import single_instance
+            if not single_instance.acquire():
+                _startup_log("Exiting duplicate Nexus instance (already running).")
+                single_instance.notify_already_running()
+                return
+        except Exception as _sex:
+            _startup_log(f"Single-instance check skipped: {_sex}")
     try:
         if update_from_github(BASE_DIR):
             _startup_log("updated from GitHub; restarting")
@@ -7181,7 +7199,8 @@ def main():
         # Ultron Autonomous Terminal Crash & Malfunction Monitor
         def _terminal_crash_monitor():
             crash_signal_path = get_user_data_dir() / "config" / "crash_signal.json"
-            fatal_crash_path = BASE_DIR / "FATAL_CRASH.log"
+            from core.user_paths import crash_log_path
+            fatal_crash_path = crash_log_path()
             last_fatal_crash_mtime = fatal_crash_path.stat().st_mtime if fatal_crash_path.exists() else 0
 
             while True:
@@ -7293,6 +7312,10 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        with open("FATAL_CRASH.log", "w") as f:
-            traceback.print_exc(file=f)
+        try:
+            from core.user_paths import crash_log_path
+            with open(crash_log_path(), "w") as f:
+                traceback.print_exc(file=f)
+        except Exception:
+            pass  # never let logging mask the real exception
         raise

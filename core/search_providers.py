@@ -43,11 +43,17 @@ class TavilyProvider(SearchProvider):
     name = "tavily"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = get_api_key("tavily_api_key", "TAVILY_API_KEY", api_key)
-        self._available = bool(self.api_key)
-        self._init_error: Optional[str] = None
-        if not self.api_key:
-            self._init_error = "TAVILY_API_KEY not set"
+        self._explicit_key = api_key
+
+    # The key is resolved on every access so a key saved in Settings (or
+    # changed later) takes effect immediately instead of needing a restart.
+    @property
+    def api_key(self) -> str:
+        return get_api_key("tavily_api_key", "TAVILY_API_KEY", self._explicit_key)
+
+    @property
+    def _available(self) -> bool:
+        return bool(self.api_key)
 
     @property
     def available(self) -> bool:
@@ -55,7 +61,7 @@ class TavilyProvider(SearchProvider):
 
     @property
     def init_error(self) -> Optional[str]:
-        return self._init_error
+        return None if self._available else "TAVILY_API_KEY not set"
 
     def search(self, query: str) -> dict:
         if not self._available:
@@ -98,11 +104,17 @@ class FirecrawlProvider(SearchProvider):
     name = "firecrawl"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = get_api_key("firecrawl_api_key", "FIRECRAWL_API_KEY", api_key)
-        self._available = bool(self.api_key)
-        self._init_error: Optional[str] = None
-        if not self.api_key:
-            self._init_error = "FIRECRAWL_API_KEY not set"
+        self._explicit_key = api_key
+
+    # The key is resolved on every access so a key saved in Settings (or
+    # changed later) takes effect immediately instead of needing a restart.
+    @property
+    def api_key(self) -> str:
+        return get_api_key("firecrawl_api_key", "FIRECRAWL_API_KEY", self._explicit_key)
+
+    @property
+    def _available(self) -> bool:
+        return bool(self.api_key)
 
     @property
     def available(self) -> bool:
@@ -110,7 +122,7 @@ class FirecrawlProvider(SearchProvider):
 
     @property
     def init_error(self) -> Optional[str]:
-        return self._init_error
+        return None if self._available else "FIRECRAWL_API_KEY not set"
 
     def search(self, query: str) -> dict:
         if not self._available:
@@ -149,11 +161,17 @@ class SerpAPIProvider(SearchProvider):
     name = "serpapi"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = get_api_key("serpapi_api_key", "SERPAPI_API_KEY", api_key)
-        self._available = bool(self.api_key)
-        self._init_error: Optional[str] = None
-        if not self.api_key:
-            self._init_error = "SERPAPI_API_KEY not set"
+        self._explicit_key = api_key
+
+    # The key is resolved on every access so a key saved in Settings (or
+    # changed later) takes effect immediately instead of needing a restart.
+    @property
+    def api_key(self) -> str:
+        return get_api_key("serpapi_api_key", "SERPAPI_API_KEY", self._explicit_key)
+
+    @property
+    def _available(self) -> bool:
+        return bool(self.api_key)
 
     @property
     def available(self) -> bool:
@@ -161,7 +179,7 @@ class SerpAPIProvider(SearchProvider):
 
     @property
     def init_error(self) -> Optional[str]:
-        return self._init_error
+        return None if self._available else "SERPAPI_API_KEY not set"
 
     def search(self, query: str) -> dict:
         if not self._available:
@@ -298,12 +316,16 @@ _default_provider: Optional[SearchProvider] = None
 
 
 def get_default_search() -> Optional[SearchProvider]:
-    """Get the default search provider (Tavily preferred, then Firecrawl, then DuckDuckGo)."""
+    """Get the default search provider (Tavily preferred, then Firecrawl, SerpAPI, DuckDuckGo).
+
+    Re-evaluated on every call (providers are cheap) so adding a key in Settings
+    is picked up without restarting the app.
+    """
     global _default_provider
-    if _default_provider is None:
-        for pid in ("tavily", "firecrawl", "serpapi", "duckduckgo"):
-            provider = get_search_provider(pid)
-            if provider and provider.available:
-                _default_provider = provider
-                break
-    return _default_provider
+    for pid in ("tavily", "firecrawl", "serpapi", "duckduckgo"):
+        provider = get_search_provider(pid)
+        if provider and provider.available:
+            _default_provider = provider
+            return provider
+    _default_provider = None
+    return None

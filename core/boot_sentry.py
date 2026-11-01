@@ -16,7 +16,7 @@ logger = logging.getLogger("BootSentry")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = get_user_data_dir() / "config"
-CRASH_LOG = BASE_DIR / "FATAL_CRASH.log"
+CRASH_LOG = get_user_data_dir() / "FATAL_CRASH.log"
 PATCH_HISTORY_FILE = CONFIG_DIR / "patch_history.json"
 
 
@@ -60,7 +60,7 @@ def check_and_recover_on_boot() -> bool:
             json.dump(history, f, indent=4)
 
         # Archive the crash log
-        crash_archive = BASE_DIR / "FATAL_CRASH_RECOVERED.log"
+        crash_archive = get_user_data_dir() / "FATAL_CRASH_RECOVERED.log"
         if CRASH_LOG.exists():
             shutil.move(str(CRASH_LOG), str(crash_archive))
 

@@ -21,6 +21,10 @@ if sys.platform == "win32":
     _base_chromium_flags += " --use-angle=d3d11"
 elif sys.platform.startswith("linux"):
     _base_chromium_flags += " --no-sandbox --disable-dev-shm-usage"
+if sys.platform == "darwin":
+    _base_chromium_flags = "--enable-gpu-rasterization --use-angle=metal"
+if os.environ.get("NEXUS_SAFE_GPU") == "1":
+    _base_chromium_flags = "--disable-gpu --disable-gpu-compositing"
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _base_chromium_flags)
 
 from PyQt6.QtCore import Qt, QUrl, pyqtSlot, QObject, pyqtSignal, QTimer, QPoint, QCoreApplication

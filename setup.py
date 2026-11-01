@@ -116,8 +116,8 @@ def write_config(api_keys: dict):
         except Exception:
             existing = {}
     existing.update(api_keys)
-    with open(api_keys_path, "w", encoding="utf-8") as f:
-        json.dump(existing, f, indent=2)
+    from core.atomic_io import atomic_write_json
+    atomic_write_json(api_keys_path, existing, indent=2)
     print(f"\n  ✓ API keys saved to: {api_keys_path}")
 
     # Write/update app_settings.json
@@ -138,8 +138,8 @@ def write_config(api_keys: dict):
     if "custom_ai_model" in api_keys:
         app_settings["custom_ai_model"] = api_keys["custom_ai_model"]
 
-    with open(app_settings_path, "w", encoding="utf-8") as f:
-        json.dump(app_settings, f, indent=2)
+    from core.atomic_io import atomic_write_json
+    atomic_write_json(app_settings_path, app_settings, indent=2)
     print(f"  ✓ App settings saved to: {app_settings_path}")
 
 

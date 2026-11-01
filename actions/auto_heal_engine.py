@@ -833,7 +833,8 @@ def auto_heal(
             tb = AutoHealEngine.get_last_error() or ""
         if not tb:
             # Check FATAL_CRASH.log if no traceback explicitly provided
-            crash_log = BASE_DIR / "FATAL_CRASH.log"
+            from core.user_paths import crash_log_path
+            crash_log = crash_log_path()
             if crash_log.exists():
                 try:
                     tb = crash_log.read_text(encoding="utf-8")

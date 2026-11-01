@@ -19,6 +19,11 @@ except ImportError:
 
 try:
     import pyperclip
+    try:
+        from core.clipboard_compat import apply as _clip_apply
+        _clip_apply()
+    except Exception:
+        pass
     _PYPERCLIP = True
 except ImportError:
     _PYPERCLIP = False
