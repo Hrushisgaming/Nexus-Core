@@ -105,6 +105,51 @@ def _build_enhanced_prompt(prompt: str, style: str = "photorealistic") -> str:
     return f"{cleaned}, {enhancer}"
 
 
+def _selected_settings() -> Dict[str, Any]:
+    try:
+        import json
+        from core.user_paths import get_user_data_dir
+        path = get_user_data_dir() / "config" / "app_settings.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _render_with_providers(prompt: str, forced: Optional[str] = None) -> tuple:
+    """Try the engine chosen in Settings first, then the others. Returns (bytes, provider_id)."""
+    import base64
+    import requests
+    from core.image_providers import get_image_provider
+
+    settings = _selected_settings()
+    chosen = (forced or settings.get("image_engine") or "pollinations").strip().lower()
+    order = [chosen] + [p for p in ("pollinations", "nvidia", "cloudflare") if p != chosen]
+    errors = []
+    for pid in order:
+        provider = get_image_provider(pid)
+        if provider is None or not provider.available:
+            errors.append(f"{pid}: not configured")
+            continue
+        model = settings.get("image_model") if pid == "pollinations" else None
+        result = provider.generate(prompt, model=model) or {}
+        if result.get("error"):
+            errors.append(f"{pid}: {result['error']}")
+            continue
+        try:
+            if result.get("image_data"):
+                return base64.b64decode(result["image_data"]), pid
+            if result.get("image_url"):
+                resp = requests.get(result["image_url"], timeout=60,
+                                    headers={"User-Agent": "NexusCore/1.0"})
+                resp.raise_for_status()
+                return resp.content, pid
+            errors.append(f"{pid}: empty result")
+        except Exception as exc:
+            errors.append(f"{pid}: {exc}")
+    raise RuntimeError("; ".join(errors) or "no image provider available")
+
+
 def generate_image(
     parameters: Optional[Dict[str, Any]] = None,
     player: Any = None,
@@ -139,33 +184,12 @@ def generate_image(
     if speak:
         speak(f"Synthesizing your image, sir. Rendering with {style} neural diffusion.")
 
-    # Encode URL
-    encoded_prompt = urllib.parse.quote(enhanced_prompt)
+    t0 = time.time()
     try:
-        from core.image_providers import get_pollinations_api_key
-        poll_key = get_pollinations_api_key()
-    except Exception:
-        poll_key = ""
-    if poll_key:
-        url = f"https://gen.pollinations.ai/image/{encoded_prompt}?nologo=true"
-    else:
-        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true"
-
-    try:
-        req_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        if poll_key:
-            req_headers["Authorization"] = f"Bearer {poll_key}"
-        req = urllib.request.Request(url, headers=req_headers)
-
-        t0 = time.time()
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            if resp.status != 200:
-                raise ValueError(f"HTTP error {resp.status} from image generation service.")
-            image_bytes = resp.read()
+        image_bytes, used_provider = _render_with_providers(enhanced_prompt, params.get("provider"))
 
         elapsed = round(time.time() - t0, 1)
+        logger.info(f"[ImageGen] Rendered by {used_provider}")
 
         # Write to disk
         with open(image_file, "wb") as f:

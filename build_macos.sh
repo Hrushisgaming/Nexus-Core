@@ -46,6 +46,8 @@ ARGS+=(
   --add-data "version.txt:."
   --add-data "app_version.txt:."
   --add-data "requirements.txt:."
+  --collect-data certifi
+  --hidden-import certifi
   --hidden-import mediapipe
   --hidden-import cv2
   --hidden-import google.genai

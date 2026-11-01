@@ -1,4 +1,6 @@
 from core.user_paths import get_user_data_dir
+from core import ssl_certs as _ssl_certs
+_ssl_certs.apply()
 from typing import Any, Optional
 import logging
 import os
