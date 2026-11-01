@@ -13033,8 +13033,9 @@ class SystemConnectivityPage(QWidget):
             if p["available"]:
                 for v in p.get("voices", []):
                     self._tts_voice_combo.addItem(f"{v['name']} ({v['id']})", v["id"])
-        if self._tts_voice_combo.findData(current_voice) >= 0:
-            self._tts_voice_combo.setCurrentData(current_voice)
+        _voice_idx = self._tts_voice_combo.findData(current_voice)
+        if _voice_idx >= 0:
+            self._tts_voice_combo.setCurrentIndex(_voice_idx)
         self._tts_voice_combo.currentIndexChanged.connect(lambda: self._set_setting("tts_voice_id", self._tts_voice_combo.currentData()))
         tts_voice_row.addWidget(self._tts_voice_combo, 1)
         tts_lay.addLayout(tts_voice_row)
