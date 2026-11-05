@@ -406,7 +406,27 @@ class DiscordBotService:
             "Keep replies friendly and under 250 words unless the user asks for detail."
         )
 
-        if gemini_key:
+        try:
+            from llm_client import normalize_provider
+            primary = normalize_provider(
+                (keys.get("default_ai_provider") or "")
+                or openrouter_client.active_provider()
+            )
+        except Exception:
+            primary = "Gemini"
+
+        # Honour the user's primary provider (NVIDIA, Groq, ...) first.
+        if primary not in ("Gemini", "OpenRouter"):
+            try:
+                text = openrouter_client.chat(
+                    prompt, system=system_prompt, temperature=0.5, max_tokens=900
+                ).strip()
+                if text:
+                    return text
+            except Exception as exc:
+                logger.warning("%s Discord reply failed: %s", primary, exc)
+
+        if gemini_key and primary != "OpenRouter":
             try:
                 client = genai.Client(
                     api_key=gemini_key,
@@ -424,15 +444,15 @@ class DiscordBotService:
                 if not _looks_like_limit_error(exc):
                     logger.warning("Gemini Discord reply failed, falling back to OpenRouter: %s", exc)
 
-        if openrouter_key:
-            try:
-                return openrouter_client.chat(
-                    prompt,
-                    system=system_prompt,
-                    temperature=0.5,
-                    max_tokens=900,
-                ).strip()
-            except Exception as exc:
-                logger.warning("OpenRouter Discord reply failed: %s", exc)
+        # Final attempt through the unified client (primary provider chain + fallbacks).
+        try:
+            return openrouter_client.chat(
+                prompt,
+                system=system_prompt,
+                temperature=0.5,
+                max_tokens=900,
+            ).strip()
+        except Exception as exc:
+            logger.warning("Discord reply failed on all providers: %s", exc)
 
         return "I couldn’t reach the AI providers right now."

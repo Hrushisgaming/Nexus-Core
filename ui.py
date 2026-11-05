@@ -6180,8 +6180,50 @@ class APIKeySettingsDialog(QDialog):
         return result
 
 
+# Providers selectable as the primary "intelligence" during first-run setup.
+_SETUP_PROVIDERS = {
+    "Gemini": {
+        "button": "Gemini",
+        "label": "Google Gemini",
+        "key_field": "gemini_api_key",
+        "placeholder": "Paste API key here...",
+        "link": "https://aistudio.google.com/app/apikey",
+        "ready": "Gemini 2.5 Pro  ·  Ready",
+        "blurb": "Also powers live voice.",
+    },
+    "NVIDIA": {
+        "button": "NVIDIA NIM",
+        "label": "NVIDIA NIM",
+        "key_field": "nvidia_api_key",
+        "placeholder": "nvapi-************************",
+        "link": "https://build.nvidia.com/settings/api-keys",
+        "ready": "NVIDIA NIM  ·  Ready",
+        "blurb": "",
+    },
+    "Groq": {
+        "button": "Groq",
+        "label": "Groq",
+        "key_field": "groq_api_key",
+        "placeholder": "gsk_************************",
+        "link": "https://console.groq.com/keys",
+        "ready": "Groq  ·  Ready",
+        "blurb": "",
+    },
+    "OpenRouter": {
+        "button": "OpenRouter",
+        "label": "OpenRouter",
+        "key_field": "openrouter_api_key",
+        "placeholder": "sk-or-************************",
+        "link": "https://openrouter.ai/keys",
+        "ready": "OpenRouter  ·  Ready",
+        "blurb": "",
+    },
+}
+
+
 class SetupOverlay(QWidget):
-    done = pyqtSignal(str, str, str)
+    # (api keys + default_ai_provider, operating system)
+    done = pyqtSignal(dict, str)
 
     def __init__(self, parent=None, defaults: dict | None = None):
         super().__init__(parent)
@@ -6189,6 +6231,13 @@ class SetupOverlay(QWidget):
         self.setStyleSheet("background: transparent;")
 
         self._defaults = defaults or {}
+        self._primary = "Gemini"
+        self._secondary = "OpenRouter"
+        self._typed_keys: dict[str, str] = {}
+        saved_primary = str(self._defaults.get("default_ai_provider") or "").strip().lower()
+        for _name in _SETUP_PROVIDERS:
+            if _name.lower() == saved_primary:
+                self._primary = _name
         self._detected = {"darwin": "mac", "windows": "windows"}.get(_OS.lower(), "linux")
         self._sel_os = self._defaults.get("os_system", self._detected)
 
@@ -6657,7 +6706,7 @@ class SetupOverlay(QWidget):
         lay.addStretch(3)
 
         self._s3_box = QFrame()
-        self._s3_box.setFixedSize(480, 260)
+        self._s3_box.setFixedSize(520, 330)
         self._s3_box.setStyleSheet("""
             QFrame {
                 background: rgba(8, 10, 16, 220);
@@ -6666,10 +6715,46 @@ class SetupOverlay(QWidget):
             }
         """)
         blay = QVBoxLayout(self._s3_box)
-        blay.setContentsMargins(32, 28, 32, 28)
+        blay.setContentsMargins(32, 24, 32, 24)
         blay.setSpacing(6)
 
-        self._s3_title = QLabel("Google Gemini")
+        # Primary intelligence selector (Gemini / NVIDIA NIM / Groq / OpenRouter)
+        picker_lbl = QLabel("PRIMARY INTELLIGENCE")
+        picker_lbl.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        picker_lbl.setStyleSheet("color: rgba(255,255,255,0.35); background: transparent; border: none; letter-spacing: 2px;")
+        blay.addWidget(picker_lbl)
+
+        self._provider_buttons: dict[str, QPushButton] = {}
+        picker_row = QHBoxLayout()
+        picker_row.setSpacing(8)
+        for _name, _info in _SETUP_PROVIDERS.items():
+            _btn = QPushButton(_info["button"])
+            _btn.setCheckable(True)
+            _btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            _btn.setFixedHeight(32)
+            _btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            _btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: rgba(255,255,255,0.5);
+                    border: 1px solid rgba(255,255,255,0.12);
+                    border-radius: 10px;
+                    padding: 0 10px;
+                }
+                QPushButton:hover { color: rgba(255,255,255,0.85); border: 1px solid rgba(0,229,255,0.4); }
+                QPushButton:checked {
+                    background: rgba(0, 229, 255, 0.14);
+                    color: #00e5ff;
+                    border: 1px solid rgba(0, 229, 255, 0.6);
+                }
+            """)
+            _btn.clicked.connect(lambda _checked=False, n=_name: self._select_primary(n))
+            picker_row.addWidget(_btn)
+            self._provider_buttons[_name] = _btn
+        blay.addLayout(picker_row)
+        blay.addSpacing(8)
+
+        self._s3_title = QLabel(_SETUP_PROVIDERS[self._primary]["label"])
         self._s3_title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         self._s3_title.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
         blay.addWidget(self._s3_title)
@@ -6703,7 +6788,10 @@ class SetupOverlay(QWidget):
                 background: rgba(0, 229, 255, 0.06);
             }
         """)
-        self._key_input.setText((self._defaults.get("gemini_api_key") or "").strip())
+        self._key_input.setPlaceholderText(_SETUP_PROVIDERS[self._primary]["placeholder"])
+        self._key_input.setText(
+            (self._defaults.get(_SETUP_PROVIDERS[self._primary]["key_field"]) or "").strip()
+        )
         self._key_input.textChanged.connect(self._on_key_changed)
         input_row.addWidget(self._key_input)
 
@@ -6729,11 +6817,13 @@ class SetupOverlay(QWidget):
 
         status_row.addStretch()
 
-        hint = QLabel("<a href='https://aistudio.google.com/app/apikey' style='color: rgba(0, 229, 255,0.5); text-decoration: none; font-size: 10px;'>Get API Key →</a>")
-        hint.setOpenExternalLinks(True)
-        hint.setStyleSheet("background: transparent; border: none;")
-        status_row.addWidget(hint)
+        self._s3_hint = QLabel()
+        self._s3_hint.setOpenExternalLinks(True)
+        self._s3_hint.setStyleSheet("background: transparent; border: none;")
+        status_row.addWidget(self._s3_hint)
         blay.addLayout(status_row)
+        self._provider_buttons[self._primary].setChecked(True)
+        self._refresh_primary_hint()
 
         blay.addStretch()
 
@@ -6785,9 +6875,39 @@ class SetupOverlay(QWidget):
 
         self._stack.addWidget(page)
 
+    def _refresh_primary_hint(self):
+        info = _SETUP_PROVIDERS[self._primary]
+        self._s3_hint.setText(
+            f"<a href='{info['link']}' style='color: rgba(0, 229, 255,0.5); "
+            f"text-decoration: none; font-size: 10px;'>Get API Key →</a>"
+        )
+
+    def _select_primary(self, name: str):
+        """User picked a different primary provider on the key screen."""
+        if name not in _SETUP_PROVIDERS or hasattr(self, "_authenticating"):
+            if name in self._provider_buttons:
+                self._provider_buttons[self._primary].setChecked(True)
+            return
+        self._typed_keys[self._primary] = self._key_input.text().strip()
+        self._primary = name
+        for n, b in self._provider_buttons.items():
+            b.setChecked(n == name)
+        info = _SETUP_PROVIDERS[name]
+        self._s3_title.setText(info["label"])
+        self._key_input.blockSignals(True)
+        self._key_input.setPlaceholderText(info["placeholder"])
+        self._key_input.setText(
+            self._typed_keys.get(name) or (self._defaults.get(info["key_field"]) or "").strip()
+        )
+        self._key_input.blockSignals(False)
+        self._refresh_primary_hint()
+
     def _on_key_changed(self, text):
         if len(text) > 10 and not hasattr(self, "_authenticating"):
             self._authenticating = True
+            self._typed_keys[self._primary] = text.strip()
+            for b in self._provider_buttons.values():
+                b.setEnabled(False)
             self._key_input.setReadOnly(True)
             self._s3_sub.setText("Authenticating...")
             self._s3_sub.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
@@ -6813,9 +6933,9 @@ class SetupOverlay(QWidget):
             self._auth_timer.stop()
             self._s3_status.setText("✓ Identity Verified")
             self._s3_status.setStyleSheet("color: #37ff5f; background: transparent; border: none;")
-            self._s3_title.setText("✓ Google Gemini")
+            self._s3_title.setText("✓ " + _SETUP_PROVIDERS[self._primary]["label"])
             self._s3_title.setStyleSheet("color: #37ff5f; background: transparent; border: none;")
-            self._s3_sub.setText("Gemini 2.5 Pro  ·  Ready")
+            self._s3_sub.setText(_SETUP_PROVIDERS[self._primary]["ready"])
             self._s3_sub.setStyleSheet("color: rgba(55,255,95,0.6); background: transparent; border: none;")
             self._key_input.setStyleSheet("""
                 QLineEdit {
@@ -6837,7 +6957,10 @@ class SetupOverlay(QWidget):
 
 
     def _show_or_prompt(self):
-        """After Gemini verified, ask if user wants to add OpenRouter too."""
+        """After the primary key is verified, offer one optional secondary provider."""
+        # Gemini primary -> offer OpenRouter; any other primary -> offer Gemini (live voice).
+        self._secondary = "OpenRouter" if self._primary == "Gemini" else "Gemini"
+        sec = _SETUP_PROVIDERS[self._secondary]
         self._s3_box.hide()
         page = self._stack.widget(6)
         lay = page.layout()
@@ -6860,7 +6983,11 @@ class SetupOverlay(QWidget):
         q_title.setStyleSheet("color: #ffffff; background: transparent; border: none;")
         prom_lay.addWidget(q_title)
 
-        q_sub = QLabel("Would you like to configure OpenRouter as well?\nThis is optional and can be done later in Settings.")
+        q_extra = f"\n{sec['blurb']}" if sec["blurb"] else ""
+        q_sub = QLabel(
+            f"Would you like to configure {sec['label']} as well?{q_extra}\n"
+            "This is optional and can be done later in Settings."
+        )
         q_sub.setFont(QFont("Segoe UI", 10))
         q_sub.setWordWrap(True)
         q_sub.setStyleSheet("color: rgba(255,255,255,0.4); background: transparent; border: none;")
@@ -6891,7 +7018,7 @@ class SetupOverlay(QWidget):
         skip_btn.clicked.connect(self._skip_or)
         btn_row.addWidget(skip_btn)
 
-        yes_btn = QPushButton("Configure OpenRouter")
+        yes_btn = QPushButton(f"Configure {sec['label']}")
         yes_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         yes_btn.setFixedHeight(42)
         yes_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
@@ -6916,13 +7043,17 @@ class SetupOverlay(QWidget):
         lay.insertWidget(lay.count() - 1, self._or_prompt_widget, 0, Qt.AlignmentFlag.AlignCenter)
 
     def _skip_or(self):
-        """User chose to skip OpenRouter, go to color selection."""
+        """User chose to skip the secondary provider, go to color selection."""
         self._or_key_value = ""
+        self._typed_keys.pop(self._secondary, None)
         self._or_prompt_widget.hide()
+        if getattr(self, "_or_box", None) is not None:
+            self._or_box.hide()
         self._show_color_stage()
 
     def _show_or_input(self):
-        """User wants to add OpenRouter."""
+        """User wants to add the secondary provider."""
+        sec = _SETUP_PROVIDERS[self._secondary]
         self._or_prompt_widget.hide()
         page = self._stack.widget(6)
         lay = page.layout()
@@ -6940,12 +7071,12 @@ class SetupOverlay(QWidget):
         or_blay.setContentsMargins(32, 28, 32, 28)
         or_blay.setSpacing(6)
 
-        or_title = QLabel("OpenRouter")
+        or_title = QLabel(sec["label"])
         or_title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         or_title.setStyleSheet("color: rgba(255,255,255,0.8); background: transparent; border: none;")
         or_blay.addWidget(or_title)
 
-        or_sub = QLabel("Paste your OpenRouter API Key")
+        or_sub = QLabel(f"Paste your {sec['label']} API Key")
         or_sub.setFont(QFont("Segoe UI", 10))
         or_sub.setStyleSheet("color: rgba(255,255,255,0.4); background: transparent; border: none;")
         or_blay.addWidget(or_sub)
@@ -6954,7 +7085,7 @@ class SetupOverlay(QWidget):
 
         self._or_input = QLineEdit()
         self._or_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._or_input.setPlaceholderText("sk-or-************************")
+        self._or_input.setPlaceholderText(sec["placeholder"])
         self._or_input.setFont(QFont("Consolas", 12))
         self._or_input.setFixedHeight(48)
         self._or_input.setStyleSheet("""
@@ -6970,7 +7101,7 @@ class SetupOverlay(QWidget):
                 border: 1px solid rgba(0, 229, 255, 0.5);
             }
         """)
-        self._or_input.setText((self._defaults.get("openrouter_api_key") or "").strip())
+        self._or_input.setText((self._defaults.get(sec["key_field"]) or "").strip())
         or_blay.addWidget(self._or_input)
 
         or_blay.addStretch()
@@ -7013,6 +7144,10 @@ class SetupOverlay(QWidget):
 
     def _save_or_key(self):
         self._or_key_value = self._or_input.text().strip()
+        if self._or_key_value:
+            self._typed_keys[self._secondary] = self._or_key_value
+        else:
+            self._typed_keys.pop(self._secondary, None)
         self._or_box.hide()
         self._show_color_stage()
 
@@ -7230,7 +7365,20 @@ class SetupOverlay(QWidget):
                 n.setStyleSheet("color: #37ff5f; background: transparent; border: none; font-weight: bold;")
                 b.setStyleSheet("color: #37ff5f; background: transparent; border: none;")
             self._call_js("if(window.dissolveReactor) window.dissolveReactor();")
-            QTimer.singleShot(1200, lambda: self.done.emit(self._key_input.text().strip(), getattr(self, "_or_key_value", ""), self._sel_os))
+            QTimer.singleShot(1200, lambda: self.done.emit(self._collect_setup_result(), self._sel_os))
+
+    def _collect_setup_result(self) -> dict:
+        """API keys the user entered plus the provider chosen as primary intelligence."""
+        self._typed_keys[self._primary] = (
+            self._typed_keys.get(self._primary) or self._key_input.text().strip()
+        )
+        result: dict = {}
+        for provider, key in self._typed_keys.items():
+            key = (key or "").strip()
+            if key and provider in _SETUP_PROVIDERS:
+                result[_SETUP_PROVIDERS[provider]["key_field"]] = key
+        result["default_ai_provider"] = self._primary
+        return result
 
 
 
@@ -11617,15 +11765,14 @@ class MainWindow(QMainWindow):
             raise
 
 
-    # Change signature:
-    def _on_setup_done(self, key: str, or_key: str, os_name: str):
+    def _on_setup_done(self, setup: dict, os_name: str):
         try:
             existing = self._load_app_settings()
-            existing.update({
-                "gemini_api_key":     key,
-                "openrouter_api_key": or_key,
-                "os_system":          os_name,
-            })
+            for field, value in (setup or {}).items():
+                # Never overwrite a saved key with an empty value.
+                if isinstance(value, str) and value.strip():
+                    existing[field] = value.strip()
+            existing["os_system"] = os_name
             self._save_app_settings(existing)
             self._ready = True
             self._api_ready = True
@@ -14582,6 +14729,24 @@ class SystemConnectivityPage(QWidget):
         msg = f"{name} key detected." if val.strip() else f"{name} key missing."
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(f"SYS: {msg}")
+
+        # For AI providers, make a real tiny request so a bad key / unknown model is reported.
+        if val.strip() and setting_key in ("gemini", "openrouter", "nvidia", "groq", "custom"):
+            ctrl = self._ctrl()
+
+            def _live_test():
+                try:
+                    from llm_client import client as _llm
+                    ok, detail = _llm.test_provider(setting_key)
+                except Exception as exc:
+                    ok, detail = False, f"{name}: {exc}"
+                try:
+                    if ctrl and hasattr(ctrl, "write_log"):
+                        ctrl.write_log(f"SYS: {'✓' if ok else '✗'} {detail}")
+                except Exception:
+                    pass
+
+            threading.Thread(target=_live_test, daemon=True).start()
         self.refresh()
 
     def _connect_mobile(self):
@@ -14709,6 +14874,9 @@ class SystemConnectivityPage(QWidget):
     def _toggle_offline_mode(self, checked: bool):
         self._set_setting("offline_mode_enabled", bool(checked))
         if checked:
+            current = (self._load_app_settings().get("default_ai_provider") or "Gemini")
+            if str(current).strip().lower() != "local":
+                self._set_setting("previous_ai_provider", current)
             self._set_setting("default_ai_provider", "Local")
             if hasattr(self, "_default_provider"):
                 self._default_provider.blockSignals(True)
@@ -14720,15 +14888,18 @@ class SystemConnectivityPage(QWidget):
                 self._sys_provider.setText("Local")
             msg = "🔒 SYSTEM: Air-Gapped Offline Mode ENGAGED. All operations running 100% locally."
         else:
-            self._set_setting("default_ai_provider", "Gemini")
+            restored = str(self._load_app_settings().get("previous_ai_provider") or "Gemini")
+            if restored.strip().lower() == "local":
+                restored = "Gemini"
+            self._set_setting("default_ai_provider", restored)
             if hasattr(self, "_default_provider"):
                 self._default_provider.blockSignals(True)
-                self._default_provider.setCurrentText("Google Gemini")
+                self._default_provider.setCurrentText("Google Gemini" if restored in ("Gemini", "Google Gemini") else restored)
                 self._default_provider.blockSignals(False)
             if hasattr(self, "_local_ai_widget"):
                 self._local_ai_widget.setVisible(False)
             if hasattr(self, "_sys_provider"):
-                self._sys_provider.setText("Gemini")
+                self._sys_provider.setText(restored)
             msg = "🌐 SYSTEM: Offline Mode DISENGAGED. Cloud connectivity restored."
         if self._ctrl() and hasattr(self._ctrl(), "write_log"):
             self._ctrl().write_log(msg)

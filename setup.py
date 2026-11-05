@@ -63,14 +63,14 @@ def setup_api_keys():
 
     keys = {}
 
-    # Gemini
+    # NVIDIA is asked first so it can be picked as the primary intelligence.
+    keys["nvidia_api_key"] = _prompt("  NVIDIA NIM API key (https://build.nvidia.com)", "")
+
+    # Gemini (also powers live voice)
     keys["gemini_api_key"] = _prompt("  Google Gemini API key", "")
 
     # OpenRouter
     keys["openrouter_api_key"] = _prompt("  OpenRouter API key", "")
-
-    # NVIDIA
-    keys["nvidia_api_key"] = _prompt("  NVIDIA NIM API key", "")
 
     # Groq
     keys["groq_api_key"] = _prompt("  Groq API key", "")
@@ -87,14 +87,23 @@ def setup_api_keys():
     # Remove empty keys
     keys = {k: v for k, v in keys.items() if v}
 
-    # Choose default provider
-    print("\n  Available providers:", ", ".join(
-        k.replace("_api_key", "") for k in keys if k.endswith("_api_key")
-    ) or "(none)")
+    # Choose the primary provider (NVIDIA is preferred when it has a key).
+    names = {
+        "nvidia_api_key": "NVIDIA",
+        "gemini_api_key": "Gemini",
+        "groq_api_key": "Groq",
+        "openrouter_api_key": "OpenRouter",
+        "custom_ai_api_key": "Custom",
+    }
+    available = [name for field, name in names.items() if keys.get(field)]
+    print("\n  Available providers:", ", ".join(available) or "(none)")
     default_provider = _prompt(
-        "  Default AI provider", "Gemini" if keys.get("gemini_api_key") else "OpenRouter"
+        "  Primary AI provider (NVIDIA, Gemini, Groq, OpenRouter, Custom)",
+        available[0] if available else "OpenRouter",
     )
-    keys["default_ai_provider"] = default_provider
+    # Accept any capitalisation / "nvidia nim" / "google gemini" style answers.
+    from llm_client import normalize_provider
+    keys["default_ai_provider"] = normalize_provider(default_provider)
 
     return keys
 

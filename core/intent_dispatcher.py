@@ -852,6 +852,42 @@ class IntentDispatcher:
             self._gemini_client = None
         return self._gemini_client
 
+    def _unified_provider_ready(self) -> bool:
+        """True when the user's primary AI provider is a non-Gemini cloud provider with a key."""
+        try:
+            from llm_client import client as unified_client
+            primary = unified_client.active_provider()
+            if primary in ("Gemini", "Local"):
+                return False
+            if bool(unified_client._settings.get("offline_mode_enabled", False)):
+                return False
+            return unified_client.has_key(primary)
+        except Exception:
+            return False
+
+    def _classify_with_unified(self, text: str, system_instruction: str, user_prompt: str, t0: float) -> Optional[IntentResult]:
+        try:
+            from llm_client import client as unified_client
+            data = unified_client.chat_json(user_prompt, system=system_instruction, max_tokens=2048)
+            if not isinstance(data, dict):
+                return None
+            result = IntentResult(
+                tier=3,
+                intent=data.get("intent", "general_conversation"),
+                action=data.get("action", ""),
+                target=data.get("target", "pc"),
+                parameters=data.get("parameters", {}),
+                confidence=float(data.get("confidence", 0.9)),
+                voice_ack=data.get("voice_ack", ""),
+                latency_ms=(time.perf_counter() - t0) * 1000,
+            )
+            if result.intent != "general_conversation" and result.confidence >= 0.8:
+                self.remember_intent(text, result)
+            return result
+        except Exception as exc:
+            logger.debug(f"Unified provider intent classification failed: {exc}")
+            return None
+
     def classify_semantic_intent(
         self,
         text: str,
@@ -860,7 +896,8 @@ class IntentDispatcher:
     ) -> Optional[IntentResult]:
         t0 = time.perf_counter()
         client = self._get_llm_client()
-        if not client:
+        use_unified = self._unified_provider_ready()
+        if not client and not use_unified:
             return None
 
         device_names = []
@@ -920,7 +957,13 @@ class IntentDispatcher:
             f"Active Foreground Window: {active_window or 'Desktop'}"
         )
 
-        candidates = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
+        # Primary provider is NVIDIA / Groq / OpenRouter / Custom: classify with it.
+        if use_unified:
+            result = self._classify_with_unified(text, system_instruction, user_prompt, t0)
+            if result is not None or not client:
+                return result
+
+        candidates = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"] if client else []
         for model in candidates:
             try:
                 resp = client.models.generate_content(

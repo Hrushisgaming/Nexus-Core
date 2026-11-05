@@ -106,7 +106,7 @@
 - **Python 3.11** or **Python 3.12**
 - **Git**
 - Working Microphone & Speakers (Webcam optional for vision)
-- **Google Gemini API Key** (Get from [Google AI Studio](https://aistudio.google.com/))
+- **At least one AI provider key** — [NVIDIA NIM](https://build.nvidia.com/settings/api-keys), [Google Gemini](https://aistudio.google.com/), [Groq](https://console.groq.com/keys) or [OpenRouter](https://openrouter.ai/keys). A Gemini key is only required for **live voice**; typed chat, planning and vision work with whichever provider you pick as primary.
 
 ### Installation
 
@@ -132,14 +132,21 @@
 4. **Configure API Keys:**
    - Launch Nexus Core Evo.
    - Click the **Settings** icon on the top navigation bar.
-   - Enter your **Gemini API Key** and any optional credentials (Spotify MCP, Weather, etc.) into the respective cards.
+   - On first launch pick your **Primary Intelligence** (Gemini, NVIDIA NIM, Groq or OpenRouter) and paste its key.
+   - Later: open **Settings → AI Providers**, enter keys, choose the **Default AI provider**, and press **Test** to send a real request (it reports a bad key or unknown model).
    - Click **Save & Connect**.
 
-3. **Configure API Keys:**
-   - Launch Nexus Core Evo.
-   - Click the **Settings** icon on the top navigation bar.
-   - Enter your **Gemini API Key** and any optional credentials (Spotify MCP, Weather, etc.) into the respective cards.
-   - Click **Save & Connect**.
+### Choosing and tuning AI providers
+
+The default provider lives in `app_settings.json` as `default_ai_provider` (`Gemini`, `NVIDIA`, `Groq`, `OpenRouter`, `Custom` or `Local`). If it fails, other providers that have a key are tried automatically (turn off with `"auto_provider_switch": false`), and the error lists why each one failed.
+
+Optional model overrides in `app_settings.json`:
+
+| Setting | Purpose |
+| :--- | :--- |
+| `nvidia_model` / `nvidia_vision_model` | NIM model ids to try first (see [build.nvidia.com](https://build.nvidia.com/models)); unknown ids fall back to built-in alternatives |
+| `groq_model` / `groq_vision_model` | Groq model ids |
+| `gemini_model` | Gemini text model |
 
 ---
 

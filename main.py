@@ -114,6 +114,7 @@ from actions.game_updater      import game_updater
 from actions.attention_monitor import AttentionMonitor, speak_native, stop_native_speech, handle_call_action, read_event_preview, set_speech_sink
 # from actions.daily_briefing import compile_daily_briefing
 from or_client import client as openrouter_client
+from llm_client import client as unified_llm, normalize_provider
 from workspace_store import store as workspace_store
 from smart_home.service import SmartHomeService
 from plugin_manager import PluginManager
@@ -434,6 +435,39 @@ def _gemini_text_reply(prompt: str) -> str:
     return _extract_gemini_text(response)
 
 
+_CLOUD_OPENAI_PROVIDERS = ("NVIDIA", "Groq", "Custom")
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are Nexus Core, a concise, helpful desktop assistant. "
+    "Reply naturally and briefly. Do not mention internal implementation details."
+)
+
+
+def _primary_provider() -> str:
+    """Canonical name of the provider the user picked (Gemini, NVIDIA, ...)."""
+    try:
+        return normalize_provider(
+            config_manager.load_settings().get("default_ai_provider", "Gemini")
+        )
+    except Exception:
+        return "Gemini"
+
+
+def _text_reply(prompt: str, system_prompt: str = _DEFAULT_SYSTEM_PROMPT, temperature: float = 0.6) -> str:
+    """Answer with the user's primary provider, falling back across providers.
+
+    Gemini keeps its dedicated fast path; every other provider (NVIDIA, Groq,
+    OpenRouter, Custom, Local) goes through the unified client.
+    """
+    if _primary_provider() == "Gemini":
+        try:
+            reply = _gemini_text_reply(prompt)
+            if reply:
+                return reply
+        except Exception as exc:
+            print(f"[NEXUS CORE] ⚠️ Gemini failed, trying other providers: {exc}")
+    return unified_llm.chat(prompt, system=system_prompt, temperature=temperature)
+
+
 def _ig_gemini_reply(username: str, text: str) -> str:
     system_prompt = (
         "You are Nexus Core, an AI personal assistant acting on behalf of your user. "
@@ -442,7 +476,14 @@ def _ig_gemini_reply(username: str, text: str) -> str:
         "Do not sound like a bot. Keep your replies under 2 sentences."
     )
     prompt = f"Instagram DM from {username}: {text}"
-    
+
+    if _primary_provider() != "Gemini":
+        try:
+            return unified_llm.chat(prompt, system=system_prompt, temperature=0.6)
+        except Exception as e:
+            print(f"[InstagramChat] {_primary_provider()} reply failed: {e}")
+            return "Hey, I'm currently busy. I will get back to you later!"
+
     try:
         client = genai.Client(
             api_key=_get_api_key(),
@@ -475,6 +516,11 @@ def _clipboard_gemini_reply(text: str) -> str:
         "Do not offer to 'help' or ask 'how can I help'. Just make a standalone witty observation or summary."
     )
     prompt = text
+    if _primary_provider() != "Gemini":
+        try:
+            return unified_llm.chat(prompt, system=system_prompt, temperature=0.8)
+        except Exception:
+            return "Interesting stuff you copied there!"
     try:
         client = genai.Client(
             api_key=_get_api_key(),
@@ -2700,6 +2746,12 @@ class BrahmaLive:
         # Direct verbal toggle for Air-Gapped Offline Mode
         lower = text.lower().strip()
         if any(p in lower for p in ("switch to offline mode", "go offline", "turn on offline mode", "enable offline mode", "air gap mode")):
+            try:
+                current_provider = config_manager.load_settings().get("default_ai_provider", "Gemini")
+                if normalize_provider(current_provider) != "Local":
+                    config_manager.set_setting("previous_ai_provider", current_provider)
+            except Exception:
+                pass
             config_manager.set_setting("offline_mode_enabled", True)
             config_manager.set_setting("default_ai_provider", "Local")
             self.ui.write_log("🔒 SYSTEM: Air-Gapped Offline Mode ENGAGED. All operations running 100% locally.")
@@ -2708,7 +2760,14 @@ class BrahmaLive:
 
         if any(p in lower for p in ("switch to online mode", "go online", "turn off offline mode", "disable offline mode")):
             config_manager.set_setting("offline_mode_enabled", False)
-            config_manager.set_setting("default_ai_provider", "Google Gemini")
+            restore_provider = "Google Gemini"
+            try:
+                saved_provider = config_manager.load_settings().get("previous_ai_provider")
+                if saved_provider and normalize_provider(saved_provider) != "Local":
+                    restore_provider = saved_provider
+            except Exception:
+                pass
+            config_manager.set_setting("default_ai_provider", restore_provider)
             self.ui.write_log("🌐 SYSTEM: Offline Mode DISENGAGED. Cloud connectivity restored.")
             self.speak("Online mode restored, sir. Cloud connectivity is active.", proactive=True)
             return
@@ -4710,15 +4769,12 @@ class BrahmaLive:
             "Reply text:"
         )
         try:
-            return _gemini_text_reply(prompt) or user_text
+            return _text_reply(
+                prompt,
+                system_prompt="You are a friendly assistant. Rewrite the reply naturally and humanely.",
+            ) or user_text
         except Exception:
-            try:
-                return openrouter_client.chat(
-                    prompt,
-                    system="You are a friendly assistant. Rewrite the reply naturally and humanely.",
-                )
-            except Exception:
-                return user_text
+            return user_text
 
     def _draft_and_send_reply(self, event: dict, text: str):
         try:
@@ -5103,6 +5159,7 @@ class BrahmaLive:
 
             is_cloud_gemini = configured_provider in ("Gemini", "Google Gemini")
             is_cloud_openrouter = configured_provider == "OpenRouter"
+            is_cloud_openai_compat = normalize_provider(configured_provider) in _CLOUD_OPENAI_PROVIDERS
 
             # 1. If user explicitly selected Google Gemini, run Gemini FIRST
             if is_cloud_gemini and not is_offline_mode:
@@ -5146,8 +5203,42 @@ class BrahmaLive:
                     else:
                         reply = ""
 
+            # 2b. NVIDIA NIM / Groq / Custom OpenAI-compatible: run the chosen provider FIRST
+            #     (falls back across other configured providers inside the unified client)
+            elif is_cloud_openai_compat and not is_offline_mode:
+                provider_label = normalize_provider(configured_provider)
+                try:
+                    self.ui.update_task_workspace(
+                        status=f"Thinking ({provider_label})",
+                        output=f"Processing on {provider_label}...",
+                        percent=50,
+                    )
+                    reply = unified_llm.chat(
+                        request_text,
+                        system=(
+                            "You are Nexus Core, a concise, helpful desktop assistant. "
+                            "Reply naturally and briefly. Do not mention internal implementation details."
+                        ),
+                    )
+                    print(f"[NEXUS CORE] 🌐 {provider_label} answered successfully!")
+                except Exception as e_prov:
+                    print(f"[NEXUS CORE] ⚠️ {provider_label} failed: {e_prov}")
+                    primary_failure = unified_llm.last_errors.get(provider_label, "")
+                    if not unified_llm.has_key(provider_label):
+                        reply = (
+                            f"Sir, no {provider_label} API key is configured. "
+                            "Please add it in Settings → AI Providers."
+                        )
+                    elif "HTTP 401" in primary_failure or "HTTP 403" in primary_failure:
+                        reply = (
+                            f"Sir, {provider_label} rejected the request. "
+                            "Please check your API key in Settings → AI Providers."
+                        )
+                    else:
+                        reply = ""
+
             # 3. If user explicitly configured Local AI, is in Offline Mode, or cloud provider failed: run Local Brain
-            if not reply and (configured_provider == "Local" or is_offline_mode or not (is_cloud_gemini or is_cloud_openrouter)) and local_brain.is_available():
+            if not reply and (configured_provider == "Local" or is_offline_mode or not (is_cloud_gemini or is_cloud_openrouter or is_cloud_openai_compat)) and local_brain.is_available():
                 try:
                     self.ui.update_task_workspace(
                         status="Thinking (Local AI)",
@@ -5236,7 +5327,8 @@ class BrahmaLive:
             if not reply and not is_offline_mode:
                 if is_cloud_gemini and self._use_openrouter_first:
                     try:
-                        reply = openrouter_client.chat(request_text)
+                        # Any other configured provider (NVIDIA, Groq, OpenRouter...) except Gemini
+                        reply = unified_llm.chat(request_text, skip=("Gemini",))
                     except Exception:
                         pass
                 elif is_cloud_openrouter:
@@ -5244,6 +5336,9 @@ class BrahmaLive:
                         reply = _gemini_text_reply(request_text)
                     except Exception:
                         pass
+                elif is_cloud_openai_compat:
+                    # The unified client already tried the full fallback chain above.
+                    pass
 
             # 4. Ultimate offline safety net: Local Brain fallback
             if not reply and local_brain.is_available():
@@ -6865,8 +6960,13 @@ class BrahmaLive:
 
         api_key = _get_api_key()
         if not api_key:
-            logger.error("[LiveVoice] No Gemini API key configured. Voice features disabled.")
-            self.ui.set_live_subtitles("NEXUS", "Please set your Gemini API key in Settings → AI Providers.", True)
+            logger.error("[LiveVoice] No Gemini API key configured. Live voice disabled (text chat still works).")
+            self.ui.set_live_subtitles(
+                "NEXUS",
+                "Live voice needs a Gemini API key (Settings → AI Providers). "
+                "Typed chat works with your selected provider.",
+                True,
+            )
             # Don't block - return control to UI event loop so user can configure keys
             self._voice_enabled = False
             return

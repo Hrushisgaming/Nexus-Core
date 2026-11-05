@@ -403,31 +403,64 @@ def _rewrite_generated_step(step: dict, goal: str) -> None:
     step["parameters"] = {"query": desc[:200]}
 
 
-def create_plan(goal: str, context: str = "") -> dict:
-    import google.generativeai as genai
+_GEMINI_PLANNER_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
 
-    genai.configure(api_key=_get_api_key())
+
+def _generate_text(system_prompt: str, user_input: str, label: str) -> str | None:
+    """Generate planner text with the user's primary AI provider.
+
+    Gemini keeps its direct path (model cascade). Any other primary provider
+    (NVIDIA NIM, Groq, OpenRouter, Custom, Local) goes through the unified
+    client, and the unified client is also the fallback when Gemini fails.
+    """
+    from llm_client import client as unified_client, normalize_provider
+
+    primary = normalize_provider(unified_client.active_provider())
+    text = None
+
+    if primary == "Gemini":
+        try:
+            import google.generativeai as genai
+
+            genai.configure(api_key=_get_api_key())
+            for model_name in _GEMINI_PLANNER_MODELS:
+                try:
+                    model = genai.GenerativeModel(
+                        model_name=model_name,
+                        system_instruction=system_prompt
+                    )
+                    response = model.generate_content(user_input)
+                    if response.text:
+                        text = response.text.strip()
+                        break
+                except Exception as e:
+                    print(f"[Planner] ⚠️ {model_name} {label} error: {e}")
+                    continue
+        except Exception as e:
+            print(f"[Planner] ⚠️ Gemini unavailable for {label}: {e}")
+
+    if not text:
+        try:
+            text = unified_client.chat(
+                user_input,
+                system=system_prompt,
+                temperature=0.2,
+                max_tokens=4096,
+                skip=("Gemini",) if primary == "Gemini" else (),
+            )
+        except Exception as e:
+            print(f"[Planner] ⚠️ {primary} {label} error: {e}")
+    return text.strip() if text else None
+
+
+def create_plan(goal: str, context: str = "") -> dict:
     system_prompt = _planner_system_prompt()
-    candidates = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
-    
+
     user_input = f"Goal: {goal}"
     if context:
         user_input += f"\n\nContext: {context}"
 
-    text = None
-    for model_name in candidates:
-        try:
-            model = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=system_prompt
-            )
-            response = model.generate_content(user_input)
-            if response.text:
-                text = response.text.strip()
-                break
-        except Exception as e:
-            print(f"[Planner] ⚠️ {model_name} planning error: {e}")
-            continue
+    text = _generate_text(system_prompt, user_input, "planning")
 
     if not text:
         return _fallback_plan(goal)
@@ -486,11 +519,7 @@ def _fallback_plan(goal: str) -> dict:
 
 
 def replan(goal: str, completed_steps: list, failed_step: dict, error: str) -> dict:
-    import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
     system_prompt = _planner_system_prompt()
-    candidates = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
 
     completed_summary = "\n".join(
         f"  - Step {s['step']} ({s['tool']}): DONE" for s in completed_steps
@@ -506,20 +535,7 @@ Error: {error}
 
 Create a REVISED plan for the remaining work only. Do not repeat completed steps."""
 
-    text = None
-    for model_name in candidates:
-        try:
-            model = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=system_prompt
-            )
-            response = model.generate_content(prompt)
-            if response.text:
-                text = response.text.strip()
-                break
-        except Exception as e:
-            print(f"[Planner] ⚠️ {model_name} replan error: {e}")
-            continue
+    text = _generate_text(system_prompt, prompt, "replan")
 
     try:
         if not text:
