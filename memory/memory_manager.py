@@ -179,7 +179,7 @@ def update_memory(memory_update: dict) -> dict:
 
 def should_extract_memory(user_text: str, brahma_text: str, api_key: str = "") -> bool:
     try:
-        from or_client import client
+        from llm_client import client  # honours the primary provider (NVIDIA, Gemini, ...)
 
         combined = f"User: {user_text[:300]}\nNexus Core: {brahma_text[:1000]}"
 
@@ -193,7 +193,7 @@ def should_extract_memory(user_text: str, brahma_text: str, api_key: str = "") -
             f"- Any other fact worth remembering long-term\n\n"
             f"Reply only YES or NO.\n\nConversation:\n{combined}",
             system="You are a memory relevance checker. Reply only YES or NO.",
-            max_tokens=5,
+            max_tokens=256,  # reasoning models need headroom or they return an empty reply
             temperature=0.0,
         )
         return "YES" in result.upper()
@@ -205,7 +205,7 @@ def should_extract_memory(user_text: str, brahma_text: str, api_key: str = "") -
 
 def extract_memory(user_text: str, brahma_text: str, api_key: str = "") -> dict:
     try:
-        from or_client import client
+        from llm_client import client  # honours the primary provider (NVIDIA, Gemini, ...)
 
         combined = f"User: {user_text[:600]}\nNexus Core: {brahma_text[:300]}"
 

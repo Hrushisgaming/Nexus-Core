@@ -4831,13 +4831,16 @@ class BrahmaLive:
             "Output ONLY valid JSON: {\"intent\": \"...\", \"reply_text\": \"...\"}"
         )
         try:
-            client = genai.Client(api_key=_get_api_key(), http_options={"api_version": "v1beta"})
-            response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
-                contents=f"{system_prompt}\n\nUser Response: {text}",
-                config={"temperature": 0.1, "response_mime_type": "application/json"}
-            )
-            data = json.loads(response.text.strip())
+            if _primary_provider() != "Gemini":
+                data = unified_llm.chat_json(f"User Response: {text}", system=system_prompt)
+            else:
+                client = genai.Client(api_key=_get_api_key(), http_options={"api_version": "v1beta"})
+                response = client.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=f"{system_prompt}\n\nUser Response: {text}",
+                    config={"temperature": 0.1, "response_mime_type": "application/json"}
+                )
+                data = json.loads(response.text.strip())
             return data.get("intent", "IGNORE"), data.get("reply_text", "")
         except Exception:
             lower = text.lower()
