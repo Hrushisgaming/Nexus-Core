@@ -108,7 +108,69 @@ def setup_api_keys():
     return keys
 
 
-def write_config(api_keys: dict):
+# (menu number, engine id, label, api-key field - "" means no key needed)
+VOICE_ENGINES = [
+    ("1", "elevenlabs", "ElevenLabs", "elevenlabs_api_key"),
+    ("2", "groq_tts", "Groq (Orpheus)", "groq_api_key"),
+    ("3", "fish_audio", "Fish Audio", "fish_audio_api_key"),
+    ("4", "edge_tts", "Microsoft Edge (free, no key)", ""),
+]
+
+
+def setup_voice(existing_keys: dict) -> tuple[dict, dict]:
+    """Optional voice-engine step. Returns (api keys to save, app settings to merge).
+
+    Skipped by default: Nexus keeps using Gemini's built-in voice. A chosen engine is
+    used for Nexus's own announcements; live conversation still speaks with Gemini.
+    """
+    print("\n" + "=" * 60)
+    print("  Voice Engine (optional)")
+    print("=" * 60)
+    if not _ask_yes_no("Set up an extra voice engine now? (default: keep Gemini's built-in voice)", default=False):
+        return {}, {}
+    for number, _engine, label, _field in VOICE_ENGINES:
+        print(f"  {number}) {label}")
+    choice = _prompt("  Pick one (number or name, Enter to skip)", "").strip().lower()
+    picked = next(
+        (e for e in VOICE_ENGINES
+         if choice in (e[0], e[1], e[2].lower()) or (choice and choice in e[2].lower())),
+        None,
+    )
+    if not picked:
+        print("  Skipped - keeping Gemini's built-in voice.")
+        return {}, {}
+    _number, engine, label, field = picked
+
+    keys: dict = {}
+    if field:
+        key = (existing_keys.get(field) or "").strip()
+        if key:
+            print(f"  Using the {label} key you already entered.")
+        else:
+            key = _prompt(f"  {label} API key (Enter to skip this voice)", "").strip()
+        if not key:
+            print("  No key given - skipped, keeping Gemini's built-in voice.")
+            return {}, {}
+        keys[field] = key
+
+    voice = ""
+    try:
+        from core.tts_providers import get_tts_provider
+        prov = get_tts_provider(engine)
+        default_voice = str(getattr(prov, "voice_id", "") or "")
+        if prov is not None and prov.get_voices():
+            print("  Voices: " + ", ".join(str(v.get("id")) for v in prov.get_voices()))
+        voice = _prompt("  Voice", default_voice).strip()
+    except Exception:
+        pass
+    settings = {"tts_engine": engine}
+    if voice:
+        settings["tts_voices"] = {engine: voice}
+    print(f"  ✓ {label} will be used for Nexus's announcements (change anytime in Settings).")
+    return keys, settings
+
+
+def write_config(api_keys: dict, extra_settings: dict | None = None):
     """Write api_keys.json and app_settings.json to the user data dir."""
     from core.user_paths import get_user_data_dir
 
@@ -146,6 +208,9 @@ def write_config(api_keys: dict):
         app_settings["custom_ai_base_url"] = api_keys["custom_ai_base_url"]
     if "custom_ai_model" in api_keys:
         app_settings["custom_ai_model"] = api_keys["custom_ai_model"]
+    if extra_settings:
+        from core.voice_settings import merge_setup_result
+        app_settings = merge_setup_result(app_settings, extra_settings)
 
     from core.atomic_io import atomic_write_json
     atomic_write_json(app_settings_path, app_settings, indent=2)
@@ -163,12 +228,15 @@ def main():
     print("\n=== AI Provider Configuration ===")
     setup_keys = _ask_yes_no("Configure AI provider API keys now?", default=True)
     api_keys = {}
+    voice_settings_extra = {}
     if setup_keys:
         api_keys = setup_api_keys()
+        voice_keys, voice_settings_extra = setup_voice(api_keys)
+        api_keys.update(voice_keys)
 
     # 3. Write config
     if api_keys:
-        write_config(api_keys)
+        write_config(api_keys, voice_settings_extra)
     else:
         print("\n  ⚠ No API keys configured. You can add them later in Settings → AI Providers.")
 

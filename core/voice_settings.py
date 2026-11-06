@@ -3,7 +3,7 @@ core/voice_settings.py
 Single reader for the voice-engine choice saved by Settings.
 
 app_settings.json keys:
-    tts_engine : "gemini_live" (default) | "elevenlabs" | "groq_tts" | "fish_audio"
+    tts_engine : "gemini_live" (default) | "elevenlabs" | "groq_tts" | "fish_audio" | "edge_tts"
     tts_voices : {engine_id: voice name / id}
     tts_models : {engine_id: model id / name}
     tts_voice_id : legacy single voice id (only honoured for ElevenLabs)
@@ -61,3 +61,27 @@ def gemini_live_model(settings: Optional[dict] = None) -> str:
     if m and not m.startswith("models/"):
         m = f"models/{m}"
     return m
+
+
+_DICT_FIELDS = ("tts_voices", "tts_models")
+
+
+def merge_setup_result(existing: dict, setup: dict) -> dict:
+    """Merge the first-run setup result into saved settings.
+
+    * non-empty strings overwrite (an empty value never erases a saved key);
+    * per-engine dicts (tts_voices / tts_models) are merged key by key, so choosing
+      a voice for one engine keeps the voices saved for the others.
+    """
+    merged = dict(existing or {})
+    for field, value in (setup or {}).items():
+        if field in _DICT_FIELDS and isinstance(value, dict):
+            current = merged.get(field)
+            current = dict(current) if isinstance(current, dict) else {}
+            for engine_id, v in value.items():
+                if isinstance(v, str) and v.strip():
+                    current[engine_id] = v.strip()
+            merged[field] = current
+        elif isinstance(value, str) and value.strip():
+            merged[field] = value.strip()
+    return merged

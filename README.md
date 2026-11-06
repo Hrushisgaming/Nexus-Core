@@ -133,6 +133,7 @@
    - Launch Nexus Core Evo.
    - Click the **Settings** icon on the top navigation bar.
    - On first launch pick your **Primary Intelligence** (Gemini, NVIDIA NIM, Groq or OpenRouter) and paste its key.
+   - Setup then offers an **optional voice engine** (ElevenLabs, Groq, Fish Audio or free Microsoft Edge voices) with a **Test voice** button. Press **Skip for now** to keep Gemini's built-in voice. (`python setup.py` asks the same, also skippable.)
    - Later: open **Settings → AI Providers**, enter keys, choose the **Default AI provider**, and press **Test** to send a real request (it reports a bad key or unknown model).
    - Click **Save & Connect**.
 
@@ -147,6 +148,14 @@ Optional model overrides in `app_settings.json`:
 | `nvidia_model` / `nvidia_vision_model` | NIM model ids to try first (see [build.nvidia.com](https://build.nvidia.com/models)); unknown ids fall back to built-in alternatives |
 | `groq_model` / `groq_vision_model` | Groq model ids |
 | `gemini_model` | Gemini text model |
+
+### Voice engines
+
+`tts_engine` in `app_settings.json` (or **Settings → Text-to-Speech**) selects the engine: `gemini_live` (default, built in), `elevenlabs`, `groq_tts`, `fish_audio` or `edge_tts` (free, no key). `tts_voices` / `tts_models` hold the voice and model per engine. An external engine speaks Nexus's own announcements and alerts; live conversation replies keep Gemini's voice.
+
+- **Groq** voices use Orpheus (`canopylabs/orpheus-v1-english`; voices `autumn`, `diana`, `hannah`, `austin`, `daniel`, `troy`). Groq retired PlayAI TTS, so an old `playai-tts` setting is switched automatically.
+- **Edge** needs only the `edge-tts` package (already in `requirements.txt`).
+- Playback uses `ffplay`/`mpv`/`mpg123` when installed, and otherwise Windows' built-in player (WAV via `winsound`, MP3 via PowerShell) or `paplay`/`aplay` for WAV on Linux.
 
 ---
 

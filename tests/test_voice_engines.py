@@ -6,7 +6,7 @@ from core import tts_providers, voice_output, voice_settings
 def test_gemini_live_is_first_and_default():
     ids = list(tts_providers._PROVIDER_REGISTRY)
     assert ids[0] == "gemini_live"
-    assert ids[1:] == ["elevenlabs", "groq_tts", "fish_audio"]
+    assert ids[1:] == ["elevenlabs", "groq_tts", "fish_audio", "edge_tts"]
     assert voice_settings.engine({}) == "gemini_live"
 
 

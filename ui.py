@@ -6221,9 +6221,40 @@ _SETUP_PROVIDERS = {
 }
 
 
+# Voice engines offered (optionally) during first-run setup. Order = button order.
+_SETUP_VOICES = {
+    "gemini_live": {
+        "button": "Gemini (default)", "label": "Gemini Live voice", "key_field": "",
+        "placeholder": "", "link": "",
+        "blurb": "Built in - nothing to set up. Pick another engine only if you want a different voice.",
+    },
+    "elevenlabs": {
+        "button": "ElevenLabs", "label": "ElevenLabs", "key_field": "elevenlabs_api_key",
+        "placeholder": "ElevenLabs API key", "link": "https://elevenlabs.io/app/settings/api-keys",
+        "blurb": "High-quality, natural voices.",
+    },
+    "groq_tts": {
+        "button": "Groq", "label": "Groq voices", "key_field": "groq_api_key",
+        "placeholder": "gsk_************************", "link": "https://console.groq.com/keys",
+        "blurb": "Fast Orpheus voices. Uses the same key as Groq chat.",
+    },
+    "fish_audio": {
+        "button": "Fish Audio", "label": "Fish Audio", "key_field": "fish_audio_api_key",
+        "placeholder": "Fish Audio API key", "link": "https://fish.audio",
+        "blurb": "Voice cloning and community voices.",
+    },
+    "edge_tts": {
+        "button": "Edge (free)", "label": "Microsoft Edge voices", "key_field": "",
+        "placeholder": "", "link": "",
+        "blurb": "Free Microsoft neural voices - no account or key needed.",
+    },
+}
+
+
 class SetupOverlay(QWidget):
     # (api keys + default_ai_provider, operating system)
     done = pyqtSignal(dict, str)
+    _voice_test_done = pyqtSignal(bool, str)
 
     def __init__(self, parent=None, defaults: dict | None = None):
         super().__init__(parent)
@@ -6231,6 +6262,12 @@ class SetupOverlay(QWidget):
         self.setStyleSheet("background: transparent;")
 
         self._defaults = defaults or {}
+        # optional voice step: None = skipped / Gemini default (nothing is changed)
+        self._voice_choice: dict | None = None
+        self._voice_engine = "gemini_live"
+        self._voice_keys: dict[str, str] = {}
+        self._voice_voices: dict[str, str] = {}
+        self._voice_test_done.connect(self._on_voice_test_done)
         self._primary = "Gemini"
         self._secondary = "OpenRouter"
         self._typed_keys: dict[str, str] = {}
@@ -7049,7 +7086,7 @@ class SetupOverlay(QWidget):
         self._or_prompt_widget.hide()
         if getattr(self, "_or_box", None) is not None:
             self._or_box.hide()
-        self._show_color_stage()
+        self._show_voice_stage()
 
     def _show_or_input(self):
         """User wants to add the secondary provider."""
@@ -7149,6 +7186,267 @@ class SetupOverlay(QWidget):
         else:
             self._typed_keys.pop(self._secondary, None)
         self._or_box.hide()
+        self._show_voice_stage()
+
+    # ── Optional voice engine step ─────────────────────────────────
+    @staticmethod
+    def _voice_btn_css(primary: bool = False) -> str:
+        if primary:
+            return ("QPushButton { background: rgba(0, 229, 255, 0.1); color: #00e5ff;"
+                    " border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 12px; padding: 0 24px; }"
+                    "QPushButton:hover { background: rgba(0, 229, 255, 0.2); border: 1px solid rgba(0, 229, 255, 0.6); }"
+                    "QPushButton:disabled { color: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.1); }")
+        return ("QPushButton { background: transparent; color: rgba(255,255,255,0.45); border: none; padding: 0 14px; }"
+                "QPushButton:hover { color: rgba(255,255,255,0.8); }")
+
+    def _show_voice_stage(self):
+        """Optional: pick a voice engine (ElevenLabs, Groq, Fish Audio, free Edge). Can be skipped."""
+        page = self._stack.widget(6)
+        lay = page.layout()
+
+        self._voice_box = QFrame()
+        self._voice_box.setFixedWidth(620)
+        self._voice_box.setStyleSheet("""
+            QFrame {
+                background: rgba(8, 10, 16, 220);
+                border: 1px solid rgba(0, 229, 255, 0.2);
+                border-radius: 20px;
+            }
+        """)
+        v = QVBoxLayout(self._voice_box)
+        v.setContentsMargins(32, 26, 32, 22)
+        v.setSpacing(6)
+
+        head = QLabel("VOICE ENGINE  ·  OPTIONAL")
+        head.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        head.setStyleSheet("color: rgba(255,255,255,0.35); background: transparent; border: none; letter-spacing: 2px;")
+        v.addWidget(head)
+
+        self._voice_buttons: dict[str, QPushButton] = {}
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        for engine_id, info in _SETUP_VOICES.items():
+            b = QPushButton(info["button"])
+            b.setCheckable(True)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFixedHeight(32)
+            b.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            b.setStyleSheet("""
+                QPushButton { background: transparent; color: rgba(255,255,255,0.5);
+                    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 0 8px; }
+                QPushButton:hover { color: rgba(255,255,255,0.85); border: 1px solid rgba(0,229,255,0.4); }
+                QPushButton:checked { background: rgba(0, 229, 255, 0.14); color: #00e5ff;
+                    border: 1px solid rgba(0, 229, 255, 0.6); }
+            """)
+            b.clicked.connect(lambda _c=False, e=engine_id: self._select_voice_engine(e))
+            row.addWidget(b)
+            self._voice_buttons[engine_id] = b
+        v.addLayout(row)
+        v.addSpacing(6)
+
+        self._voice_title = QLabel("")
+        self._voice_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        self._voice_title.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
+        v.addWidget(self._voice_title)
+
+        self._voice_blurb = QLabel("")
+        self._voice_blurb.setWordWrap(True)
+        self._voice_blurb.setFont(QFont("Segoe UI", 10))
+        self._voice_blurb.setStyleSheet("color: rgba(255,255,255,0.45); background: transparent; border: none;")
+        v.addWidget(self._voice_blurb)
+        v.addSpacing(6)
+
+        field_css = """
+            QLineEdit, QComboBox {
+                background: rgba(255, 255, 255, 0.03); color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 0 14px;
+            }
+            QLineEdit:focus, QComboBox:focus { border: 1px solid rgba(0, 229, 255, 0.5); }
+            QComboBox QAbstractItemView { background: #0b0f16; color: #ffffff; selection-background-color: rgba(0,229,255,0.25); }
+        """
+        self._voice_key_input = QLineEdit()
+        self._voice_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._voice_key_input.setFont(QFont("Consolas", 11))
+        self._voice_key_input.setFixedHeight(42)
+        self._voice_key_input.setStyleSheet(field_css)
+        self._voice_key_input.returnPressed.connect(self._test_voice)
+        v.addWidget(self._voice_key_input)
+
+        self._voice_link = QLabel("")
+        self._voice_link.setOpenExternalLinks(True)
+        self._voice_link.setStyleSheet("background: transparent; border: none;")
+        v.addWidget(self._voice_link)
+
+        self._voice_combo = QComboBox()
+        self._voice_combo.setEditable(True)
+        self._voice_combo.setFixedHeight(42)
+        self._voice_combo.setFont(QFont("Segoe UI", 10))
+        self._voice_combo.setStyleSheet(field_css)
+        v.addWidget(self._voice_combo)
+
+        test_row = QHBoxLayout()
+        self._voice_test_btn = QPushButton("▶  Test voice")
+        self._voice_test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._voice_test_btn.setFixedHeight(36)
+        self._voice_test_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._voice_test_btn.setStyleSheet(self._voice_btn_css(primary=True))
+        self._voice_test_btn.clicked.connect(self._test_voice)
+        test_row.addWidget(self._voice_test_btn)
+        self._voice_status = QLabel("")
+        self._voice_status.setWordWrap(True)
+        self._voice_status.setFont(QFont("Segoe UI", 9))
+        self._voice_status.setStyleSheet("color: rgba(255,255,255,0.5); background: transparent; border: none;")
+        test_row.addWidget(self._voice_status, 1)
+        v.addLayout(test_row)
+
+        note = QLabel("Used for Nexus's own announcements and alerts; live conversation keeps Gemini's voice. "
+                      "Change anytime in Settings → Text-to-Speech.")
+        note.setWordWrap(True)
+        note.setFont(QFont("Segoe UI", 9))
+        note.setStyleSheet("color: rgba(255,255,255,0.3); background: transparent; border: none;")
+        v.addWidget(note)
+        v.addStretch()
+
+        btns = QHBoxLayout()
+        skip = QPushButton("Skip for now")
+        skip.setCursor(Qt.CursorShape.PointingHandCursor)
+        skip.setFixedHeight(42)
+        skip.setFont(QFont("Segoe UI", 11))
+        skip.setStyleSheet(self._voice_btn_css())
+        skip.clicked.connect(lambda: self._finish_voice_stage(skip=True))
+        btns.addWidget(skip)
+        btns.addStretch()
+        self._voice_continue = QPushButton("Continue →")
+        self._voice_continue.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._voice_continue.setFixedHeight(42)
+        self._voice_continue.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._voice_continue.setStyleSheet(self._voice_btn_css(primary=True))
+        self._voice_continue.clicked.connect(lambda: self._finish_voice_stage(skip=False))
+        btns.addWidget(self._voice_continue)
+        v.addLayout(btns)
+
+        # Start on the engine already saved (re-running setup), otherwise the Gemini default.
+        saved = str(self._defaults.get("tts_engine") or "gemini_live")
+        self._select_voice_engine(saved if saved in _SETUP_VOICES else "gemini_live", initial=True)
+        lay.insertWidget(lay.count() - 1, self._voice_box, 0, Qt.AlignmentFlag.AlignCenter)
+
+    def _prefill_voice_key(self, engine_id: str) -> str:
+        field = _SETUP_VOICES[engine_id]["key_field"]
+        if not field:
+            return ""
+        if field == "groq_api_key":  # same key as Groq chat: reuse what was just entered
+            typed = (self._typed_keys.get("Groq") or "").strip()
+            if typed:
+                return typed
+        return str(self._defaults.get(field) or "").strip()
+
+    def _remember_voice_fields(self):
+        engine_id = self._voice_engine
+        if _SETUP_VOICES[engine_id]["key_field"]:
+            self._voice_keys[engine_id] = self._voice_key_input.text().strip()
+        text = self._voice_combo.currentText().strip()
+        i = self._voice_combo.findText(text)
+        data = self._voice_combo.itemData(i) if i >= 0 else None
+        self._voice_voices[engine_id] = str(data) if data else text
+
+    def _select_voice_engine(self, engine_id: str, initial: bool = False):
+        if engine_id not in _SETUP_VOICES:
+            return
+        if not initial:
+            self._remember_voice_fields()
+        self._voice_engine = engine_id
+        info = _SETUP_VOICES[engine_id]
+        for name, btn in self._voice_buttons.items():
+            btn.setChecked(name == engine_id)
+        self._voice_title.setText(info["label"])
+        self._voice_blurb.setText(info["blurb"])
+        needs_key = bool(info["key_field"])
+        self._voice_key_input.setVisible(needs_key)
+        self._voice_key_input.setPlaceholderText(info["placeholder"])
+        self._voice_key_input.setText(self._voice_keys.get(engine_id) or self._prefill_voice_key(engine_id))
+        self._voice_link.setVisible(needs_key and bool(info["link"]))
+        if info["link"]:
+            self._voice_link.setText(
+                f"<a href='{info['link']}' style='color: rgba(0, 229, 255,0.5); "
+                f"text-decoration: none; font-size: 10px;'>Get API Key →</a>")
+        native = engine_id == "gemini_live"
+        self._voice_combo.setVisible(not native)
+        self._voice_test_btn.setVisible(not native)
+        self._voice_status.setText("")
+        self._voice_combo.clear()
+        if not native:
+            default_voice = ""
+            try:
+                from core.tts_providers import get_tts_provider
+                prov = get_tts_provider(engine_id)
+                default_voice = str(getattr(prov, "voice_id", "") or "")
+                for vo in (prov.get_voices() if prov else []):
+                    name = vo.get("name") or vo.get("id")
+                    desc = vo.get("description") or ""
+                    self._voice_combo.addItem(f"{name}  -  {desc}" if desc else str(name), vo.get("id"))
+            except Exception:
+                pass
+            saved_voices = self._defaults.get("tts_voices")
+            saved = (saved_voices.get(engine_id) if isinstance(saved_voices, dict) else "") or ""
+            wanted = self._voice_voices.get(engine_id) or saved or default_voice
+            i = self._voice_combo.findData(wanted)
+            if i >= 0:
+                self._voice_combo.setCurrentIndex(i)
+            else:
+                self._voice_combo.setEditText(str(wanted))
+
+    def _test_voice(self):
+        engine_id = self._voice_engine
+        if engine_id == "gemini_live":
+            return
+        self._remember_voice_fields()
+        key = self._voice_keys.get(engine_id, "")
+        if _SETUP_VOICES[engine_id]["key_field"] and not key:
+            self._voice_status.setStyleSheet("color: #ffb347; background: transparent; border: none;")
+            self._voice_status.setText("Paste an API key first.")
+            return
+        self._voice_test_btn.setEnabled(False)
+        self._voice_status.setStyleSheet("color: #00e5ff; background: transparent; border: none;")
+        self._voice_status.setText("Testing…")
+        voice = self._voice_voices.get(engine_id, "")
+
+        def _work():
+            try:
+                from core import voice_output
+                ok, msg = voice_output.preview_voice(engine_id, api_key=key, voice=voice)
+            except Exception as exc:
+                ok, msg = False, f"{exc.__class__.__name__}: {exc}"
+            self._voice_test_done.emit(bool(ok), str(msg))
+
+        import threading
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _on_voice_test_done(self, ok: bool, message: str):
+        try:
+            self._voice_test_btn.setEnabled(True)
+            color = "#37ff5f" if ok else "#ff6b6b"
+            self._voice_status.setStyleSheet(f"color: {color}; background: transparent; border: none;")
+            self._voice_status.setText(("✓ " if ok else "✗ ") + message)
+        except RuntimeError:
+            pass  # overlay already closed
+
+    def _finish_voice_stage(self, skip: bool = False):
+        engine_id = self._voice_engine
+        if not skip and engine_id != "gemini_live":
+            self._remember_voice_fields()
+            info = _SETUP_VOICES[engine_id]
+            key = self._voice_keys.get(engine_id, "")
+            if info["key_field"] and not key:
+                self._voice_status.setStyleSheet("color: #ffb347; background: transparent; border: none;")
+                self._voice_status.setText("Paste an API key, or press Skip for now.")
+                return
+            self._voice_choice = {
+                "engine": engine_id, "key_field": info["key_field"], "key": key,
+                "voice": self._voice_voices.get(engine_id, ""),
+            }
+        else:
+            self._voice_choice = None  # skipped / Gemini default: leave existing settings untouched
+        self._voice_box.hide()
         self._show_color_stage()
 
     def _show_color_stage(self):
@@ -7378,6 +7676,14 @@ class SetupOverlay(QWidget):
             if key and provider in _SETUP_PROVIDERS:
                 result[_SETUP_PROVIDERS[provider]["key_field"]] = key
         result["default_ai_provider"] = self._primary
+        choice = self._voice_choice
+        if choice and choice.get("engine") and choice["engine"] != "gemini_live":
+            engine = choice["engine"]
+            result["tts_engine"] = engine
+            if choice.get("key") and choice.get("key_field"):
+                result[choice["key_field"]] = choice["key"]
+            if choice.get("voice"):
+                result["tts_voices"] = {engine: choice["voice"]}
         return result
 
 
@@ -11767,11 +12073,9 @@ class MainWindow(QMainWindow):
 
     def _on_setup_done(self, setup: dict, os_name: str):
         try:
-            existing = self._load_app_settings()
-            for field, value in (setup or {}).items():
-                # Never overwrite a saved key with an empty value.
-                if isinstance(value, str) and value.strip():
-                    existing[field] = value.strip()
+            from core.voice_settings import merge_setup_result
+            # Never overwrites a saved key with an empty value; merges per-engine voice dicts.
+            existing = merge_setup_result(self._load_app_settings(), setup)
             existing["os_system"] = os_name
             self._save_app_settings(existing)
             self._ready = True

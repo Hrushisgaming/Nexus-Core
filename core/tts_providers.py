@@ -7,6 +7,7 @@ Supports:
 - ElevenLabs (cloud, high quality voices)
 - Groq TTS (cloud, fast)
 - Fish Audio (cloud, voice cloning)
+- Microsoft Edge voices (free, no API key)
 - Gemini Live (built-in native voice, default engine)
 
 Common interface:
@@ -36,6 +37,8 @@ class TTSProvider:
     available: bool = False
     init_error: Optional[str] = None
     voices: list[dict] = []
+    needs_key: bool = True          # False = works without any API key
+    last_error: str = ""            # why the most recent synthesize() failed ('' = no failure)
 
     def synthesize(self, text: str, voice_id: Optional[str] = None) -> bytes:
         raise NotImplementedError
@@ -55,7 +58,7 @@ class ElevenLabsTTSProvider(TTSProvider):
     default_model = "eleven_turbo_v2_5"
     suggested_models = ["eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_multilingual_v2", "eleven_v3"]
 
-    DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Rachel
+    DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
 
     def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: Optional[str] = None):
         self.api_key = get_api_key("elevenlabs_api_key", "ELEVENLABS_API_KEY", api_key)
@@ -64,8 +67,8 @@ class ElevenLabsTTSProvider(TTSProvider):
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
         self.voices = [
-            {"id": "pNInz6obpgDQGcFmaJgB", "name": "Rachel", "description": "Warm, versatile female voice"},
-            {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Adam", "description": "Deep, authoritative male voice"},
+            {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "description": "Warm, versatile female voice"},
+            {"id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "description": "Deep, authoritative male voice"},
             {"id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi", "description": "Strong, confident female voice"},
             {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "description": "Warm, expressive female voice"},
             {"id": "ErXwobaYiN019PkySvjV", "name": "Antoni", "description": "Professional male voice"},
@@ -102,12 +105,15 @@ class ElevenLabsTTSProvider(TTSProvider):
                     "similarity_boost": 0.75,
                 },
             }
+            self.last_error = ""
             resp = requests.post(url, headers=headers, json=payload, timeout=30)
             if resp.status_code == 200:
                 return resp.content
-            logger.error(f"ElevenLabs TTS error {resp.status_code}: {resp.text[:200]}")
+            self.last_error = f"HTTP {resp.status_code}: {resp.text[:160]}"
+            logger.error(f"ElevenLabs TTS error {self.last_error}")
             return b""
         except Exception as exc:
+            self.last_error = f"{exc.__class__.__name__}: {exc}"
             logger.error(f"ElevenLabs TTS error: {exc}")
             return b""
 
@@ -121,28 +127,36 @@ class ElevenLabsTTSProvider(TTSProvider):
 
 
 class GroqTTSProvider(TTSProvider):
+    """Groq's text-to-speech (Canopy Labs Orpheus). PlayAI TTS was retired by Groq.
+
+    Groq returns WAV only, and Orpheus accepts short inputs, so long text is sent
+    in sentence-sized pieces and the WAV parts are joined.
+    """
     name = "groq_tts"
     label = "Groq TTS"
-    default_model = "playai-tts"
-    suggested_models = ["playai-tts", "canopylabs/orpheus-v1-english"]
+    default_model = "canopylabs/orpheus-v1-english"
+    suggested_models = ["canopylabs/orpheus-v1-english"]
+    audio_format = "wav"
 
-    DEFAULT_VOICE_ID = "troy"  # Orpheus / Canopy Labs default
+    DEFAULT_VOICE_ID = "autumn"
+    LEGACY_MODELS = {"playai-tts", "playai-tts-arabic"}   # retired -> mapped to default_model
+    MAX_CHARS = 190
 
-    def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: str = "playai-tts"):
+    def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: Optional[str] = None):
         self.api_key = get_api_key("groq_api_key", "GROQ_API_KEY", api_key)
         self.voice_id = voice_id or self.DEFAULT_VOICE_ID
+        if not model or model in self.LEGACY_MODELS:
+            model = self.default_model
         self.model = model
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
         self.voices = [
-            {"id": "troy", "name": "Troy", "description": "Deep, warm male voice (Orpheus/Canopy Labs)"},
-            {"id": "fortuna", "name": "Fortuna", "description": "Clear, professional female voice"},
-            {"id": "alex", "name": "Alex", "description": "Neutral male voice"},
-            {"id": "cody", "name": "Cody", "description": "Friendly male voice"},
-            {"id": "jules", "name": "Jules", "description": "Calm male voice"},
-            {"id": "kael", "name": "Kael", "description": "Young male voice"},
-            {"id": "vicente", "name": "Vicente", "description": "Spanish male voice"},
-            {"id": "zephyr", "name": "Zephyr", "description": "Bright female voice"},
+            {"id": "autumn", "name": "Autumn", "description": "Warm female voice (default)"},
+            {"id": "diana", "name": "Diana", "description": "Clear female voice"},
+            {"id": "hannah", "name": "Hannah", "description": "Friendly female voice"},
+            {"id": "austin", "name": "Austin", "description": "Natural male voice"},
+            {"id": "daniel", "name": "Daniel", "description": "Calm male voice"},
+            {"id": "troy", "name": "Troy", "description": "Deep male voice"},
         ]
         if not self.api_key:
             self._init_error = "GROQ_API_KEY not set"
@@ -156,31 +170,83 @@ class GroqTTSProvider(TTSProvider):
     def init_error(self) -> Optional[str]:
         return self._init_error
 
+    @staticmethod
+    def _split_text(text: str, limit: int) -> list[str]:
+        import re
+        chunks: list[str] = []
+        cur = ""
+        for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+            while len(sentence) > limit:                      # hard-split very long sentences
+                cut = sentence.rfind(" ", 0, limit)
+                cut = cut if cut > 0 else limit
+                if cur:
+                    chunks.append(cur)
+                    cur = ""
+                chunks.append(sentence[:cut].strip())
+                sentence = sentence[cut:].strip()
+            if cur and len(cur) + 1 + len(sentence) > limit:
+                chunks.append(cur)
+                cur = sentence
+            else:
+                cur = f"{cur} {sentence}".strip()
+        if cur:
+            chunks.append(cur)
+        return [c for c in chunks if c]
+
+    @staticmethod
+    def _join_wavs(parts: list[bytes]) -> bytes:
+        if len(parts) == 1:
+            return parts[0]
+        import io
+        import wave
+        try:
+            with wave.open(io.BytesIO(parts[0]), "rb") as first:
+                params = first.getparams()
+            out = io.BytesIO()
+            with wave.open(out, "wb") as dst:
+                dst.setparams(params)
+                for part in parts:
+                    with wave.open(io.BytesIO(part), "rb") as src:
+                        dst.writeframes(src.readframes(src.getnframes()))
+            return out.getvalue()
+        except Exception as exc:
+            logger.warning(f"Groq TTS: could not join audio parts ({exc}); using the first part")
+            return parts[0]
+
+    def _request(self, text: str, voice: str) -> tuple[int, bytes, str]:
+        import requests
+        resp = requests.post(
+            "https://api.groq.com/openai/v1/audio/speech",
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            json={"model": self.model, "input": text, "voice": voice, "response_format": "wav"},
+            timeout=45,
+        )
+        return resp.status_code, (resp.content if resp.status_code == 200 else b""), (resp.text or "")[:160]
+
     def synthesize(self, text: str, voice_id: Optional[str] = None) -> bytes:
         if not self._available:
             raise RuntimeError(self._init_error or "Groq TTS not configured")
+        self.last_error = ""
+        voice = voice_id or self.voice_id
+        parts: list[bytes] = []
         try:
-            import requests
-            vid = voice_id or self.voice_id
-            url = "https://api.groq.com/openai/v1/audio/speech"
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": self.model,
-                "input": text,
-                "voice": vid,
-                "response_format": "mp3",
-            }
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
-            if resp.status_code == 200:
-                return resp.content
-            logger.error(f"Groq TTS error {resp.status_code}: {resp.text[:200]}")
-            return b""
+            for chunk in self._split_text(text, self.MAX_CHARS):
+                status, audio, body = self._request(chunk, voice)
+                if status == 400 and voice != self.DEFAULT_VOICE_ID and "voice" in body.lower():
+                    # an old / unknown voice name saved in settings: fall back to the default voice
+                    voice = self.DEFAULT_VOICE_ID
+                    status, audio, body = self._request(chunk, voice)
+                if status != 200:
+                    hint = " (key rejected - check it is a Groq key)" if status in (401, 403) else ""
+                    self.last_error = f"HTTP {status}{hint}: {body}"
+                    logger.error(f"Groq TTS error {self.last_error}")
+                    return b""
+                parts.append(audio)
         except Exception as exc:
+            self.last_error = f"{exc.__class__.__name__}: {exc}"
             logger.error(f"Groq TTS error: {exc}")
             return b""
+        return self._join_wavs(parts) if parts else b""
 
     def get_voices(self) -> list[dict]:
         return self.voices
@@ -235,18 +301,107 @@ class FishAudioTTSProvider(TTSProvider):
                 "voice_id": vid,
                 "format": "mp3",
             }
+            self.last_error = ""
             resp = requests.post(url, headers=headers, json=payload, timeout=30)
             if resp.status_code == 200:
                 return resp.content
-            logger.error(f"Fish Audio TTS error {resp.status_code}: {resp.text[:200]}")
+            self.last_error = f"HTTP {resp.status_code}: {resp.text[:160]}"
+            logger.error(f"Fish Audio TTS error {self.last_error}")
             return b""
         except Exception as exc:
+            self.last_error = f"{exc.__class__.__name__}: {exc}"
             logger.error(f"Fish Audio TTS error: {exc}")
             return b""
 
     def get_voices(self) -> list[dict]:
         return self.voices
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Microsoft Edge voices (free, no API key)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class EdgeTTSProvider(TTSProvider):
+    name = "edge_tts"
+    label = "Microsoft Edge (free, no key)"
+    default_model = ""
+    suggested_models: list[str] = []
+    needs_key = False
+
+    DEFAULT_VOICE_ID = "en-US-GuyNeural"
+
+    def __init__(self, api_key: Optional[str] = None, voice_id: Optional[str] = None, model: Optional[str] = None):
+        self.voice_id = voice_id or self.DEFAULT_VOICE_ID
+        self.model = model or ""
+        self._init_error: Optional[str] = None
+        try:
+            import edge_tts  # noqa: F401
+            self._available = True
+        except Exception:
+            self._available = False
+            self._init_error = "edge-tts is not installed (pip install edge-tts)"
+        self.voices = [
+            {"id": "en-US-GuyNeural", "name": "Guy", "description": "US male, natural"},
+            {"id": "en-US-AriaNeural", "name": "Aria", "description": "US female, expressive"},
+            {"id": "en-US-JennyNeural", "name": "Jenny", "description": "US female, friendly"},
+            {"id": "en-US-AndrewNeural", "name": "Andrew", "description": "US male, warm"},
+            {"id": "en-GB-RyanNeural", "name": "Ryan", "description": "UK male"},
+            {"id": "en-GB-SoniaNeural", "name": "Sonia", "description": "UK female"},
+            {"id": "en-IN-NeerjaNeural", "name": "Neerja", "description": "Indian English female"},
+            {"id": "en-IN-PrabhatNeural", "name": "Prabhat", "description": "Indian English male"},
+        ]
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @property
+    def init_error(self) -> Optional[str]:
+        return self._init_error
+
+    def synthesize(self, text: str, voice_id: Optional[str] = None) -> bytes:
+        if not self._available:
+            raise RuntimeError(self._init_error or "Edge TTS not available")
+        self.last_error = ""
+        voice = voice_id or self.voice_id
+
+        async def _run() -> bytes:
+            import edge_tts
+            audio = bytearray()
+            async for chunk in edge_tts.Communicate(text, voice=voice).stream():
+                if chunk.get("type") == "audio":
+                    audio.extend(chunk.get("data", b""))
+            return bytes(audio)
+
+        try:
+            import asyncio
+            import threading
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(_run())
+            box: dict = {}                                    # called from inside an event loop
+
+            def _worker():
+                try:
+                    box["audio"] = asyncio.run(_run())
+                except Exception as exc:
+                    box["error"] = exc
+            t = threading.Thread(target=_worker, daemon=True)
+            t.start()
+            t.join(60)
+            if "error" in box:
+                raise box["error"]
+            return box.get("audio", b"")
+        except Exception as exc:
+            self.last_error = f"{exc.__class__.__name__}: {exc}"
+            logger.error(f"Edge TTS error: {exc}")
+            return b""
+
+    def get_voices(self) -> list[dict]:
+        return self.voices
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -308,6 +463,7 @@ _PROVIDER_REGISTRY: dict[str, type[TTSProvider]] = {
     "elevenlabs": ElevenLabsTTSProvider,
     "groq_tts": GroqTTSProvider,
     "fish_audio": FishAudioTTSProvider,
+    "edge_tts": EdgeTTSProvider,
 }
 
 
@@ -335,6 +491,7 @@ def get_available_tts_providers() -> list[dict]:
                 "name": cls.name,
                 "label": cls.label or cls.name,
                 "native": cls.native,
+                "needs_key": cls.needs_key,
                 "available": instance.available,
                 "init_error": instance.init_error,
                 "voices": instance.voices,
@@ -348,6 +505,7 @@ def get_available_tts_providers() -> list[dict]:
                 "name": cls.name,
                 "label": cls.label or cls.name,
                 "native": cls.native,
+                "needs_key": cls.needs_key,
                 "available": False,
                 "init_error": str(exc),
                 "voices": [],
@@ -363,10 +521,10 @@ _default_provider: Optional[TTSProvider] = None
 
 
 def get_default_tts() -> Optional[TTSProvider]:
-    """Get the default TTS provider (ElevenLabs preferred, then Groq, then Fish Audio)."""
+    """Get the default TTS provider (ElevenLabs preferred, then Groq, then Fish Audio, then free Edge)."""
     global _default_provider
     if _default_provider is None:
-        for pid in ("elevenlabs", "groq_tts", "fish_audio"):
+        for pid in ("elevenlabs", "groq_tts", "fish_audio", "edge_tts"):
             provider = get_tts_provider(pid)
             if provider and provider.available:
                 _default_provider = provider
