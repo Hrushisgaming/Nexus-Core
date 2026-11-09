@@ -6824,21 +6824,43 @@ class BrahmaLive:
                         {"data": indata.tobytes(), "mime_type": "audio/pcm"}
                     )
 
+        # The OS shows its "microphone in use" indicator for as long as an input stream
+        # is open, so the stream is closed completely while muted and reopened on unmute
+        # (instead of staying open and just discarding the audio).
+        stream = None
         try:
-            with sd.InputStream(
-                samplerate=SEND_SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="int16",
-                blocksize=CHUNK_SIZE,
-                device=_mic_dev,
-                callback=callback,
-            ):
-                print(f"[NEXUS CORE] 🎤 Mic stream open ({_mic_name or 'Default'})")
-                while True:
-                    await asyncio.sleep(0.1)
+            while True:
+                if not self.ui.muted:
+                    if stream is None:
+                        stream = sd.InputStream(
+                            samplerate=SEND_SAMPLE_RATE,
+                            channels=CHANNELS,
+                            dtype="int16",
+                            blocksize=CHUNK_SIZE,
+                            device=_mic_dev,
+                            callback=callback,
+                        )
+                        stream.start()
+                        print(f"[NEXUS CORE] 🎤 Mic stream open ({_mic_name or 'Default'})")
+                elif stream is not None:
+                    try:
+                        stream.stop()
+                        stream.close()
+                    except Exception:
+                        pass
+                    stream = None
+                    print("[NEXUS CORE] 🔇 Mic stream closed (muted)")
+                await asyncio.sleep(0.1)
         except Exception as e:
             print(f"[NEXUS CORE] ❌ Mic: {e}")
             raise
+        finally:
+            if stream is not None:
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception:
+                    pass
 
     async def _receive_audio(self):
         print("[NEXUS CORE] 👂 Recv started")

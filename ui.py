@@ -3711,6 +3711,7 @@ class WorkspaceSidebar(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow, True)
         self._collapsed = True
         self._expanded_w = 468
         self._target_h = 860
@@ -7776,6 +7777,7 @@ class CommandBar(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow, True)
         self.setObjectName("CommandBar")
         self.setFixedSize(580, 48)
         self.setStyleSheet("background: transparent;")
@@ -9755,6 +9757,9 @@ class FloatingLauncher(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        # On macOS, Tool windows are hidden whenever the app loses focus (e.g. when you
+        # click Chrome), which made the floating icon vanish. Keep it visible.
+        self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedSize(88, 88)
         self._state = "idle"
@@ -10270,6 +10275,7 @@ class MainWindow(QMainWindow):
     discord_status_changed = pyqtSignal(str)
     minimized = pyqtSignal()
     restored = pyqtSignal()
+    closed_to_background = pyqtSignal()
     _hud_operation_sig = pyqtSignal(dict)
     _hud_deliverable_sig = pyqtSignal(dict)
     _circuit_hud_sig = pyqtSignal(object)
@@ -11610,6 +11616,18 @@ class MainWindow(QMainWindow):
                 self.minimized.emit()
             else:
                 self.restored.emit()
+
+    def closeEvent(self, event):
+        # Closing the window (red button / X) sends the app to the background instead
+        # of leaving a window-less process that can only be reopened by quitting it.
+        # Real quits (Cmd+Q, tray Quit, restart) aren't spontaneous close events, so
+        # they still go through.
+        if event.spontaneous() and not getattr(self, "_really_quitting", False):
+            event.ignore()
+            self.hide()
+            self.closed_to_background.emit()
+            return
+        super().closeEvent(event)
 
     def _do_set_live_subtitles(self, speaker: str, text: str, is_interim: bool):
         speaker_upper = speaker.upper()
@@ -17130,6 +17148,15 @@ class BrahmaUI:
         self._workspace_sidebar.close_requested.connect(self._close_workspace_sidebar)
         self._win.minimized.connect(self._on_minimized)
         self._win.restored.connect(self._on_restored)
+        # Closing the window keeps the app running in the background; show the floating
+        # icon so there is always a way back, and reopen on a Dock click (macOS).
+        self._win.closed_to_background.connect(self._on_minimized)
+        self._app.aboutToQuit.connect(lambda: setattr(self._win, "_really_quitting", True))
+        self._reopen_armed = False
+        self._ignore_reopen_until = 0.0
+        QTimer.singleShot(5000, lambda: setattr(self, "_reopen_armed", True))
+        if platform.system() == "Darwin":
+            self._app.applicationStateChanged.connect(self._on_app_state_changed)
         self._win._state_sig.connect(self._sync_launcher_state)
         self._win._audio_level_sig.connect(self._launcher.set_audio_level)
         try:
@@ -17474,7 +17501,30 @@ class BrahmaUI:
         quit_action.triggered.connect(self._app.quit)
         return menu
 
+    def _note_ui_action(self):
+        """Mark that the app is being activated by one of its own controls."""
+        self._ignore_reopen_until = time.monotonic() + 1.5
+
+    def _on_app_state_changed(self, state):
+        """macOS: clicking the Dock icon (or Cmd+Tab) reopens the main window if it was closed."""
+        if state != Qt.ApplicationState.ApplicationActive or not self._reopen_armed:
+            return
+        try:
+            if time.monotonic() < self._ignore_reopen_until:
+                return
+            if self._win.isVisible() and not self._win.isMinimized():
+                return
+            from PyQt6.QtGui import QCursor
+            pos = QCursor.pos()
+            for w in (self._launcher, self._workspace_sidebar, self._command_bar, self._control_panel):
+                if w is not None and w.isVisible() and w.geometry().contains(pos):
+                    return  # the click was on our own floating window
+            self.show_main()
+        except Exception:
+            pass
+
     def _on_tray_activated(self, reason):
+        self._note_ui_action()
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._toggle_workspace_sidebar()
         elif reason == QSystemTrayIcon.ActivationReason.DoubleClick:
@@ -17517,6 +17567,7 @@ class BrahmaUI:
             self._show_workspace_sidebar()
 
     def _show_workspace_sidebar(self):
+        self._note_ui_action()
         self._workspace_sidebar.show_workspace()
         self._workspace_sidebar.focus_input()
         if self._launcher.isVisible():
