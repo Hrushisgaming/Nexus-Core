@@ -2513,6 +2513,13 @@ class BrahmaLive:
         self._spoke_start_time = 0.0
         self._last_spoke_time = 0.0
         self._speaking_lock = threading.Lock()
+        # All spoken output that doesn't come straight from the Live session (alerts,
+        # acknowledgements, external TTS, offline voice) goes through one queue and
+        # one worker so two voices can never play at the same time.
+        import queue as _queue_mod
+        self._speech_queue = _queue_mod.Queue()
+        self._speech_worker_started = False
+        self._speech_worker_lock = threading.Lock()
         self._use_openrouter_first = False
         self._pending_attention: dict | None = None
         self._pending_reply_event: dict | None = None
@@ -5414,6 +5421,16 @@ class BrahmaLive:
         elif not self.ui.muted:
             self.ui.set_state("LISTENING")
 
+    def _settle_listening_state(self) -> None:
+        try:
+            if (self._is_speaking or getattr(self, "_server_turn_active", False)
+                    or getattr(self, "_in_live_tool", False)):
+                return
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+        except Exception:
+            pass
+
     def trigger_barge_in(self):
         """Immediately interrupts AI speech playback and switches state to LISTENING."""
         with self._speaking_lock:
@@ -5424,11 +5441,7 @@ class BrahmaLive:
             self._discard_server_audio = True
             self._last_spoke_time = time.monotonic()
 
-        try:
-            from actions.attention_monitor import stop_native_speech
-            stop_native_speech()
-        except Exception:
-            pass
+        self._silence_local_voices()
 
         try:
             if self.audio_in_queue:
@@ -5467,32 +5480,92 @@ class BrahmaLive:
             # Gemini Live duplex tool execution will vocalize completion via send_tool_response
             return
 
+        self._enqueue_speech(text)
+
+    def _enqueue_speech(self, text: str) -> None:
+        """Queue text for the single speech worker (never blocks the caller)."""
+        with self._speech_worker_lock:
+            if not self._speech_worker_started:
+                self._speech_worker_started = True
+                threading.Thread(target=self._speech_worker, daemon=True, name="nexus-speech-worker").start()
+        self._speech_queue.put(text)
+
+    def _speech_worker(self) -> None:
+        while True:
+            text = self._speech_queue.get()
+            try:
+                self._deliver_speech(text)
+            except Exception as exc:
+                print(f"[Nexus Speak] Speech delivery failed: {exc}")
+
+    def _wait_for_voice_idle(self, timeout: float = 20.0) -> bool:
+        """Block until no voice (Live model or local) is playing, plus a short echo tail."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            busy = self._is_speaking or getattr(self, "_server_turn_active", False)
+            if not busy and (time.monotonic() - self._last_spoke_time) >= 0.3:
+                return True
+            time.sleep(0.1)
+        return False
+
+    def _silence_local_voices(self) -> None:
+        """Stop any non-Live voice (external TTS / edge / offline) that is mid-sentence."""
+        try:
+            from actions.attention_monitor import stop_native_speech
+            stop_native_speech()
+        except Exception:
+            pass
         try:
             from core import voice_output
-            if voice_output.external_voice_ready():
-                def _external():
-                    ok = False
-                    try:
-                        self.set_speaking(True)
-                        ok = voice_output.speak_external(text)
-                    except Exception as exc:
-                        print(f"[Nexus Speak] External voice failed: {exc}")
-                    finally:
-                        self.set_speaking(False)
-                    if not ok:
-                        self._speak_native(text)
-                threading.Thread(target=_external, daemon=True, name="external-tts").start()
-                return
+            voice_output.stop_playback()
+        except Exception:
+            pass
+
+    def _deliver_speech(self, text: str) -> None:
+        try:
+            from core import voice_output
+            use_external = voice_output.external_voice_ready()
         except Exception as exc:
             print(f"[Nexus Speak] Voice engine check failed: {exc}")
+            use_external = False
+
+        if use_external:
+            self._wait_for_voice_idle()
+            ok = False
+            try:
+                self.set_speaking(True)
+                ok = voice_output.speak_external(text)
+            except Exception as exc:
+                print(f"[Nexus Speak] External voice failed: {exc}")
+            finally:
+                self.set_speaking(False)
+            if ok:
+                return
         self._speak_native(text)
 
+    def _speak_local(self, text: str) -> None:
+        """Offline / edge voice. Only ever called from the speech worker."""
+        self._wait_for_voice_idle()
+        try:
+            self.set_speaking(True)
+            from actions.attention_monitor import _speak_edge_native
+            _speak_edge_native(text)
+        except Exception as exc:
+            print(f"[Nexus Speak] Local speech failed: {exc}")
+        finally:
+            self.set_speaking(False)
+
     def _speak_native(self, text: str):
-        """Speak through the Gemini Live voice (or the offline fallback)."""
+        """Speak through the Gemini Live voice (or the offline fallback).
+
+        Runs on the speech worker, and waits for the spoken turn to finish so the
+        next queued message can't start talking over it.
+        """
         if self.session and self._loop:
-            # Route text through Gemini Live API for the unified native Charon voice
             import asyncio
-            async def _send():
+            self._wait_for_voice_idle()
+
+            async def _send() -> bool:
                 try:
                     prompt = (
                         f"Deliver this update aloud to the user right now in your own voice. "
@@ -5500,30 +5573,26 @@ class BrahmaLive:
                     )
                     content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
                     await self.session.send_client_content(turns=[content], turn_complete=True)
+                    return True
                 except Exception as e:
                     print(f"[NEXUS CORE] Charon speech send err: {e}")
-                    def _fallback():
-                        try:
-                            self.set_speaking(True)
-                            from actions.attention_monitor import _speak_edge_native
-                            _speak_edge_native(text)
-                        except Exception as exc:
-                            print(f"[Nexus Speak] Fallback speech failed: {exc}")
-                        finally:
-                            self.set_speaking(False)
-                    threading.Thread(target=_fallback, daemon=True).start()
-            asyncio.run_coroutine_threadsafe(_send(), self._loop)
-        else:
-            def _speak_thread():
-                try:
-                    self.set_speaking(True)
-                    from actions.attention_monitor import _speak_edge_native
-                    _speak_edge_native(text)
-                except Exception as exc:
-                    print(f"[Nexus Speak] Offline speech failed: {exc}")
-                finally:
-                    self.set_speaking(False)
-            threading.Thread(target=_speak_thread, daemon=True, name="brahma-offline-speak").start()
+                    return False
+
+            sent = False
+            try:
+                sent = bool(asyncio.run_coroutine_threadsafe(_send(), self._loop).result(timeout=10))
+            except Exception as exc:
+                print(f"[NEXUS CORE] Charon speech scheduling err: {exc}")
+            if sent:
+                # Wait for the Live voice to start, then to finish.
+                started = time.monotonic()
+                while time.monotonic() - started < 4.0 and not (
+                    self._is_speaking or getattr(self, "_server_turn_active", False)
+                ):
+                    time.sleep(0.1)
+                self._wait_for_voice_idle(timeout=45.0)
+                return
+        self._speak_local(text)
 
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
@@ -6603,8 +6672,9 @@ class BrahmaLive:
             except Exception:
                 pass
 
-        if not self.ui.muted:
-            self.ui.set_state("LISTENING")
+        # Don't flip back to LISTENING here: the receive loop immediately sets THINKING
+        # while the model composes its reply, and the real "back to listening" happens
+        # when the spoken reply ends. Flipping here made the mode flicker after every tool.
 
         print(f"[NEXUS CORE] 📤 {name} → {str(result)[:80]}")
         self._in_live_tool = False
@@ -6786,6 +6856,10 @@ class BrahmaLive:
                         if getattr(self, "_discard_server_audio", False):
                             # Turn was interrupted; discard residual audio chunks
                             continue
+                        if not self._server_turn_active:
+                            # The Live voice is taking over: cut any local/external voice
+                            # that is still talking so the two never overlap.
+                            self._silence_local_voices()
                         self._server_turn_active = True
                         if not self._is_speaking:
                             self.set_speaking(True)
@@ -6830,6 +6904,13 @@ class BrahmaLive:
                         if sc.turn_complete:
                             self._server_turn_active = False
                             self._discard_server_audio = False
+                            # If the turn produced no speech (or it already finished) make
+                            # sure we settle back to LISTENING, but only after a pause so a
+                            # tool follow-up turn doesn't cause a flicker in between.
+                            try:
+                                asyncio.get_running_loop().call_later(2.5, self._settle_listening_state)
+                            except Exception:
+                                pass
                             full_in = "".join(in_buf).strip()
                             if full_in:
                                 self.ui.write_log(f"You: {full_in}")
@@ -6888,18 +6969,27 @@ class BrahmaLive:
             device=_spk_dev,
         )
         stream.start()
+        last_chunk_at = time.monotonic()
         try:
             while True:
                 try:
                     if self._is_speaking:
-                        # Wait up to 0.45s between audio chunks before concluding speech
-                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.45)
+                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.3)
                     else:
                         chunk = await self.audio_in_queue.get()
                 except asyncio.TimeoutError:
-                    if self._is_speaking and self.audio_in_queue.empty():
+                    # A gap between chunks is normal network jitter, not the end of the
+                    # reply. Only leave SPEAKING once the server has finished the turn
+                    # (and a short pause has passed), or after a long silence as a safety
+                    # net. Ending it on every gap made the mode flip SPEAKING <-> LISTENING.
+                    idle = time.monotonic() - last_chunk_at
+                    turn_open = getattr(self, "_server_turn_active", False)
+                    if (self._is_speaking and self.audio_in_queue.empty()
+                            and ((not turn_open and idle >= 0.6) or idle >= 4.0)):
                         self.set_speaking(False)
                     continue
+
+                last_chunk_at = time.monotonic()
 
                 if getattr(self, "_discard_server_audio", False):
                     continue

@@ -5,7 +5,7 @@ Powered by Pollinations AI & FLUX / SDXL Neural Diffusion.
 
 Generates high-resolution digital art, photorealistic portraits,
 3D renders, and concept designs directly from natural language prompts.
-Saves to Desktop/Brahma_Images, displays on the Circuit HUD, and opens automatically.
+Saves to Desktop/Nexus_Images, displays on the Circuit HUD, and opens automatically.
 """
 
 import json
@@ -72,9 +72,15 @@ def _get_output_directory(custom_path: Optional[str] = None) -> Path:
     if custom_path:
         out = Path(custom_path)
     else:
-        # Default: Desktop/Brahma_Images
-        desktop = Path.home() / "Desktop" / "Brahma_Images"
-        out = desktop
+        # Default: Desktop/Nexus_Images (renamed from the old Desktop/Brahma_Images)
+        images_root = Path.home() / "Desktop"
+        out = images_root / "Nexus_Images"
+        legacy = images_root / "Brahma_Images"
+        if legacy.exists() and not out.exists():
+            try:
+                legacy.rename(out)  # carry over images generated before the rename
+            except OSError as exc:
+                logger.warning("Could not rename legacy image folder %s: %s", legacy, exc)
     out.mkdir(parents=True, exist_ok=True)
     return out
 
@@ -178,7 +184,7 @@ def generate_image(
     # Prepare file name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     clean_slug = re.sub(r"[^a-zA-Z0-9_]", "_", raw_prompt[:25]).strip("_") or "artwork"
-    image_file = out_dir / f"brahma_{clean_slug}_{timestamp}.jpg"
+    image_file = out_dir / f"nexus_{clean_slug}_{timestamp}.jpg"
 
     if player and hasattr(player, "write_log"):
         player.write_log(f"🎨 [ImageGen] Synthesizing image: '{raw_prompt}' ({style})...")

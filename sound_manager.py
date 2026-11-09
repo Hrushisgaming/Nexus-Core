@@ -160,6 +160,15 @@ class SoundManager(QObject):
         self._last_telemetry_time = 0.0
         self._telemetry_cooldown = 0.22  # Minimum 220ms between telemetry chirps
         self._effects: dict[str, QSoundEffect] = {}
+        # Minimum gap (seconds) between repeats of the same cue, so a burst of state
+        # changes can never turn into a constant stream of pings.
+        self._cue_cooldowns = {
+            "listening_start": 2.0,
+            "listening_stop": 2.0,
+            "mission_complete": 1.5,
+            "deploy_whoosh": 0.5,
+        }
+        self._last_played: dict[str, float] = {}
 
         self._audio_ready = False
         self._load_settings()
@@ -256,6 +265,12 @@ class SoundManager(QObject):
         if not self._enabled:
             return
         self._ensure_audio()
+        gap = self._cue_cooldowns.get(name, 0.0)
+        if gap:
+            now = time.monotonic()
+            if now - self._last_played.get(name, -1e9) < gap:
+                return
+            self._last_played[name] = now
         eff = self._effects.get(name)
         if eff:
             try:

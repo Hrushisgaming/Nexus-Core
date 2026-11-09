@@ -10042,19 +10042,10 @@ class FloatingLauncher(QWidget):
         self._status_line = (detail or self._default_status()).strip() or self._default_status()
         self._apply_state_style()
 
-        # Acoustic cyber cues on state changes
-        if self._state != old_state:
-            try:
-                from sound_manager import SoundManager
-                sm = SoundManager.instance()
-                if self._state == "listening":
-                    sm.play_listening_start()
-                elif self._state == "idle" and old_state in ("thinking", "executing", "processing"):
-                    sm.play_mission_complete()
-                elif self._state in ("thinking", "executing", "processing"):
-                    sm.play_telemetry_chirp()
-            except Exception:
-                pass
+        # No automatic sounds here. The orb state changes on every turn (listening ->
+        # thinking -> speaking -> listening ...), so playing a cue per transition made
+        # the app ping constantly. Cues now fire only from explicit events (mic
+        # mute/unmute, barge-in, finished deliverables).
 
     def _default_status(self) -> str:
         return {

@@ -52,7 +52,7 @@ _SAFE_SCREENSHOT_ROOTS = (
 )
 
 def _safe_screenshot_path(requested: str | None) -> Path:
-    fallback = Path.home() / "Desktop" / "brahma_screenshot.png"
+    fallback = Path.home() / "Desktop" / "nexus_screenshot.png"
     if not requested:
         return fallback
     try:

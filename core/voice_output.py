@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import uuid
 
 from core import voice_settings
@@ -62,6 +63,44 @@ def audio_extension(audio: bytes) -> str:
     return ".mp3"
 
 
+_play_lock = threading.Lock()
+_active_proc: "subprocess.Popen | None" = None
+_interrupted = False
+
+
+def _run_player(args: list, **kwargs) -> bool:
+    """Run an audio player so stop_playback() can end it mid-sentence."""
+    global _active_proc
+    proc = subprocess.Popen(args, **kwargs)
+    with _play_lock:
+        _active_proc = proc
+    try:
+        return proc.wait() == 0
+    finally:
+        with _play_lock:
+            if _active_proc is proc:
+                _active_proc = None
+
+
+def stop_playback() -> None:
+    """Stop any external-voice audio that is currently playing (e.g. on barge-in)."""
+    global _interrupted
+    _interrupted = True
+    with _play_lock:
+        proc = _active_proc
+    if proc is not None:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+    if sys.platform == "win32":
+        try:
+            import winsound
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except Exception:
+            pass
+
+
 def _powershell_play(path: str) -> bool:
     """Windows fallback that plays MP3/WAV with the built-in WPF MediaPlayer."""
     exe = shutil.which("powershell") or shutil.which("pwsh")
@@ -79,8 +118,7 @@ def _powershell_play(path: str) -> bool:
     )
     try:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        return subprocess.run([exe, "-NoProfile", "-Command", script], check=False,
-                              timeout=180, creationflags=flags).returncode == 0
+        return _run_player([exe, "-NoProfile", "-Command", script], creationflags=flags)
     except Exception as exc:
         logger.warning(f"PowerShell playback failed: {exc}")
         return False
@@ -89,7 +127,7 @@ def _powershell_play(path: str) -> bool:
 def _play_file(path: str) -> bool:
     ext = os.path.splitext(path)[1].lower()
     if sys.platform == "darwin" and shutil.which("afplay"):
-        return subprocess.run(["afplay", path], check=False).returncode == 0
+        return _run_player(["afplay", path])
     if sys.platform == "win32":
         if ext == ".wav":
             try:
@@ -108,12 +146,12 @@ def _play_file(path: str) -> bool:
         if exe:
             args = {"ffplay": [exe, "-nodisp", "-autoexit", "-loglevel", "quiet", path],
                     "mpg123": [exe, "-q", path], "mpv": [exe, "--no-video", "--really-quiet", path]}[player]
-            return subprocess.run(args, check=False).returncode == 0
+            return _run_player(args)
     if ext == ".wav":                              # Linux: WAV can use the stock players
         for player, args in (("paplay", ["paplay"]), ("aplay", ["aplay", "-q"])):
             exe = shutil.which(player)
             if exe:
-                return subprocess.run([exe, *args[1:], path], check=False).returncode == 0
+                return _run_player([exe, *args[1:], path])
     if sys.platform == "win32":
         return _powershell_play(path)
     return False
@@ -133,6 +171,12 @@ def _play_audio(audio: bytes) -> bool:
 
 
 def speak_external(text: str) -> bool:
+    """Speak via the configured external engine.
+
+    Returns True when handled, including when the user/Live voice interrupted it
+    (so the caller doesn't repeat the same text in another voice).
+    """
+    global _interrupted
     text = (text or "").strip()
     if not text or not external_voice_ready():
         return False
@@ -141,7 +185,12 @@ def speak_external(text: str) -> bool:
         audio = provider.synthesize(text, voice_id=getattr(provider, "voice_id", None) or None)
         if not audio:
             return False
-        return _play_audio(audio)
+        _interrupted = False
+        played = _play_audio(audio)
+        if _interrupted:
+            _interrupted = False
+            return True
+        return played
     except Exception as exc:
         logger.error(f"External TTS failed: {exc}")
         return False
