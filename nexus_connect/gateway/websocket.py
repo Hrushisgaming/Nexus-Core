@@ -41,8 +41,14 @@ class ConnectionHub:
     async def unregister(self, websocket: WebSocket) -> str:
         async with self._lock:
             device_id = self._socket_index.pop(id(websocket), "")
-            if device_id:
-                self._connections.pop(device_id, None)
+            if not device_id:
+                return ""
+            state = self._connections.get(device_id)
+            if state is not None and state.websocket is not websocket:
+                # A newer connection already took over this device (reconnect);
+                # the old socket closing must not log the new one out.
+                return ""
+            self._connections.pop(device_id, None)
             return device_id
 
     async def get(self, device_id: str) -> ConnectionState | None:

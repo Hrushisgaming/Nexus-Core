@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -96,6 +98,12 @@ def _required_params_for_action(action: str) -> list[str]:
         "ui_tap": ["x", "y"],
         "ui_swipe": ["x1", "y1", "x2", "y2"],
         "ui_type": ["text"],
+        "browser_open_url": ["url"],
+        "browser_navigate": ["url"],
+        "browser_type": ["text"],
+        "browser_press_key": ["key"],
+        "browser_eval": ["code"],
+        "browser_upload_file": ["files"],
     }.get(action, [])
 
 
@@ -122,7 +130,53 @@ def _required_capabilities_for_action(action: str) -> list[str]:
         "get_device_info": ["device_info"],
         "mouse_move": ["mouse"],
         "keyboard_type": ["keyboard"],
+        # Browser extension (platform "browser"): one capability per group of actions.
+        "browser_info": ["browser"],
+        "browser_list_tabs": ["tabs"],
+        "browser_open_url": ["tabs"],
+        "browser_navigate": ["navigate"],
+        "browser_back": ["navigate"],
+        "browser_forward": ["navigate"],
+        "browser_reload": ["navigate"],
+        "browser_activate_tab": ["tabs"],
+        "browser_close_tab": ["tabs"],
+        "browser_snapshot": ["page_read"],
+        "browser_get_text": ["page_read"],
+        "browser_wait_for": ["page_read"],
+        "browser_click": ["page_interact"],
+        "browser_type": ["page_interact"],
+        "browser_press_key": ["page_interact"],
+        "browser_scroll": ["page_interact"],
+        "browser_screenshot": ["screenshot"],
+        "browser_eval": ["script_eval"],
+        "browser_upload_file": ["file_upload"],
     }.get(action, [])
+
+
+def _persist_screenshot(result: dict[str, Any]) -> None:
+    """Browser screenshots arrive as base64; keep them on disk and return a path instead."""
+    data = result.get("data")
+    if not isinstance(data, dict) or not data.get("image_base64"):
+        return
+    encoded = data.pop("image_base64")
+    try:
+        from core.user_paths import get_user_data_dir
+
+        folder = get_user_data_dir() / "browser_screenshots"
+        folder.mkdir(parents=True, exist_ok=True)
+        extension = "jpg" if "jpeg" in str(data.get("mime", "")) else "png"
+        path = folder / f"browser_{int(time.time() * 1000)}.{extension}"
+        raw = base64.b64decode(encoded)
+        path.write_bytes(raw)
+        data["file_path"] = str(path)
+        data["bytes"] = len(raw)
+        for old in sorted(folder.glob("browser_*"))[:-50]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+    except Exception:
+        data["image_base64"] = encoded
 
 
 def _format_devices(devices: list[dict[str, Any]]) -> str:
@@ -301,7 +355,7 @@ def connect_execute(parameters: dict[str, Any] | None = None, player=None, speak
                 import urllib.request
                 req_data = json.dumps({"device": target, "action": action, "parameters": command_parameters}).encode("utf-8")
                 req = urllib.request.Request("http://127.0.0.1:8765/gateway/execute", data=req_data, headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(req, timeout=30) as resp:
+                with urllib.request.urlopen(req, timeout=80 if str(action).startswith("browser_") else 30) as resp:
                     result = json.loads(resp.read().decode("utf-8"))
             except Exception:
                 result = None
@@ -318,6 +372,7 @@ def connect_execute(parameters: dict[str, Any] | None = None, player=None, speak
 
         result.setdefault("device", target)
         result.setdefault("action", action)
+        _persist_screenshot(result)
         if result.get("success", False):
             if "data" not in result and "result" in result:
                 result["data"] = result.pop("result")

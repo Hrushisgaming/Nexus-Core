@@ -1344,7 +1344,18 @@ TOOL_DECLARATIONS = [
             "Routes a Nexus Connect command to a paired device through the gateway. "
             "Use for actions such as launch_app, open_url, get_battery, capture_screen, take_photo, "
             "clipboard_get, clipboard_set, send_file, receive_file, media_play, media_pause, volume_set, "
-            "notification_list, get_device_info, close_app, mouse_move, keyboard_type, unlock_phone, file_list, file_read, file_write, file_delete."
+            "notification_list, get_device_info, close_app, mouse_move, keyboard_type, unlock_phone, file_list, file_read, file_write, file_delete. "
+            "For a paired browser (platform 'browser', the Nexus Browser Control extension) use: browser_list_tabs, "
+            "browser_open_url {url}, browser_navigate {url, tab_id}, browser_back/forward/reload, browser_activate_tab/close_tab {tab_id}, "
+            "browser_snapshot {tab_id} (page text + interactive elements with refs), browser_get_text, "
+            "browser_click {ref | selector | x,y}, browser_type {ref | selector, text, submit}, browser_press_key {key}, "
+            "browser_scroll {direction}, browser_wait_for {selector | text}, browser_screenshot, browser_eval {code}. "
+            "browser_upload_file {ref | selector, files:[absolute paths]} attaches local files to an <input type=file> (the user is always asked first). "
+            "Take a browser_snapshot before clicking or typing and use the refs it returns; pass tab_id from browser_open_url. "
+            "Nexus only works in its own 'Nexus' tab group: open pages with browser_open_url. The user's other tabs are off limits unless they share them. "
+            "Payments, sending, posting, deleting, scripts and uploads pop up a confirmation for the user. "
+            "If a browser action fails with USER_DENIED, USER_NO_RESPONSE, SITE_BLOCKED, TAB_NOT_SHARED or PAUSED, "
+            "the user said no or set a rule: do NOT retry it or find another way around it; tell the user what was refused. "
             "Do not execute device operations directly anywhere else."
         ),
         "parameters": {
@@ -1382,7 +1393,7 @@ TOOL_DECLARATIONS = [
             "type": "OBJECT",
             "properties": {
                 "device_name": {"type": "STRING", "description": "Optional device name shown in the pairing flow"},
-                "platform": {"type": "STRING", "description": "android | windows | ios | tablet | other"},
+                "platform": {"type": "STRING", "description": "android | windows | ios | tablet | browser | other"},
                 "pending_id": {"type": "STRING", "description": "Pending request id to approve"},
             },
             "required": []
@@ -2983,7 +2994,7 @@ class BrahmaLive:
                     threading.Thread(target=_run_open_local, daemon=True).start()
                     return
 
-            if intent_res.intent == "mobile_connect" and source != "instagram":
+            if intent_res.intent == "mobile_connect" and source not in ("instagram", "browser"):
                 if self._handle_nexus_connect_command(text, source=source or "local", parsed_intent=intent_res):
                     return
 
@@ -3798,7 +3809,7 @@ class BrahmaLive:
             print(f"[Registry] Match error: {e_dyn}")
 
         # Nexus Connect Mobile Routing (fallback intercept)
-        if source != "instagram" and self._handle_nexus_connect_command(text, source=source or "local"):
+        if source not in ("instagram", "browser") and self._handle_nexus_connect_command(text, source=source or "local"):
             return
 
         developer_settings = self.ui._load_app_settings() if hasattr(self.ui, "_load_app_settings") else {}
@@ -4181,7 +4192,7 @@ class BrahmaLive:
             self.ui.begin_task_workspace(text, _build_task_plan(text), source=source or "local")
         except Exception:
             pass
-        if source != "instagram" and self._handle_nexus_connect_command(text, source=source or "local"):
+        if source not in ("instagram", "browser") and self._handle_nexus_connect_command(text, source=source or "local"):
             return
         if self._handle_smart_home_command(text, source=source or "local"):
             return
@@ -7231,6 +7242,11 @@ def main():
             ui.set_nexus_connect_service(nexus_connect)
     except Exception:
         pass
+    # "Send to Nexus" from the paired browser extension lands in the normal chat.
+    if nexus_connect is not None:
+        nexus_connect.gateway.on_browser_message = (
+            lambda text, meta: ui.submit_external_command(text, source="browser")
+        )
     if nexus_connect is not None and nexus_connect_enabled:
         connect_port = int(getattr(nexus_connect.gateway.config, "port", 8765))
         if _is_port_in_use(connect_port):
