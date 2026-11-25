@@ -104,33 +104,108 @@ def _open_url_in_chrome(url: str) -> bool:
         return False
 
 
-def _press_media_key(key_name: str) -> bool:
-    """Sends hardware virtual media key codes."""
-    try:
-        import ctypes
-        VK_MEDIA_NEXT_TRACK = 0xB0
-        VK_MEDIA_PREV_TRACK = 0xB1
-        VK_MEDIA_PLAY_PAUSE = 0xB3
-        VK_VOLUME_MUTE      = 0xAD
-        VK_VOLUME_DOWN      = 0xAE
-        VK_VOLUME_UP        = 0xAF
+# macOS NX_KEYTYPE_* codes used by system-defined media key events.
+_MAC_NX_KEYS = {
+    "playpause": 16,
+    "nexttrack": 17,
+    "prevtrack": 18,
+    "volumemute": 7,
+    "volumedown": 1,
+    "volumeup": 0,
+}
 
-        key_map = {
-            "playpause": VK_MEDIA_PLAY_PAUSE,
-            "nexttrack": VK_MEDIA_NEXT_TRACK,
-            "prevtrack": VK_MEDIA_PREV_TRACK,
-            "volumemute": VK_VOLUME_MUTE,
-            "volumedown": VK_VOLUME_DOWN,
-            "volumeup":   VK_VOLUME_UP,
-        }
-        vk = key_map.get(key_name.lower())
-        if vk and sys.platform == "win32":
-            ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
-            time.sleep(0.04)
-            ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+
+def _press_mac_media_key(key_name: str) -> bool:
+    """Send a real hardware-style media key on macOS (needs pyobjc Quartz/AppKit)."""
+    code = _MAC_NX_KEYS.get(key_name.lower())
+    if code is None:
+        return False
+    try:
+        import Quartz
+        from AppKit import NSEvent
+
+        def _post(down: bool) -> None:
+            flags = 0xA00 if down else 0xB00
+            data1 = (code << 16) | flags
+            event = NSEvent.otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_(
+                14, (0, 0), flags, 0, 0, None, 8, data1, -1
+            )
+            Quartz.CGEventPost(0, event.CGEvent())
+
+        _post(True)
+        time.sleep(0.04)
+        _post(False)
+        return True
+    except Exception:
+        pass
+
+    # Fallbacks without pyobjc: volume via AppleScript, transport via the running player.
+    try:
+        if key_name == "volumeup":
+            script = "set volume output volume ((output volume of (get volume settings)) + 6)"
+        elif key_name == "volumedown":
+            script = "set volume output volume ((output volume of (get volume settings)) - 6)"
+        elif key_name == "volumemute":
+            script = "set volume with output muted"
+        else:
+            verb = {"playpause": "playpause", "nexttrack": "next track", "prevtrack": "previous track"}[key_name]
+            script = (
+                'if application "Spotify" is running then\n'
+                f'tell application "Spotify" to {verb}\n'
+                'else if application "Music" is running then\n'
+                f'tell application "Music" to {verb}\n'
+                'end if'
+            )
+        res = subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+
+def _press_linux_media_key(key_name: str) -> bool:
+    """Linux: playerctl for transport, pactl for volume."""
+    try:
+        if key_name in ("playpause", "nexttrack", "prevtrack"):
+            cmd = {"playpause": "play-pause", "nexttrack": "next", "prevtrack": "previous"}[key_name]
+            if shutil.which("playerctl"):
+                return subprocess.run(["playerctl", cmd], capture_output=True, timeout=5).returncode == 0
+        elif shutil.which("pactl"):
+            args = {
+                "volumeup": ["set-sink-volume", "@DEFAULT_SINK@", "+5%"],
+                "volumedown": ["set-sink-volume", "@DEFAULT_SINK@", "-5%"],
+                "volumemute": ["set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+            }.get(key_name)
+            if args:
+                return subprocess.run(["pactl", *args], capture_output=True, timeout=5).returncode == 0
+    except Exception:
+        pass
+    return False
+
+
+def _press_media_key(key_name: str) -> bool:
+    """Press a media/volume key on Windows, macOS or Linux."""
+    key_name = (key_name or "").lower()
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            key_map = {
+                "playpause": 0xB3, "nexttrack": 0xB0, "prevtrack": 0xB1,
+                "volumemute": 0xAD, "volumedown": 0xAE, "volumeup": 0xAF,
+            }
+            vk = key_map.get(key_name)
+            if vk:
+                ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+                time.sleep(0.04)
+                ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+                return True
+        except Exception as e:
+            print(f"[Music] Keybd event error: {e}")
+    elif sys.platform == "darwin":
+        if _press_mac_media_key(key_name):
             return True
-    except Exception as e:
-        print(f"[Music] Keybd event error: {e}")
+    else:
+        if _press_linux_media_key(key_name):
+            return True
 
     try:
         import pyautogui

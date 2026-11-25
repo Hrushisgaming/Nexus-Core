@@ -74,13 +74,11 @@ def _get_api_config() -> dict:
 
 def _capture_webcam_snapshot(camera_index: int = 0) -> Optional[np.ndarray]:
     """Safely opens webcam, grabs a clean stabilized frame, and immediately releases the device."""
-    backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
+    from core.camera import open_camera
     cap = None
     try:
-        cap = cv2.VideoCapture(int(camera_index), backend)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
+        cap = open_camera(indexes=[int(camera_index), 0])
+        if cap is None:
             return None
 
         # Warm up sensor for automatic exposure/white-balance
@@ -353,7 +351,7 @@ def run(parameters: dict, player=None, speak=None, session_memory=None) -> str:
 
     if player and hasattr(player, "show_content"):
         try:
-            player.show_content("🥗 BRAHMA NUTRITION SCAN", panel_content)
+            player.show_content("🥗 NEXUS NUTRITION SCAN", panel_content)
         except Exception:
             pass
 

@@ -1,7 +1,7 @@
-"""Windows-only webcam and microphone smoke test for Brahma AI Evo.
+"""Webcam and microphone smoke test for Nexus Core (Windows, macOS and Linux).
 
-Run from the repository root with Brahma closed:
-    python tools/windows_av_smoke_test.py
+Run from the repository root with Nexus Core closed:
+    python tools/av_smoke_test.py
 
 The test opens the default webcam and microphone briefly. It does not save,
 upload, or retain video or audio.
@@ -10,13 +10,10 @@ from __future__ import annotations
 
 import sys
 import time
+from pathlib import Path
 
 
 def main() -> int:
-    if sys.platform != "win32":
-        print("This hardware smoke test is intended for Windows.")
-        return 2
-
     try:
         import cv2
         import sounddevice as sd
@@ -24,10 +21,13 @@ def main() -> int:
         print(f"Missing camera/audio dependency: {exc}")
         return 2
 
-    camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from core.camera import open_camera
+
+    camera = open_camera(0)
     try:
-        if not camera.isOpened():
-            print("FAIL: Windows could not open the default webcam (index 0).")
+        if camera is None:
+            print("FAIL: Could not open the default webcam (index 0).")
             return 1
         ok, frame = camera.read()
         if not ok or frame is None or frame.size == 0:
@@ -35,7 +35,8 @@ def main() -> int:
             return 1
         print(f"PASS: Webcam opened and delivered a frame ({frame.shape[1]}x{frame.shape[0]}).")
     finally:
-        camera.release()
+        if camera is not None:
+            camera.release()
 
     try:
         devices = sd.query_devices()

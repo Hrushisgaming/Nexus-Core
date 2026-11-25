@@ -1,4 +1,4 @@
-"""Small, safe embedded browser window for Brahma AI Evo.
+"""Small, safe embedded browser window for Nexus Core.
 
 The browser deliberately accepts only ordinary HTTP(S) destinations. It is a
 viewer/navigation surface, not a replacement for the Playwright automation
@@ -47,7 +47,7 @@ def create_embedded_browser_window(parent=None):
         from PyQt6.QtWebEngineWidgets import QWebEngineView
     except Exception as exc:
         raise RuntimeError(
-            "QtWebEngine is unavailable. Install the PyQt6-WebEngine package and restart Brahma."
+            "QtWebEngine is unavailable. Install the PyQt6-WebEngine package and restart Nexus Core."
         ) from exc
 
     class SafePage(QWebEnginePage):
@@ -62,7 +62,7 @@ def create_embedded_browser_window(parent=None):
     class EmbeddedBrowserWindow(QMainWindow):
         def __init__(self, owner=None):
             super().__init__(owner)
-            self.setWindowTitle("Brahma • Embedded Browser")
+            self.setWindowTitle("Nexus Core • Embedded Browser")
             self.resize(1180, 780)
             self.setMinimumSize(720, 480)
 

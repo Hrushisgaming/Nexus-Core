@@ -88,11 +88,9 @@ def _get_camera_index() -> int:
         return 0
 
 def _open_camera(index: int = 0):
-    backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
-    cap = cv2.VideoCapture(index, backend)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
+    from core.camera import open_camera
+    cap = open_camera(indexes=[index, 0])
+    if cap is None:
         return None
     # Quick flush of initial buffered frames
     for _ in range(5):
@@ -220,7 +218,7 @@ def _render_hud_overlay(frame: np.ndarray, reps: int, target: int, exercise: str
     # Rep counter display
     is_flash = time.time() < flash_until
     rep_color = _COLOR_GOLD if is_flash else _COLOR_CYAN
-    title_text = f"BRAHMA FIT // {exercise.upper()}"
+    title_text = f"NEXUS FIT // {exercise.upper()}"
     cv2.putText(out, title_text, (20, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.65, _COLOR_WHITE, 1, cv2.LINE_AA)
 
     rep_str = f"{reps}"
@@ -443,7 +441,7 @@ def run(parameters: dict, player=None, speak=None, session_memory=None) -> str:
 
     if player and hasattr(player, "show_content"):
         try:
-            player.show_content("💪 BRAHMA FITNESS SUMMARY", summary_card)
+            player.show_content("💪 NEXUS FITNESS SUMMARY", summary_card)
         except Exception:
             pass
 

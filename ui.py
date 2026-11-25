@@ -2095,25 +2095,8 @@ class GestureCameraPreview(QFrame):
             return
         try:
             import cv2
-            cap = None
-            backends = [cv2.CAP_DSHOW] if hasattr(cv2, "CAP_DSHOW") else []
-            backends.append(cv2.CAP_ANY)
-            for backend in backends:
-                for idx in (0, 1):
-                    try:
-                        c = cv2.VideoCapture(idx, backend)
-                        if c is not None and c.isOpened():
-                            c.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-                            c.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-                            ret, test_frame = c.read()
-                            if ret and test_frame is not None:
-                                cap = c
-                                break
-                            c.release()
-                    except Exception:
-                        pass
-                if cap is not None:
-                    break
+            from core.camera import open_camera
+            cap = open_camera(indexes=(0, 1), width=320, height=240, require_frame=True)
 
             if cap is None or not cap.isOpened():
                 if cap is not None:
@@ -10357,7 +10340,7 @@ class MainWindow(QMainWindow):
             safe_address = normalize_browser_url(address)
             if not WEB_ENGINE_AVAILABLE:
                 raise RuntimeError(
-                    "QtWebEngine is not available. Install PyQt6-WebEngine and restart Brahma."
+                    "QtWebEngine is not available. Install PyQt6-WebEngine and restart Nexus Core."
                 )
             if getattr(self, "_embedded_browser_window", None) is None:
                 self._embedded_browser_window = create_embedded_browser_window(self)
@@ -17881,7 +17864,7 @@ class BrahmaUI:
         from core.embedded_browser import normalize_browser_url
         if not WEB_ENGINE_AVAILABLE:
             raise RuntimeError(
-                "QtWebEngine is not available. Install PyQt6-WebEngine and restart Brahma."
+                "QtWebEngine is not available. Install PyQt6-WebEngine and restart Nexus Core."
             )
         safe_address = normalize_browser_url(str(address or ""))
         self._win._open_browser_sig.emit(safe_address)

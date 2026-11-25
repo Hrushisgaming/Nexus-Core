@@ -1150,7 +1150,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "open_app",
         "description": (
-            "Opens any application on the Windows computer. "
+            "Opens any application on the computer (Windows, macOS or Linux). "
             "Use this whenever the user asks to open, launch, or start any app, "
             "website, or program. Always call this tool — never just say you opened it."
         ),
@@ -1422,9 +1422,10 @@ TOOL_DECLARATIONS = [
     {
         "name": "open_embedded_browser",
         "description": (
-            "Opens a website inside Brahma AI Evo's built-in QtWebEngine browser window. "
+            "Opens a website inside Nexus Core's built-in QtWebEngine browser window. "
             "Use this for simple requests such as 'open YouTube', 'visit example.com', "
-            "or 'show this website inside Brahma'. This is not browser automation. "
+            "or 'show this website inside Nexus Core'. This is only a viewer: for clicking, typing, logging in, "
+            "reading page content or any multi-step web task use browser_control instead. "
             "Only HTTP and HTTPS website addresses are supported."
         ),
         "parameters": {
@@ -1438,10 +1439,14 @@ TOOL_DECLARATIONS = [
     {
         "name": "browser_control",
         "description": (
-            "Complete browser automation powered by Microsoft Playwright MCP. "
-            "Use for: opening websites, web searching, navigating, semantic accessibility snapshots, "
-            "clicking elements or snapshot references, typing, form filling, hovering, executing JavaScript, "
-            "taking screenshots, managing tabs, and any web-based task."
+            "Complete browser control: the DEFAULT tool for anything on a website that involves interaction. "
+            "It drives the user's real Chrome through the paired Nexus browser extension (their sign-ins and tabs, "
+            "inside the 'Nexus' tab group, honouring their blocked-site list and confirmation prompts) and "
+            "automatically falls back to a separate Playwright browser if the extension is not connected. "
+            "Use for: opening websites, web searching, navigating, page snapshots, clicking, typing, form filling, "
+            "JavaScript, screenshots, managing tabs, and any web-based task. "
+            "If a result says the action was blocked or denied by the user's browser settings, stop and tell the user; "
+            "never retry it another way. Set browser='playwright' only to force the separate automation browser."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1458,6 +1463,7 @@ TOOL_DECLARATIONS = [
                 "expression":  {"type": "STRING", "description": "JavaScript expression to evaluate in page"},
                 "path":        {"type": "STRING", "description": "File path for screenshot or upload"},
                 "tab":         {"type": "INTEGER", "description": "1-based tab index for switch_tab"},
+                "browser":     {"type": "STRING", "description": "Optional. 'playwright' forces the separate automation browser instead of the user's Chrome extension"},
             },
             "required": ["action"]
         }
@@ -6106,7 +6112,7 @@ class BrahmaLive:
                     result = "Please provide a website address to open."
                 else:
                     self.ui.open_embedded_browser(address)
-                    result = f"Opening {address} in Brahma's embedded browser. Some websites may restrict playback or sign-in."
+                    result = f"Opening {address} in Nexus Core's embedded browser. Some websites may restrict playback or sign-in."
                 
             elif name == "browser_control":
                 r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))

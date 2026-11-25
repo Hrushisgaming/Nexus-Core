@@ -1,4 +1,5 @@
 from core.user_paths import get_user_data_dir
+from core.camera import open_camera
 import asyncio
 import base64
 import io
@@ -77,9 +78,8 @@ def _get_camera_index() -> int:
     best_index = 0
 
     for idx in range(6):
-        cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            cap.release()
+        cap = open_camera(idx)
+        if cap is None:
             continue
         for _ in range(5):
             cap.read()
@@ -147,8 +147,8 @@ def _capture_screenshot() -> bytes:
 
 def _capture_camera() -> bytes:
     camera_index = _get_camera_index()
-    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
-    if not cap.isOpened():
+    cap = open_camera(camera_index)
+    if cap is None:
         raise RuntimeError(f"Camera could not be opened: index {camera_index}")
     for _ in range(10):
         cap.read()

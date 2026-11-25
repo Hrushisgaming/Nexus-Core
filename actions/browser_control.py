@@ -1,3 +1,4 @@
+import os
 import asyncio
 import threading
 import concurrent.futures
@@ -557,9 +558,25 @@ def browser_control(
         time_ms     : milliseconds to wait
     """
     import time
-    from actions.playwright_mcp_client import get_playwright_mcp_client
 
     action = (parameters or {}).get("action", "").lower().strip()
+
+    # The paired Chrome extension is the default "hands". Playwright is used only when
+    # it is not connected or cannot do the action; a refusal from the extension is final.
+    try:
+        from actions.browser_router import try_extension
+        routed = try_extension(parameters or {})
+    except Exception as router_err:
+        _log(f"[Browser] extension routing skipped ({router_err})")
+        routed = None
+    if routed is not None:
+        _log(f"[Browser] (Chrome extension) {str(routed)[:100]}")
+        if player and hasattr(player, "write_log"):
+            player.write_log(f"[browser] {str(routed)[:80]}")
+        return routed
+
+    from actions.playwright_mcp_client import get_playwright_mcp_client
+
     result = "Unknown action."
 
     # Try Microsoft Playwright MCP first
