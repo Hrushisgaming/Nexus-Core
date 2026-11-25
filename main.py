@@ -5279,7 +5279,11 @@ class BrahmaLive:
                             "Please check your API key in Settings → AI Providers."
                         )
                     else:
-                        reply = ""
+                        detail = str(e_prov).replace("All AI providers failed - ", "").strip()[:300]
+                        reply = (
+                            f"Sir, {provider_label} didn't give me an answer. {detail}"
+                            if detail else ""
+                        )
 
             # 3. If user explicitly configured Local AI, is in Offline Mode, or cloud provider failed: run Local Brain
             if not reply and (configured_provider == "Local" or is_offline_mode or not (is_cloud_gemini or is_cloud_openrouter or is_cloud_openai_compat)) and local_brain.is_available():
@@ -5420,7 +5424,7 @@ class BrahmaLive:
                     reply = "I’m ready, sir."
             self.ui.write_log(f"Nexus Core: {reply}")
             # Only speak non-fallback replies; avoid looping on fallback
-            is_fallback = reply in ("I’m ready, sir.", "I'm unable to reach the local AI engine. Please ensure Ollama is running.", "Sir, I couldn't reach OpenRouter right now. Please check your OpenRouter API key and internet connection.")
+            is_fallback = reply.startswith("Sir, ") and "didn't give me an answer" in reply or reply in ("I’m ready, sir.", "I'm unable to reach the local AI engine. Please ensure Ollama is running.", "Sir, I couldn't reach OpenRouter right now. Please check your OpenRouter API key and internet connection.")
             if not getattr(self.ui, "muted", False) and not is_fallback:
                 self.speak(reply, proactive=True)
             try:

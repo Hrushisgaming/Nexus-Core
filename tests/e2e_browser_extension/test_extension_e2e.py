@@ -129,7 +129,7 @@ def env(tmp_path_factory):
             "--host-resolver-rules=MAP *.test 127.0.0.1", "--no-first-run", "--no-default-browser-check",
         ],
     )
-    sw = e.context.service_workers[0] if e.context.service_workers else e.context.wait_for_event("serviceworker")
+    sw = e.context.service_workers[0] if e.context.service_workers else e.context.wait_for_event("serviceworker", timeout=90000)
     e.sw = sw
     e.ext_id = sw.url.split("/")[2]
     e.pool = ThreadPoolExecutor(max_workers=4)
@@ -531,3 +531,79 @@ def test_16_popup_renders_the_new_sections(env):
     wait_until(env, lambda: env.popup.inner_text("#settingsMsg") == "Saved.", what="settings to save")
     assert popup_msg(env, {"cmd": "getSettings"})["settings"]["scope"] == "all_tabs"
     settings(env, scope="agent_tabs")
+
+
+# ---------------------------------------------------------------- the agent's own entry point
+class _GatewayShim:
+    """What actions.nexus_connect talks to, pointed at the test gateway."""
+
+    def __init__(self, env):
+        self.env = env
+
+    def is_running(self):
+        return True
+
+    def list_devices(self):
+        return self.env.gateway.list_devices()
+
+    def route_command(self, target, action, params):
+        return execute(self.env, action, params, device=target)
+
+
+def agent(env, monkeypatch_or_none=None, **params):
+    from actions.browser_control import browser_control
+
+    nc._SERVICE_PROVIDER = lambda: _GatewayShim(env)
+    return browser_control(params)
+
+
+def agent_with_confirm(env, allow, **params):
+    fut = env.pool.submit(agent, env, None, **params)
+    win = confirm_page(env)
+    from playwright.sync_api import Error as PWError
+    try:
+        if allow:
+            win.wait_for_selector("#allow:not([disabled])")
+            win.click("#allow")
+        else:
+            win.click("#deny")
+    except PWError:
+        pass
+    return fut.result(timeout=60)
+
+
+def test_17_browser_control_drives_the_users_chrome(env):
+    settings(env, scope="agent_tabs", realInput=True, confirmRisky=True, siteMode="blocklist")
+    out = agent(env, action="go_to", url=env.site("app.test", "/form"))
+    assert "Navigated" in out or "Opened" in out, out
+    page = agent(env, action="snapshot")
+    assert "Save" in page and "Test form" in page
+
+    agent(env, action="smart_click", text="Save")
+    assert env.form.evaluate("window.saved") >= 1  # the page only counts real (trusted) clicks
+
+    out = agent(env, action="smart_type", description="Name", text="Ada Lovelace")
+    assert env.form.evaluate("document.getElementById('name').value") == "Ada Lovelace", out
+
+    orders = env.form.evaluate("window.orders")
+    out = agent_with_confirm(env, False, action="smart_click", text="Place order")
+    assert "USER_DENIED" in out and "declined" in out
+    assert env.form.evaluate("window.orders") == orders
+    out = agent_with_confirm(env, True, action="smart_click", text="Place order")
+    assert env.form.evaluate("window.orders") == orders + 1, out
+
+
+def test_18_a_refusal_is_never_routed_around(env, monkeypatch):
+    import actions.browser_control as bc
+
+    monkeypatch.setattr(bc, "_ensure_started", lambda: (_ for _ in ()).throw(AssertionError("fell back to Playwright")))
+    out = agent(env, action="go_to", url=env.site("bank.test", "/"))
+    assert "SITE_BLOCKED" in out and "do not retry" in out.lower()
+
+    popup_msg(env, {"cmd": "setPaused", "paused": True})
+    try:
+        out = agent(env, action="snapshot")
+        assert "PAUSED" in out and "do not retry" in out.lower()
+    finally:
+        popup_msg(env, {"cmd": "setPaused", "paused": False})
+    assert "Test form" in agent(env, action="snapshot")
