@@ -1,7 +1,7 @@
 name: Build Nexus Core for Linux (.tar.gz)
 
 # Run this one OS on its own (Actions > this workflow > Run workflow),
-# or let "Build Nexus Core (all platforms)" call it.
+# or let "Build Multi-Platform Installers" call it.
 on:
   workflow_dispatch:
   workflow_call:
