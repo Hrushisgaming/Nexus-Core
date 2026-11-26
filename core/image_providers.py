@@ -165,18 +165,44 @@ class PollinationsImageProvider(ImageProvider):
     def init_error(self) -> Optional[str]:
         return self._init_error
 
-    def generate(self, prompt: str, model: Optional[str] = None) -> dict:
+    supports_references = True
+    UPLOAD_URL = "https://media.pollinations.ai/upload"
+    # Editing-capable models tried (in order) when a reference image is given.
+    EDIT_MODELS = ["kontext", "klein", "black-forest-labs/flux.2-klein-4b"]
+
+    def _upload_reference(self, data_uri: str) -> Optional[str]:
+        """Upload one reference (data URI) to Pollinations' media store; returns its public URL."""
+        import base64
+        import requests
+        try:
+            raw = base64.b64decode(data_uri.split(",", 1)[1])
+            headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+            resp = requests.post(self.UPLOAD_URL, files={"file": ("reference.jpg", raw, "image/jpeg")},
+                                 headers=headers, timeout=60)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("url") or (f"https://media.pollinations.ai/{data['id']}" if data.get("id") else None)
+            logger.error(f"Pollinations upload error {resp.status_code}: {resp.text[:200]}")
+        except Exception as exc:
+            logger.error(f"Pollinations upload error: {exc}")
+        return None
+
+    def generate(self, prompt: str, model: Optional[str] = None, reference_images: Optional[list] = None,
+                 aspect_ratio: str = "1:1") -> dict:
         if not self._available:
             return {"error": self._init_error or "Pollinations not available", "provider": "pollinations"}
         try:
             import requests
-            model_id = model or self.default_model
-            params = {
-                "model": model_id,
-                "width": 1024,
-                "height": 1024,
-                "nologo": "true",
-            }
+            width, height = {"16:9": (1344, 768), "9:16": (768, 1344)}.get(aspect_ratio, (1024, 1024))
+            params = {"width": width, "height": height, "nologo": "true"}
+            models = [model or self.default_model]
+            if reference_images:
+                urls = [u for u in (self._upload_reference(r) for r in reference_images[:4]) if u]
+                if not urls:
+                    return {"error": "couldn't upload the reference image", "provider": "pollinations",
+                            "reference_rejected": True}
+                params["image"] = "|".join(urls)
+                models = [m for m in dict.fromkeys(self.EDIT_MODELS + models)]
             headers = {}
             if self.api_key:
                 # Keyed requests go through the unified endpoint with Bearer auth
@@ -184,15 +210,14 @@ class PollinationsImageProvider(ImageProvider):
                 headers["Authorization"] = f"Bearer {self.api_key}"
             else:
                 url = f"https://image.pollinations.ai/prompt/{prompt}"
-            resp = requests.get(url, params=params, headers=headers, timeout=30)
-            if resp.status_code == 200:
-                return {
-                    "image_url": resp.url,
-                    "provider": "pollinations",
-                    "model": model_id,
-                }
-            logger.error(f"Pollinations error {resp.status_code}: {resp.text[:200]}")
-            return {"error": f"HTTP {resp.status_code}", "provider": "pollinations"}
+            last = "no model answered"
+            for model_id in models:
+                resp = requests.get(url, params={**params, "model": model_id}, headers=headers, timeout=90)
+                if resp.status_code == 200 and (resp.headers.get("Content-Type", "image/").startswith("image/")):
+                    return {"image_url": resp.url, "provider": "pollinations", "model": model_id}
+                last = f"HTTP {resp.status_code} ({model_id})"
+                logger.error(f"Pollinations error {resp.status_code} on {model_id}: {resp.text[:200]}")
+            return {"error": last, "provider": "pollinations", "reference_rejected": bool(reference_images)}
         except Exception as exc:
             logger.error(f"Pollinations error: {exc}")
             return {"error": str(exc), "provider": "pollinations"}

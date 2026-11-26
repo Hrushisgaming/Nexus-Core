@@ -153,7 +153,7 @@ def _render_with_providers(prompt: str, forced: Optional[str] = None, references
     """Try the engine chosen in Settings first, then the others.
 
     Returns (bytes, provider_id, note). With reference images the providers that accept them
-    (NVIDIA FLUX.3 Klein) go first; if none can use the image it is described by a vision
+    (Pollinations and NVIDIA FLUX.3 Klein) go first; if none can use the image it is described by a vision
     model and the description is added to the prompt, and `note` says so.
     """
     import base64
@@ -166,7 +166,10 @@ def _render_with_providers(prompt: str, forced: Optional[str] = None, references
     order = [chosen] + [p for p in ("pollinations", "nvidia", "cloudflare") if p != chosen]
     refs = [Path(r) for r in (references or [])]
     if refs:
-        order = ["nvidia"] + [p for p in order if p != "nvidia"]
+        # Pollinations edits from an uploaded image reliably; NVIDIA's hosted API may only accept
+        # preset images, so it goes second unless the user picked it as their engine.
+        first = chosen if chosen in ("pollinations", "nvidia") else "pollinations"
+        order = [first] + [p for p in ("pollinations", "nvidia") if p != first] + [p for p in order if p not in ("pollinations", "nvidia")]
     data_uris = [to_data_uri(r) for r in refs]
     errors: list[str] = []
     note = ""

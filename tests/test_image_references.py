@@ -80,12 +80,13 @@ def _run(providers, refs, chosen="pollinations"):
         return ig._render_with_providers("a cat", None, refs)
 
 
-def test_reference_goes_to_nvidia_first_even_if_another_engine_is_selected(tmp_path):
+def test_reference_goes_to_a_reference_capable_engine_first(tmp_path):
     ref = _png(tmp_path / "r.png")
     b64 = base64.b64encode(b"IMG").decode()
     nv = _P({"image_data": b64}, refs=True)
     po = _P({"image_data": b64})
-    data, used, note = _run({"nvidia": nv, "pollinations": po}, [ref])
+    po.supports_references = False
+    data, used, note = _run({"nvidia": nv, "pollinations": po}, [ref], chosen="nvidia")
     assert used == "nvidia" and po.calls == [] and "reference_images" in nv.calls[0][1]
     assert nv.calls[0][1]["reference_images"][0].startswith("data:image/jpeg;base64,")
     assert "Used your reference" in note
@@ -117,3 +118,37 @@ def test_generate_image_errors_when_web_search_finds_nothing():
     with mock.patch("core.image_refs.fetch_reference_for_topic", return_value=[]):
         out = ig.generate_image({"prompt": "x", "reference_search": "zzz"})
     assert out.startswith("Error") and "web" in out
+
+
+def test_pollinations_uploads_reference_then_passes_image_url(tmp_path):
+    from core.image_providers import PollinationsImageProvider
+    ref = _png(tmp_path / "r.png")
+    uri = image_refs.to_data_uri(ref)
+    prov = PollinationsImageProvider(api_key="k")
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(("post", url))
+        return mock.Mock(status_code=200, json=lambda: {"url": "https://media.pollinations.ai/abc"})
+
+    def fake_get(url, params=None, **kw):
+        calls.append(("get", params))
+        ok = params["model"] == "klein"
+        return mock.Mock(status_code=200 if ok else 400, url="https://out/img", text="",
+                         headers={"Content-Type": "image/jpeg"})
+
+    with mock.patch("requests.post", side_effect=fake_post), mock.patch("requests.get", side_effect=fake_get):
+        res = prov.generate("make it moldy", reference_images=[uri])
+    assert res["image_url"] == "https://out/img" and res["model"] == "klein"
+    gets = [c[1] for c in calls if c[0] == "get"]
+    assert gets[0]["image"] == "https://media.pollinations.ai/abc" and gets[0]["model"] == "kontext"
+
+
+def test_pollinations_reports_rejected_reference_when_all_models_fail(tmp_path):
+    from core.image_providers import PollinationsImageProvider
+    uri = image_refs.to_data_uri(_png(tmp_path / "r.png"))
+    prov = PollinationsImageProvider()
+    with mock.patch.object(prov, "_upload_reference", return_value="https://m/x"), \
+         mock.patch("requests.get", return_value=mock.Mock(status_code=400, url="u", text="no", headers={})):
+        res = prov.generate("x", reference_images=[uri])
+    assert res["reference_rejected"] and "error" in res
