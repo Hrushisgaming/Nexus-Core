@@ -587,16 +587,24 @@ async function pageOp(op, a) {
       const cs = getComputedStyle(el);
       return cs.visibility !== "hidden" && cs.display !== "none" && cs.opacity !== "0";
     };
+    // Querying that also looks inside open shadow roots (custom elements hide their inputs there).
+    const deepAll = (sel, root = document, out = []) => {
+      for (const el of root.querySelectorAll(sel)) out.push(el);
+      if (out.length > 4000) return out;
+      for (const host of root.querySelectorAll("*")) if (host.shadowRoot) deepAll(sel, host.shadowRoot, out);
+      return out;
+    };
+    const frameTag = window === window.top ? "" : (window.__nexusFrameTag = window.__nexusFrameTag || Math.random().toString(36).slice(2, 4));
     const label = (el) => String(el.innerText || el.value || el.getAttribute("aria-label") || el.title || el.alt || el.placeholder || "")
       .trim().replace(/\s+/g, " ").slice(0, 120);
     const find = () => {
       if (a.ref) {
-        const el = document.querySelector('[data-nexus-ref="' + CSS.escape(String(a.ref)) + '"]');
+        const el = deepAll('[data-nexus-ref="' + CSS.escape(String(a.ref)) + '"]')[0];
         if (!el) throw new Error('Unknown or stale ref "' + a.ref + '". Take a new snapshot first.');
         return el;
       }
       if (a.selector) {
-        const el = document.querySelector(a.selector);
+        const el = document.querySelector(a.selector) || deepAll(a.selector)[0];
         if (!el) throw new Error("No element matches selector: " + a.selector);
         return el;
       }
@@ -689,12 +697,12 @@ async function pageOp(op, a) {
         window.__nexusRefN = window.__nexusRefN || 0;
         const elements = [];
         let total = 0;
-        for (const el of document.querySelectorAll(SEL)) {
+        for (const el of deepAll(SEL)) {
           if (!visible(el)) continue;
           total++;
           if (elements.length >= a.maxElements) continue;
           let ref = el.getAttribute("data-nexus-ref");
-          if (!ref) { ref = "n" + (++window.__nexusRefN); el.setAttribute("data-nexus-ref", ref); }
+          if (!ref) { ref = frameTag + "n" + (++window.__nexusRefN); el.setAttribute("data-nexus-ref", ref); }
           const tag = el.tagName.toLowerCase();
           const r = el.getBoundingClientRect();
           const isField = tag === "input" || tag === "textarea" || tag === "select";
@@ -712,7 +720,7 @@ async function pageOp(op, a) {
         }
         const text = (document.body ? document.body.innerText : "") || "";
         return {
-          url: location.href, title: document.title,
+          url: location.href, title: document.title, is_top: window === window.top,
           text: text.slice(0, a.maxText), text_truncated: text.length > a.maxText,
           elements, elements_total: total,
           scroll: { x: Math.round(scrollX), y: Math.round(scrollY), page_height: document.documentElement.scrollHeight, viewport_height: innerHeight },
@@ -872,14 +880,46 @@ async function pageEval(code) {
 
 async function runInPage(tab, op, args) {
   assertScriptable(tab);
-  let res;
+  // Snapshots and ref-based actions look in every frame: refs from an iframe's elements are
+  // prefixed per frame, so only the frame that owns a ref answers.
+  const allFrames = op === "snapshot" || !!(args && args.ref);
+  let results;
   try {
-    [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: pageOp, args: [op, args] });
+    results = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames }, func: pageOp, args: [op, args] });
   } catch (e) {
     throw fail("SCRIPT_FAILED", `Couldn't run on that page: ${e.message}`);
   }
-  const out = res && res.result;
-  if (out && out.__error) throw fail("PAGE_ERROR", out.__error);
+  results = (results || []).filter((r) => r && r.result !== undefined && r.result !== null);
+  if (!results.length) return undefined;
+  const top = results.find((r) => r.frameId === 0) || results[0];
+  if (op === "snapshot") {
+    if (top.result.__error) throw fail("PAGE_ERROR", top.result.__error);
+    const out = top.result;
+    const max = (args && args.maxElements) || 150;
+    for (const r of results) {
+      if (r === top || !r.result || r.result.__error || !r.result.elements) continue;
+      for (const el of r.result.elements) {
+        if (out.elements.length >= max) break;
+        out.elements.push({ ...el, in_frame: r.result.url });
+      }
+      out.elements_total += r.result.elements_total;
+      if (r.result.text && out.text.length < (args.maxText || 5000)) {
+        out.text += "\n[frame " + r.result.url + "]\n" + r.result.text.slice(0, 1500);
+      }
+    }
+    return out;
+  }
+  if (!allFrames) {
+    if (top.result.__error) throw fail("PAGE_ERROR", top.result.__error);
+    return top.result;
+  }
+  const answered = results.find((r) => !(r.result && r.result.__error));
+  if (!answered) {
+    const err = (results.find((r) => r.frameId === 0) || results[0]).result;
+    throw fail("PAGE_ERROR", err.__error);
+  }
+  const out = answered.result;
+  if (out && typeof out === "object" && answered.frameId !== 0) out.in_frame = true;
   return out;
 }
 
@@ -924,6 +964,20 @@ async function tryReal(step) {
     if (e && e.code === "DEBUGGER_UNAVAILABLE") return false;
     throw e;
   }
+}
+
+// Downscale a PNG data URL to a JPEG no wider than maxWidth. Returns { base64, width, height }.
+async function shrinkImage(dataUrl, maxWidth, quality) {
+  const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const scale = Math.min(1, maxWidth / bmp.width);
+  const width = Math.max(1, Math.round(bmp.width * scale)), height = Math.max(1, Math.round(bmp.height * scale));
+  const canvas = new OffscreenCanvas(width, height);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, width, height);
+  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: Math.min(Math.max(quality, 0.2), 0.95) });
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return { base64: btoa(bin), width, height };
 }
 
 const ACTIONS = {
@@ -1051,7 +1105,7 @@ const ACTIONS = {
     ctx.summary = `Clicked ${prep.tag} “${trunc(prep.text)}”`;
     await confirmIfRisky(prep, tab, "Nexus wants to click a button");
     let input = "synthetic";
-    if (await wantsRealInput(p)) {
+    if (!prep.in_frame && await wantsRealInput(p)) {
       if (await tryReal(() => cdp.click(tab.id, prep.x, prep.y, { double: !!p.double }))) input = "real";
     }
     if (input === "synthetic") { assertNotPaused(); await runInPage(tab, "click", { ...pick(p, "ref", "selector", "x", "y", "double") }); }
@@ -1076,7 +1130,7 @@ const ACTIONS = {
     ctx.summary = `Typed ${text.length} character(s) into ${prep.tag}` + (p.submit ? " and submitted" : "");
     await confirmIfRisky(prep, tab, p.submit ? "Nexus wants to fill in and submit a form" : "Nexus wants to type into a field");
     let input = "synthetic", info = {};
-    if (!prep.is_select && await wantsRealInput(p)) {
+    if (!prep.is_select && !prep.in_frame && await wantsRealInput(p)) {
       const ok = await tryReal(async () => {
         await runInPage(tab, "focus", { ...target, clear: p.clear !== false });
         if (text === "" && p.clear !== false) await cdp.pressKey(tab.id, "Backspace");
@@ -1162,17 +1216,42 @@ const ACTIONS = {
       await chrome.tabs.update(tab.id, { active: true });
       await sleep(250);
     }
-    const format = p.format === "jpeg" ? "jpeg" : "png";
     let dataUrl;
     try {
-      dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format, quality: num(p.quality, 80) });
+      dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
     } catch (e) {
       throw fail("SCREENSHOT_FAILED", `Couldn't capture the tab: ${e.message}`);
     }
+    // Models are billed per pixel: send a modest JPEG, not a full-resolution PNG.
+    const small = await shrinkImage(dataUrl, num(p.max_width, 1024), num(p.quality, 0.6));
+    let viewport = null;
+    try { viewport = await runInPage(tab, "viewport", {}); } catch (_) { /* restricted page */ }
     return {
-      tab_id: tab.id, mime: `image/${format}`, image_base64: dataUrl.split(",")[1],
-      message: `Captured a screenshot of tab ${tab.id}.`,
+      tab_id: tab.id, mime: "image/jpeg", image_base64: small.base64,
+      image_width: small.width, image_height: small.height,
+      viewport_width: viewport && viewport.w, viewport_height: viewport && viewport.h,
+      message: `Captured a screenshot of tab ${tab.id} (${small.width}x${small.height}).`,
     };
+  },
+
+  // Press, move along a path, release: draws on canvases, drags sliders and sortable items.
+  async browser_drag(p, ctx) {
+    const tab = await resolveTab(p, ctx);
+    const raw = Array.isArray(p.path) && p.path.length >= 2 ? p.path
+      : [[p.from_x, p.from_y], [p.to_x, p.to_y]];
+    const pts = raw.map((q) => ({ x: Number(Array.isArray(q) ? q[0] : q && q.x), y: Number(Array.isArray(q) ? q[1] : q && q.y) }));
+    if (pts.length < 2 || pts.length > 400 || pts.some((q) => !Number.isFinite(q.x) || !Number.isFinite(q.y))) {
+      throw fail("MISSING_PARAMETERS", "Drag needs from_x, from_y, to_x, to_y, or a path of 2 to 400 [x, y] points.");
+    }
+    if (!(await wantsRealInput(p))) throw fail("REAL_INPUT_REQUIRED", "Dragging needs real input, which is turned off in the extension's settings.");
+    const prep = await runInPage(tab, "prepare", { x: pts[0].x, y: pts[0].y, kind: "click" });
+    ctx.summary = `Dragged across ${pts.length} point(s)`;
+    await confirmIfRisky(prep, tab, "Nexus wants to drag on the page");
+    if (!(await tryReal(() => cdp.drag(tab.id, pts, { stepMs: num(p.step_ms, 8) })))) {
+      throw fail("DEBUGGER_UNAVAILABLE", "Chrome wouldn't let Nexus use real mouse input on this tab.");
+    }
+    await sleep(num(p.settle_ms, 200));
+    return { tab_id: tab.id, input: "real", points: pts.length, message: `Dragged across ${pts.length} point(s).` };
   },
 
   async browser_eval(p, ctx) {

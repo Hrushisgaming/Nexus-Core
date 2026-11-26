@@ -18,7 +18,12 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+# main.py sets this to a function that hands JPEG bytes to the live model as a real image.
+# It returns True when the image was delivered.
+IMAGE_SINK: Optional[Callable[[bytes], bool]] = None
 
 # The user (or their rules) said no. Never retry these through another browser.
 REFUSAL_CODES = {
@@ -173,6 +178,44 @@ def _target(session: _Session, p: dict, *, want_field: bool = False) -> dict:
 
 
 # ----------------------------------------------------------------- formatting
+def _describe_screenshot(jpeg: bytes) -> str:
+    """Text-only chat providers can't take an image: have a vision model describe it, briefly."""
+    try:
+        import base64
+        from llm_client import client as llm
+
+        return (llm.vision(
+            "Describe this browser screenshot for an assistant that must operate the page: the main content, "
+            "every visible text box, button and link with roughly where it is, and any game or canvas state. "
+            "Under 150 words.", base64.b64encode(jpeg).decode(), "image/jpeg", max_tokens=300) or "").strip()
+    except Exception:
+        return ""
+
+
+def _show_screenshot(data: dict) -> str:
+    """Give the model the picture itself (small JPEG) instead of base64 text."""
+    msg = data.get("message") or "Captured a screenshot."
+    w, h = data.get("image_width"), data.get("image_height")
+    vw, vh = data.get("viewport_width"), data.get("viewport_height")
+    geo = ""
+    if w and vw:
+        geo = (f" Image is {w}x{h}; the page viewport is {vw}x{vh} CSS px, so multiply image x,y by "
+               f"{vw / w:.3f} to get click coordinates.")
+    path = data.get("file_path")
+    if not path or not Path(path).is_file():
+        return msg + geo
+    jpeg = Path(path).read_bytes()
+    try:
+        if IMAGE_SINK and IMAGE_SINK(jpeg):
+            return f"{msg} The screenshot is now in front of you.{geo}"
+    except Exception:
+        pass
+    desc = _describe_screenshot(jpeg)
+    if desc:
+        return f"{msg}{geo}\nWhat it shows: {desc}"
+    return f"{msg}{geo} Saved at {path}; this chat mode can't view images."
+
+
 def _format(data: dict) -> str:
     message = data.get("message") if isinstance(data, dict) else None
     if isinstance(data, dict) and set(data) <= {"message", "tab_id", "url", "title", "input"} and message:
@@ -303,7 +346,19 @@ def _handle(session: _Session, action: str, p: dict) -> Optional[str]:
         return _format(session.call("browser_eval", code=code))
 
     if action in {"screenshot", "take_screenshot"}:
-        return _format(session.call("browser_screenshot"))
+        return _show_screenshot(session.call("browser_screenshot", max_width=int(p.get("max_width") or 1024)))
+
+    if action in {"drag", "draw"}:
+        pts = p.get("path") or p.get("points")
+        if not pts:
+            def _pt(v, x_key, y_key):
+                if isinstance(v, dict):
+                    return v.get("x"), v.get("y")
+                return p.get(x_key), p.get(y_key)
+            fx, fy = _pt(p.get("from"), "from_x", "from_y")
+            tx, ty = _pt(p.get("to"), "to_x", "to_y")
+            return _format(session.call("browser_drag", from_x=fx, from_y=fy, to_x=tx, to_y=ty))
+        return _format(session.call("browser_drag", path=pts))
 
     if action == "back":
         return _format(session.call("browser_back"))

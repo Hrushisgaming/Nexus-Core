@@ -64,6 +64,27 @@ document.addEventListener("wheel", e => { if (e.isTrusted) window.trustedWheel++
 </script>"""
 
 
+GAME_PAGE = """<!doctype html><meta charset=utf-8><title>Game</title>
+<body style="margin:0;font:16px sans-serif">
+<my-box id="host"></my-box>
+<iframe id="fr" src="/frame" style="width:300px;height:80px;border:1px solid #999"></iframe><br>
+<canvas id="cv" width="400" height="300" style="border:1px solid #000"></canvas>
+<script>
+customElements.define("my-box", class extends HTMLElement {
+  constructor() { super(); const r = this.attachShadow({mode: "open"});
+    r.innerHTML = '<input id="shadow-in" placeholder="Your guess"><button id="shadow-btn">Guess</button>'; }
+});
+window.strokes = []; window.down = false;
+const cv = document.getElementById("cv");
+cv.addEventListener("mousedown", e => { if (e.isTrusted) { window.down = true; window.strokes.push([[e.offsetX, e.offsetY]]); } });
+cv.addEventListener("mousemove", e => { if (window.down && e.isTrusted) window.strokes[window.strokes.length - 1].push([e.offsetX, e.offsetY]); });
+cv.addEventListener("mouseup", () => { window.down = false; });
+</script>"""
+
+FRAME_PAGE = """<!doctype html><meta charset=utf-8><title>Frame</title>
+<input id="frame-in" placeholder="Type in frame"><button id="frame-btn" onclick="window.frameClicks=(window.frameClicks||0)+1">Frame go</button>"""
+
+
 class _Site(BaseHTTPRequestHandler):
     def log_message(self, *a):  # quiet
         pass
@@ -74,7 +95,7 @@ class _Site(BaseHTTPRequestHandler):
             self.send_header("Location", f"http://bank.test:{self.server.server_port}/")
             self.end_headers()
             return
-        body = {"/form": FORM_PAGE}.get(self.path, "<!doctype html><title>Plain</title><body><p>plain page</p>")
+        body = {"/form": FORM_PAGE, "/game": GAME_PAGE, "/frame": FRAME_PAGE}.get(self.path, "<!doctype html><title>Plain</title><body><p>plain page</p>")
         data = body.encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -220,9 +241,14 @@ def no_confirm(env, action, params):
 
 
 def page_of(env, url_part):
-    for pg in env.context.pages:
-        if url_part in pg.url:
-            return pg
+    end = time.time() + 8
+    while True:
+        for pg in env.context.pages:
+            if url_part in pg.url:
+                return pg
+        if time.time() > end:
+            break
+        env.popup.wait_for_timeout(100)
     raise AssertionError(f"no page with {url_part}")
 
 
@@ -607,3 +633,63 @@ def test_18_a_refusal_is_never_routed_around(env, monkeypatch):
     finally:
         popup_msg(env, {"cmd": "setPaused", "paused": False})
     assert "Test form" in agent(env, action="snapshot")
+
+
+# ---------------------------------------------------------------- what the agent can see and do
+def test_19_snapshot_reaches_into_shadow_dom_and_iframes(env):
+    r = execute(env, "browser_open_url", {"url": env.site("app.test", "/game")})
+    assert r["success"], r
+    env.game_tab = r["data"]["tab_id"]
+    env.game = page_of(env, "/game")
+    snap = execute(env, "browser_snapshot", {"tab_id": env.game_tab})["data"]
+    texts = {(e.get("tag"), e.get("text")): e for e in snap["elements"]}
+    shadow_in = next(e for e in snap["elements"] if e["tag"] == "input" and e["text"] == "Your guess")
+    frame_in = next(e for e in snap["elements"] if e["tag"] == "input" and e["text"] == "Type in frame")
+    assert frame_in.get("in_frame") and not shadow_in.get("in_frame")
+    assert ("button", "Frame go") in texts
+    # typing works in both, and the page sees the values
+    r = execute(env, "browser_type", {"tab_id": env.game_tab, "ref": shadow_in["ref"], "text": "banana"})
+    assert r["success"], r
+    assert env.game.evaluate("document.getElementById('host').shadowRoot.getElementById('shadow-in').value") == "banana"
+    r = execute(env, "browser_type", {"tab_id": env.game_tab, "ref": frame_in["ref"], "text": "inside"})
+    assert r["success"] and r["data"]["input"] == "synthetic", r
+    frame = next(f for f in env.game.frames if f.url.endswith("/frame"))
+    assert frame.evaluate("document.getElementById('frame-in').value") == "inside"
+    r = execute(env, "browser_click", {"tab_id": env.game_tab, "ref": next(e["ref"] for e in snap["elements"] if e["text"] == "Frame go")})
+    assert r["success"], r
+    assert frame.evaluate("window.frameClicks") == 1
+
+
+def test_20_screenshot_is_a_small_jpeg_with_geometry(env):
+    r = execute(env, "browser_screenshot", {"tab_id": env.game_tab})
+    assert r["success"], r
+    d = r["data"]
+    assert d["mime"] == "image/jpeg" and d["image_width"] <= 1024
+    assert d["viewport_width"] and d["viewport_height"]
+    import base64
+    raw = base64.b64decode(d["image_base64"])
+    assert raw[:2] == b"\xff\xd8" and len(raw) < 400_000
+
+
+def test_21_drag_draws_on_a_canvas_with_real_mouse_events(env):
+    box = env.game.evaluate("(() => { const r = document.getElementById('cv').getBoundingClientRect(); return [r.left, r.top]; })()")
+    x0, y0 = box
+    path = [[x0 + 40 + i * 20, y0 + 50 + (i % 3) * 10] for i in range(10)]
+    r = execute(env, "browser_drag", {"tab_id": env.game_tab, "path": path})
+    assert r["success"] and r["data"]["points"] == 10, r
+    strokes = env.game.evaluate("window.strokes")
+    assert len(strokes) == 1 and len(strokes[0]) >= 10
+    assert execute(env, "browser_drag", {"tab_id": env.game_tab, "path": [[1, 1]]})["error_code"] == "MISSING_PARAMETERS"
+    settings(env, realInput=False)
+    assert execute(env, "browser_drag", {"tab_id": env.game_tab, "from_x": 1, "from_y": 1, "to_x": 9, "to_y": 9})["error_code"] == "REAL_INPUT_REQUIRED"
+    settings(env, realInput=True)
+
+
+def test_22_agent_screenshot_reaches_the_model_as_an_image(env, monkeypatch):
+    import actions.browser_router as br
+    seen = []
+    monkeypatch.setattr(br, "IMAGE_SINK", lambda jpeg: seen.append(jpeg) or True)
+    out = agent(env, action="screenshot", tab_id=env.game_tab)
+    assert seen and seen[0][:2] == b"\xff\xd8"
+    assert "in front of you" in out and "multiply image x,y" in out
+    assert "base64" not in out and len(out) < 600

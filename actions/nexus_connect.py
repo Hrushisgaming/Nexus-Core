@@ -147,6 +147,7 @@ def _required_capabilities_for_action(action: str) -> list[str]:
         "browser_type": ["page_interact"],
         "browser_press_key": ["page_interact"],
         "browser_scroll": ["page_interact"],
+        "browser_drag": ["page_interact"],
         "browser_screenshot": ["screenshot"],
         "browser_eval": ["script_eval"],
         "browser_upload_file": ["file_upload"],

@@ -98,6 +98,23 @@ export async function click(tabId, x, y, { double = false } = {}) {
   }
 }
 
+// Press at the first point, move through the rest with the button held, release at the last.
+export async function drag(tabId, points, { stepMs = 8 } = {}) {
+  const [first, ...rest] = points;
+  await cmd(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: first.x, y: first.y, pointerType: "mouse" });
+  await cmd(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x: first.x, y: first.y, button: "left", buttons: 1, clickCount: 1, pointerType: "mouse" });
+  let last = first;
+  try {
+    for (const q of rest) {
+      await cmd(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: q.x, y: q.y, button: "left", buttons: 1, pointerType: "mouse" });
+      last = q;
+      if (stepMs > 0) await new Promise((r) => setTimeout(r, stepMs));
+    }
+  } finally {
+    await cmd(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x: last.x, y: last.y, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse" }).catch(() => {});
+  }
+}
+
 export async function wheel(tabId, x, y, deltaX, deltaY) {
   await cmd(tabId, "Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX, deltaY });
 }

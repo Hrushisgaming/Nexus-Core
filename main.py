@@ -1350,7 +1350,10 @@ TOOL_DECLARATIONS = [
             "browser_open_url {url}, browser_navigate {url, tab_id}, browser_back/forward/reload, browser_activate_tab/close_tab {tab_id}, "
             "browser_snapshot {tab_id} (page text + interactive elements with refs), browser_get_text, "
             "browser_click {ref | selector | x,y}, browser_type {ref | selector, text, submit}, browser_press_key {key}, "
-            "browser_scroll {direction}, browser_wait_for {selector | text}, browser_screenshot, browser_eval {code}. "
+            "browser_scroll {direction}, browser_wait_for {selector | text}, browser_eval {code}, "
+            "browser_screenshot (you are shown a real image; page coordinates = image coordinates x the scale in the reply), "
+            "browser_drag {from_x,from_y,to_x,to_y | path:[[x,y],...]} presses, moves and releases the mouse (drawing, sliders). "
+            "Elements inside iframes and shadow DOM are listed in the snapshot; if no element matches, take a screenshot and click by x,y. "
             "browser_upload_file {ref | selector, files:[absolute paths]} attaches local files to an <input type=file> (the user is always asked first). "
             "Take a browser_snapshot before clicking or typing and use the refs it returns; pass tab_id from browser_open_url. "
             "Nexus only works in its own 'Nexus' tab group: open pages with browser_open_url. The user's other tabs are off limits unless they share them. "
@@ -7156,6 +7159,18 @@ class BrahmaLive:
                         self._loop          = asyncio.get_event_loop()
                         self.audio_in_queue = asyncio.Queue()
                         self.out_queue      = asyncio.Queue()  # Fix: removed maxsize=10 to prevent dropping packets
+                        try:
+                            import actions.browser_router as _br
+                            _loop, _q = asyncio.get_running_loop(), self.out_queue
+
+                            def _show_to_model(jpeg: bytes, _loop=_loop, _q=_q, _self=self) -> bool:
+                                if _self.out_queue is not _q or _self.session is None:
+                                    return False  # that live session has ended
+                                _loop.call_soon_threadsafe(_q.put_nowait, {"data": jpeg, "mime_type": "image/jpeg"})
+                                return True
+                            _br.IMAGE_SINK = _show_to_model
+                        except Exception:
+                            pass
                         
                         print("[NEXUS CORE] ✅ Connected.")
                         try:

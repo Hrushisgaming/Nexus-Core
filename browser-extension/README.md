@@ -11,7 +11,7 @@ It appears in Nexus as a device with platform `browser`.
 ## What Nexus can do
 `browser_list_tabs`, `browser_open_url`, `browser_navigate`, `browser_back/forward/reload`, `browser_activate_tab`, `browser_close_tab`,
 `browser_snapshot` (page text + clickable elements with refs), `browser_get_text`, `browser_click`, `browser_type`, `browser_press_key`,
-`browser_scroll`, `browser_wait_for`, `browser_screenshot`, `browser_eval`, `browser_upload_file`.
+`browser_scroll`, `browser_wait_for`, `browser_screenshot`, `browser_eval`, `browser_upload_file`, `browser_drag`.
 
 ## You stay in control
 - **Its own tab group.** Nexus works in a purple **Nexus** tab group. Your other tabs are invisible to it and untouchable unless you share them
@@ -43,3 +43,13 @@ The text arrives in Nexus chat, fenced and labelled as untrusted page content so
 
 ## Tests
 `NEXUS_E2E=1 xvfb-run -a python -m pytest tests/e2e_browser_extension -v` drives the extension in real Chromium against the real gateway.
+
+## What the agent can see
+
+- Snapshots include elements inside open shadow DOM and inside iframes (iframe elements are marked `in_frame`
+  and are driven with synthetic events, since their coordinates aren't known to the top page).
+- `browser_screenshot` returns a downscaled JPEG (max 1024 px wide by default) plus the page viewport size,
+  so the model can turn image coordinates into click coordinates. Nexus Core hands the image to the live
+  model as a real image (or has a vision model describe it in text-only chats); it is never pasted as base64 text.
+- `browser_drag` presses, moves along a path and releases the mouse with real input events (drawing on canvases,
+  sliders). It needs real input to be switched on.
