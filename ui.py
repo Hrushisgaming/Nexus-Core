@@ -11110,6 +11110,23 @@ class MainWindow(QMainWindow):
                 self._proc_lbl.setText("PROC  --")
 
 
+    def _on_file_selected(self, path: str):
+        """The attach button / drop zone chose a file: queue it for the next message."""
+        path = str(path or "").strip()
+        if not path or not Path(path).is_file():
+            return
+        pending = getattr(self, "_pending_attachments", None)
+        if pending is None:
+            pending = self._pending_attachments = []
+        if path not in pending:
+            pending.append(path)
+        self._log_sig.emit(f"SYS: Attached {Path(path).name} - it will go with your next message.")
+
+    def _take_attachments(self) -> list[str]:
+        pending = list(getattr(self, "_pending_attachments", None) or [])
+        self._pending_attachments = []
+        return pending
+
     def _browse_attachment(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Attach a file to Nexus Core", str(Path.home()),
@@ -11223,9 +11240,13 @@ class MainWindow(QMainWindow):
             self._result_card.set_body("Waiting for reply...")
             self._result_card.hide()
         self._restart_card_hide_timer()
-        self._log_sig.emit(f"You: {txt}")
+        attachments = self._take_attachments() if (source or "local") == "local" else []
+        self._log_sig.emit(f"You: {txt}" + (f"  [+{len(attachments)} attached]" if attachments else ""))
+        agent_text = txt
+        if attachments:
+            agent_text += "\n\n[Attached files: " + "; ".join(attachments) + "]"
         if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(txt, source or "local"), daemon=True).start()
+            threading.Thread(target=self.on_text_command, args=(agent_text, source or "local"), daemon=True).start()
 
     def _on_log_text(self, text: str):
         self._log.append_log(text)

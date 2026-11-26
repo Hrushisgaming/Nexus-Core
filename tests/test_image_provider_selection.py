@@ -24,7 +24,7 @@ def test_uses_selected_provider_first():
     b64 = base64.b64encode(b"IMG").decode()
     nv = _P("nvidia", result={"image_data": b64})
     po = _P("pollinations", result={"image_data": b64})
-    data, used = _run({"nvidia": nv, "pollinations": po}, "nvidia")
+    data, used, _note = _run({"nvidia": nv, "pollinations": po}, "nvidia")
     assert used == "nvidia" and data == b"IMG" and po.calls == 0
 
 
@@ -32,7 +32,7 @@ def test_falls_back_when_selected_fails():
     b64 = base64.b64encode(b"OK").decode()
     nv = _P("nvidia", result={"error": "HTTP 401"})
     po = _P("pollinations", result={"image_data": b64})
-    data, used = _run({"nvidia": nv, "pollinations": po}, "nvidia")
+    data, used, _note = _run({"nvidia": nv, "pollinations": po}, "nvidia")
     assert used == "pollinations" and data == b"OK"
 
 

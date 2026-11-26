@@ -65,14 +65,21 @@ class ImageProvider:
 
 
 class NVIDIAImageProvider(ImageProvider):
-    name = "nvidia"
+    """NVIDIA NIM hosted FLUX.3 Klein (text-to-image and reference-image editing)."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "nvidia/nvidia-nim-image"):
+    name = "nvidia"
+    supports_references = True
+    BASE_URL = "https://ai.api.nvidia.com/v1/genai/"
+    # Output sizes must be multiples of 16 within 512..1568 and <= 1,062,400 pixels.
+    SIZES = {"1:1": (1024, 1024), "16:9": (1344, 768), "9:16": (768, 1344), "4:3": (1152, 864), "3:4": (864, 1152)}
+
+    def __init__(self, api_key: Optional[str] = None, model: str = "black-forest-labs/flux-3-image-klein"):
         self.api_key = get_api_key("nvidia_api_key", "NVIDIA_API_KEY", api_key)
         self.default_model = model
         self.models = [
-            "nvidia/nvidia-nim-image",
-            "nvidia/sdxl",
+            "black-forest-labs/flux-3-image-klein",
+            "black-forest-labs/flux.1-dev",
+            "black-forest-labs/flux.1-schnell",
         ]
         self._available = bool(self.api_key)
         self._init_error: Optional[str] = None
@@ -88,38 +95,39 @@ class NVIDIAImageProvider(ImageProvider):
     def init_error(self) -> Optional[str]:
         return self._init_error
 
-    def generate(self, prompt: str, model: Optional[str] = None) -> dict:
+    def generate(self, prompt: str, model: Optional[str] = None, reference_images: Optional[list] = None,
+                 aspect_ratio: str = "1:1") -> dict:
+        """reference_images: list of data URIs ("data:image/jpeg;base64,...").
+
+        Returns {"image_data": b64} on success, or {"error", "reference_rejected": bool}.
+        """
         if not self._available:
             return {"error": self._init_error or "NVIDIA not configured", "provider": "nvidia"}
         try:
             import requests
             model_id = model or self.default_model
-            url = f"https://api.nvcf.nvidia.com/v2/generative/images/{model_id}"
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-            payload = {
-                "text_prompt": prompt,
-                "width": 1024,
-                "height": 1024,
-            }
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            width, height = self.SIZES.get(aspect_ratio, self.SIZES["1:1"])
+            payload: dict = {"prompt": prompt[:2000], "width": width, "height": height}
+            if reference_images and model_id.endswith("klein"):
+                payload["image"] = list(reference_images)[:4]
+            resp = requests.post(
+                f"{self.BASE_URL}{model_id}",
+                headers={"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"},
+                json=payload, timeout=120,
+            )
             if resp.status_code == 200:
-                data = resp.json()
-                # NVIDIA returns base64 image
-                images = data.get("images", [])
-                if images:
-                    return {
-                        "image_data": images[0],
-                        "provider": "nvidia",
-                        "model": model_id,
-                        "format": "base64",
-                    }
+                art = (resp.json().get("artifacts") or [{}])[0]
+                if art.get("finishReason") == "CONTENT_FILTERED":
+                    return {"error": "blocked by NVIDIA's content filter", "provider": "nvidia"}
+                if art.get("base64"):
+                    return {"image_data": art["base64"], "provider": "nvidia", "model": model_id}
                 return {"error": "No image returned", "provider": "nvidia"}
-            logger.error(f"NVIDIA Image error {resp.status_code}: {resp.text[:200]}")
-            return {"error": f"HTTP {resp.status_code}", "provider": "nvidia"}
+            logger.error(f"NVIDIA Image error {resp.status_code}: {resp.text[:300]}")
+            return {
+                "error": f"HTTP {resp.status_code}: {resp.text[:160]}", "provider": "nvidia",
+                # 422 with an image field = the hosted API refused the uploaded reference.
+                "reference_rejected": bool(reference_images) and resp.status_code in (400, 422),
+            }
         except Exception as exc:
             logger.error(f"NVIDIA Image error: {exc}")
             return {"error": str(exc), "provider": "nvidia"}

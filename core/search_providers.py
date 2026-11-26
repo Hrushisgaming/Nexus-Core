@@ -63,7 +63,7 @@ class TavilyProvider(SearchProvider):
     def init_error(self) -> Optional[str]:
         return None if self._available else "TAVILY_API_KEY not set"
 
-    def search(self, query: str) -> dict:
+    def search(self, query: str, include_images: bool = False) -> dict:
         if not self._available:
             return {"error": self._init_error or "Tavily not configured", "results": []}
         try:
@@ -75,7 +75,7 @@ class TavilyProvider(SearchProvider):
                     "query": query,
                     "search_depth": "basic",
                     "include_answer": True,
-                    "include_images": False,
+                    "include_images": bool(include_images),
                     "include_raw_content": False,
                     "max_results": 5,
                 },
@@ -86,6 +86,7 @@ class TavilyProvider(SearchProvider):
                 return {
                     "answer": data.get("answer", ""),
                     "results": data.get("results", []),
+                    "images": data.get("images", []),
                     "provider": "tavily",
                 }
             logger.error(f"Tavily error {resp.status_code}: {resp.text[:200]}")

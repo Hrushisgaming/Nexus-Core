@@ -47,6 +47,14 @@ PLUGIN = {
                 "type": "STRING",
                 "description": "Aspect ratio: '1:1' (square), '16:9' (landscape), '9:16' (portrait) (default: 1:1)."
             },
+            "reference_images": {
+                "type": "ARRAY", "items": {"type": "STRING"},
+                "description": "Optional reference image file paths or http(s) URLs. Use the paths of images the user attached ('[Attached files: ...]') or just downloaded."
+            },
+            "reference_search": {
+                "type": "STRING",
+                "description": "Optional web topic: search the web for an image of this, download it and use it as the reference."
+            },
             "destination": {
                 "type": "STRING",
                 "description": "Optional custom folder path to save the generated image."
@@ -122,16 +130,48 @@ def _selected_settings() -> Dict[str, Any]:
         return {}
 
 
-def _render_with_providers(prompt: str, forced: Optional[str] = None) -> tuple:
-    """Try the engine chosen in Settings first, then the others. Returns (bytes, provider_id)."""
+def _describe_references(paths: list) -> str:
+    """Fallback when no provider can take the image itself: describe it with a vision model."""
+    try:
+        import base64
+        from llm_client import client as llm
+
+        parts = []
+        for p in paths[:2]:
+            b64 = base64.b64encode(Path(p).read_bytes()).decode()
+            parts.append(llm.vision(
+                "Describe this image for an artist who must recreate its subject, composition, colours and style. "
+                "Be concrete, under 80 words.", b64, "image/jpeg", max_tokens=220))
+        return " ".join(x.strip() for x in parts if x and x.strip())
+    except Exception as exc:
+        logger.info(f"[ImageGen] couldn't describe reference: {exc}")
+        return ""
+
+
+def _render_with_providers(prompt: str, forced: Optional[str] = None, references: Optional[list] = None,
+                           aspect_ratio: str = "1:1") -> tuple:
+    """Try the engine chosen in Settings first, then the others.
+
+    Returns (bytes, provider_id, note). With reference images the providers that accept them
+    (NVIDIA FLUX.3 Klein) go first; if none can use the image it is described by a vision
+    model and the description is added to the prompt, and `note` says so.
+    """
     import base64
     import requests
     from core.image_providers import get_image_provider
+    from core.image_refs import to_data_uri
 
     settings = _selected_settings()
     chosen = (forced or settings.get("image_engine") or "pollinations").strip().lower()
     order = [chosen] + [p for p in ("pollinations", "nvidia", "cloudflare") if p != chosen]
-    errors = []
+    refs = [Path(r) for r in (references or [])]
+    if refs:
+        order = ["nvidia"] + [p for p in order if p != "nvidia"]
+    data_uris = [to_data_uri(r) for r in refs]
+    errors: list[str] = []
+    note = ""
+    described = ""
+
     for pid in order:
         provider = get_image_provider(pid)
         if provider is None or not provider.available:
@@ -139,18 +179,40 @@ def _render_with_providers(prompt: str, forced: Optional[str] = None) -> tuple:
             continue
         per = settings.get("image_models") if isinstance(settings.get("image_models"), dict) else {}
         model = (per.get(pid) or (settings.get("image_model") if pid == "pollinations" else None) or None)
-        result = provider.generate(prompt, model=model) or {}
+        use_prompt = prompt
+        kwargs: dict = {}
+        if getattr(provider, "supports_references", False):
+            kwargs["aspect_ratio"] = aspect_ratio
+            if data_uris:
+                kwargs["reference_images"] = data_uris
+        elif refs:
+            if not described:
+                described = _describe_references(refs) or " "
+            if described.strip():
+                use_prompt = f"{prompt}. Based on this reference image: {described.strip()}"
+                note = "Your reference image couldn't be sent to the image engine, so I described it and used that description."
+        result = provider.generate(use_prompt, model=model, **kwargs) or {}
+        if result.get("error") and kwargs.get("reference_images") and result.get("reference_rejected"):
+            # The hosted API refused the upload: retry once without it, using a description instead.
+            errors.append(f"{pid}: reference image rejected ({result['error']})")
+            described = described or _describe_references(refs) or " "
+            retry = f"{prompt}. Based on this reference image: {described.strip()}" if described.strip() else prompt
+            kwargs.pop("reference_images")
+            result = provider.generate(retry, model=model, **kwargs) or {}
+            note = "NVIDIA wouldn't accept the uploaded reference image, so I described it and used that description."
         if result.get("error"):
             errors.append(f"{pid}: {result['error']}")
             continue
         try:
             if result.get("image_data"):
-                return base64.b64decode(result["image_data"]), pid
+                if kwargs.get("reference_images"):
+                    note = "Used your reference image."
+                return base64.b64decode(result["image_data"]), pid, note
             if result.get("image_url"):
                 resp = requests.get(result["image_url"], timeout=60,
                                     headers={"User-Agent": "NexusCore/1.0"})
                 resp.raise_for_status()
-                return resp.content, pid
+                return resp.content, pid, note
             errors.append(f"{pid}: empty result")
         except Exception as exc:
             errors.append(f"{pid}: {exc}")
@@ -179,6 +241,18 @@ def generate_image(
     destination = params.get("destination")
 
     enhanced_prompt = _build_enhanced_prompt(raw_prompt, style)
+
+    # Reference images: files the user attached, URLs, or an image found on the web for a topic.
+    from core.image_refs import fetch_reference_for_topic, resolve_references
+    ref_inputs = params.get("reference_images") or params.get("reference_image") or params.get("reference")
+    references = resolve_references(ref_inputs)
+    topic = (params.get("reference_search") or "").strip()
+    if topic and not references:
+        references = fetch_reference_for_topic(topic, count=1)
+        if not references:
+            return f"Error: I couldn't find a usable image on the web for '{topic}'. Nothing was generated."
+    if ref_inputs and not references:
+        return "Error: I couldn't read the reference image you gave me (is it a valid image file or link?). Nothing was generated."
     out_dir = _get_output_directory(destination)
 
     # Prepare file name
@@ -193,7 +267,8 @@ def generate_image(
 
     t0 = time.time()
     try:
-        image_bytes, used_provider = _render_with_providers(enhanced_prompt, params.get("provider"))
+        image_bytes, used_provider, ref_note = _render_with_providers(
+            enhanced_prompt, params.get("provider"), references, str(aspect_ratio))
 
         elapsed = round(time.time() - t0, 1)
         logger.info(f"[ImageGen] Rendered by {used_provider}")
@@ -232,7 +307,9 @@ def generate_image(
             f"- **Style**: {style.title()}\n"
             f"- **File Path**: `{image_file}`\n"
             f"- **Resolution**: High-Res ({kb_size} KB)\n"
-            f"- **Render Time**: {elapsed}s\n\n"
+            f"- **Render Time**: {elapsed}s\n"
+            + (f"- **Reference**: {ref_note or 'a reference image was supplied'}\n" if references else "")
+            + "\n"
             f"The image has been opened on your screen!"
         )
 

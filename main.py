@@ -2309,6 +2309,14 @@ TOOL_DECLARATIONS = [
                     "type": "STRING",
                     "description": "Aspect ratio: '1:1' (square), '16:9' (landscape), '9:16' (portrait) (default: 1:1)."
                 },
+                "reference_images": {
+                    "type": "ARRAY", "items": {"type": "STRING"},
+                    "description": "Reference image file paths or http(s) URLs. If the message ends with '[Attached files: ...]' and the user wants an image based on / edited from / like it, pass those paths here."
+                },
+                "reference_search": {
+                    "type": "STRING",
+                    "description": "When the user asks to find an image of something on the web and make an image from it, put the search topic here: Nexus downloads the first usable image and uses it as the reference."
+                },
                 "destination": {
                     "type": "STRING",
                     "description": "Optional custom folder path to save the generated image."
