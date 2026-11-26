@@ -1,0 +1,64 @@
+name: Build Nexus Core for Linux (.tar.gz)
+
+# Run this one OS on its own (Actions > this workflow > Run workflow),
+# or let "Build Nexus Core (all platforms)" call it.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build-linux:
+    name: Build Linux Portable Binary
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libegl1-mesa libxkbcommon-x11-0 libpulse0 libasound2-dev portaudio19-dev
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Linux Binary
+        run: |
+          pyinstaller --noconfirm \
+            --windowed \
+            --name "NexusCore" \
+            --add-data "assets:assets" \
+            --add-data "config:config" \
+            --add-data "core:core" \
+            --add-data "nexus_connect:nexus_connect" \
+            --add-data "actions:actions" \
+            --add-data "memory:memory" \
+            --add-data "plugins:plugins" \
+            --add-data "features:features" \
+            --add-data "skills:skills" \
+            --add-data "smart_home:smart_home" \
+            --add-data "dashboard/static:dashboard/static" \
+            --add-data "workspace_store.py:." \
+            --add-data "version.txt:." \
+            --add-data "app_version.txt:." \
+            --add-data "requirements.txt:." \
+            main.py
+
+          test -d "dist/NexusCore"
+          cd dist
+          tar -czvf "NexusCore-Linux.tar.gz" "NexusCore"
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusCore-Linux
+          path: dist/NexusCore-Linux.tar.gz
+          if-no-files-found: error

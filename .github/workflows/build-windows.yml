@@ -1,0 +1,41 @@
+name: Build Nexus Core for Windows (.exe)
+
+# Run this one OS on its own (Actions > this workflow > Run workflow),
+# or let "Build Nexus Core (all platforms)" call it.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build-windows:
+    name: Build Windows Setup (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Uninstaller & NexusCore
+        run: |
+          pyinstaller --noconfirm installer/Uninstall.spec
+          pyinstaller --noconfirm installer/NexusCore.spec
+          Copy-Item "dist/Uninstall.exe" -Destination "dist/NexusCore/Uninstall.exe" -Force
+          Copy-Item "installer/uninstall.cmd" -Destination "dist/NexusCore/uninstall.cmd" -Force
+          pyinstaller --noconfirm installer/NexusCore_Setup.spec
+
+      - name: Upload Windows Setup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusCore-Windows-Setup
+          path: dist/NexusCore_Setup.exe
+          if-no-files-found: error

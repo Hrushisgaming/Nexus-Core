@@ -1,5 +1,8 @@
 name: Build Multi-Platform Installers
 
+# All-in-one: runs the Windows, macOS and Linux workflows together and bundles the three
+# downloads into one artifact (NexusCore-All-Platforms). Each OS also has its own workflow
+# (build-windows.yml, build-macos.yml, build-linux.yml) if you only need one.
 on:
   pull_request:
   workflow_dispatch:
@@ -10,146 +13,29 @@ on:
       - 'v*'
 
 jobs:
-  build-windows:
-    name: Build Windows Setup (.exe)
-    runs-on: windows-latest
+  windows:
+    uses: ./.github/workflows/build-windows.yml
+  macos:
+    uses: ./.github/workflows/build-macos.yml
+  linux:
+    uses: ./.github/workflows/build-linux.yml
+
+  bundle:
+    name: Bundle all platforms into one download
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v4
         with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install Dependencies
+          path: bundle
+      - name: List what was built
+        run: find bundle -type f -exec ls -lh {} \;
+      - name: Package
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build Uninstaller & NexusCore
-        run: |
-          pyinstaller --noconfirm installer/Uninstall.spec
-          pyinstaller --noconfirm installer/NexusCore.spec
-          Copy-Item "dist/Uninstall.exe" -Destination "dist/NexusCore/Uninstall.exe" -Force
-          Copy-Item "installer/uninstall.cmd" -Destination "dist/NexusCore/uninstall.cmd" -Force
-          pyinstaller --noconfirm installer/NexusCore_Setup.spec
-
-      - name: Upload Windows Setup Artifact
-        uses: actions/upload-artifact@v4
+          cd bundle
+          zip -r ../NexusCore-All-Platforms.zip .
+      - uses: actions/upload-artifact@v4
         with:
-          name: NexusCore-Windows-Setup
-          path: dist/NexusCore_Setup.exe
-          if-no-files-found: error
-
-  build-macos:
-    name: Build macOS Application (.dmg)
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Verify Runner
-        run: |
-          uname -m
-          python --version
-          python -c "import platform; print('Architecture:', platform.machine())"
-
-      - name: Install System Dependencies
-        run: |
-          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
-          brew list portaudio >/dev/null 2>&1 || brew install portaudio
-
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Verify modules compile and import
-        run: |
-          python -m py_compile main.py ui.py core/platform_api.py core/window_context.py core/sensorium.py core/protocols.py core/user_paths.py core/updater_ota.py actions/game_updater.py
-          python - <<'PY'
-          import core.platform_api
-          import core.window_context
-          import core.sensorium
-          import core.protocols
-          import core.user_paths
-          import core.updater_ota
-          import actions.game_updater
-          print('All modules import OK')
-          PY
-
-      - name: Build macOS App + DMG
-        run: |
-          chmod +x build_macos.sh
-          ./build_macos.sh
-
-      - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: NexusCore-macOS-DMG
-          path: dist/*.dmg
-          if-no-files-found: error
-
-  build-linux:
-    name: Build Linux Portable Binary
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx libegl1-mesa libxkbcommon-x11-0 libpulse0 libasound2-dev portaudio19-dev
-
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build Linux Binary
-        run: |
-          pyinstaller --noconfirm \
-            --windowed \
-            --name "NexusCore" \
-            --add-data "assets:assets" \
-            --add-data "config:config" \
-            --add-data "core:core" \
-            --add-data "nexus_connect:nexus_connect" \
-            --add-data "actions:actions" \
-            --add-data "memory:memory" \
-            --add-data "plugins:plugins" \
-            --add-data "features:features" \
-            --add-data "skills:skills" \
-            --add-data "smart_home:smart_home" \
-            --add-data "dashboard/static:dashboard/static" \
-            --add-data "workspace_store.py:." \
-            --add-data "version.txt:." \
-            --add-data "app_version.txt:." \
-            --add-data "requirements.txt:." \
-            main.py
-
-          test -d "dist/NexusCore"
-          cd dist
-          tar -czvf "NexusCore-Linux.tar.gz" "NexusCore"
-
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: NexusCore-Linux
-          path: dist/NexusCore-Linux.tar.gz
+          name: NexusCore-All-Platforms
+          path: NexusCore-All-Platforms.zip
           if-no-files-found: error
